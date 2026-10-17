@@ -58,6 +58,20 @@ test("mobile build contains only public assets, opts out of network calls, and k
   assert.match(html, /data-edition="mobile"/);
   assert.match(html, /connect-src 'none'/);
   assert.match(html, /API課金は発生しません/);
+  const scriptURL = new URL(
+    html.match(/<script[^>]+src="([^"]+)"/)[1],
+    "https://example.test",
+  );
+  assert.equal(scriptURL.searchParams.get("v"), result.revision);
+  for (const file of result.files.filter((f) => f.endsWith(".js"))) {
+    const js = await readFile(resolve(dir, file), "utf8");
+    for (const match of js.matchAll(/\bfrom\s+["']([^"']+)["']/g)) {
+      const dependency = new URL(match[1], scriptURL);
+      assert.equal(dependency.searchParams.get("v"), result.revision);
+      assert.ok(result.files.includes(dependency.pathname.slice(1)));
+    }
+  }
+  assert.match(html, new RegExp(`/styles\\.css\\?v=${result.revision}`));
   const source = await readFile(
     new URL("../public/index.html", import.meta.url),
     "utf8",

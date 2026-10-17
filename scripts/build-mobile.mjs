@@ -1,12 +1,7 @@
-import {
-  mkdir,
-  readFile,
-  writeFile,
-  copyFile,
-  realpath,
-} from "node:fs/promises";
+import { mkdir, readFile, writeFile, realpath } from "node:fs/promises";
 import { resolve, dirname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 import { parse, serialize } from "parse5";
 
 export async function buildMobile(output, { cloud = false } = {}) {
@@ -39,11 +34,42 @@ export async function buildMobile(output, { cloud = false } = {}) {
     "styles.css",
     "favicon.svg",
   ];
-  for (const file of files)
-    await copyFile(resolve(publicDir, file), resolve(target, file));
-  const document = parse(
-    await readFile(resolve(publicDir, "index.html"), "utf8"),
+  const sources = new Map(
+    await Promise.all(
+      ["index.html", ...files].map(async (file) => [
+        file,
+        await readFile(resolve(publicDir, file), "utf8"),
+      ]),
+    ),
   );
+  // All modules share a content revision, including their transitive imports.
+  // A deployment must never combine cached JS with a newer HTML contract.
+  const revision = createHash("sha256")
+    .update(JSON.stringify([cloud, [...sources]]))
+    .digest("hex")
+    .slice(0, 16);
+  for (const file of files) {
+    const content = file.endsWith(".js")
+      ? sources
+          .get(file)
+          .replace(
+            /(\bfrom\s+["'])\.\/(engine|world|careers|story)\.js(["'])/g,
+            `$1./$2.js?v=${revision}$3`,
+          )
+      : sources.get(file);
+    await writeFile(resolve(target, file), content);
+  }
+  const document = parse(sources.get("index.html"));
+  const versionAssets = (element) => {
+    for (const attr of element.attrs ?? [])
+      if (
+        ["src", "href"].includes(attr.name) &&
+        files.some((f) => attr.value === `/${f}`)
+      )
+        attr.value += `?v=${revision}`;
+    for (const child of element.childNodes ?? []) versionAssets(child);
+  };
+  versionAssets(document);
   const html = document.childNodes.find((n) => n.tagName === "html");
   html.attrs.push({
     name: "data-edition",
@@ -71,7 +97,7 @@ export async function buildMobile(output, { cloud = false } = {}) {
     resolve(target, "index.html"),
     serialize(document).replace("LOCAL EDITION / 0.3", "MOBILE DEMO / 0.3"),
   );
-  return { output: target, files: ["index.html", ...files] };
+  return { output: target, files: ["index.html", ...files], revision };
 }
 if (
   process.argv[1] &&
