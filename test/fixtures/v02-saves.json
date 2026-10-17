@@ -1,0 +1,200 @@
+[
+  {
+    "save": {
+      "version": 2,
+      "dynamicFrom": 80,
+      "profile": {
+        "region": "city",
+        "job": "tech",
+        "priority": "balance",
+        "ai": "sometimes",
+        "gender": "undisclosed",
+        "household": "solo",
+        "companyType": "small",
+        "age": 30,
+        "income": 500,
+        "savings": 1000,
+        "monthlyCost": 12,
+        "stocks": 100,
+        "rent": 7,
+        "homeValue": 0,
+        "mortgage": 0,
+        "mortgageYears": 25,
+        "mortgageRate": 1.5,
+        "retirementAge": 65,
+        "pension": 120,
+        "company": "合成企業",
+        "housing": "rent",
+        "companyFacts": null
+      },
+      "scenario": "steady",
+      "seed": 49,
+      "decisions": [
+        "learn",
+        "focus",
+        "switch",
+        "rest"
+      ],
+      "scenes": {}
+    },
+    "expected": [
+      {
+        "income": 487.13320341443097,
+        "cash": 1032.2212345949674,
+        "savings": 1131.8809270789216,
+        "expenses": 238,
+        "skill": 47.52,
+        "health": 63.2,
+        "businessSetup": 0,
+        "businessOverhead": 0,
+        "outcome": null
+      },
+      {
+        "income": 501.71458047318714,
+        "cash": 1185.5243157545897,
+        "savings": 1290.3712593978046,
+        "expenses": 228,
+        "skill": 48.040000000000006,
+        "health": 60.400000000000006,
+        "businessSetup": 0,
+        "businessOverhead": 0,
+        "outcome": null
+      },
+      {
+        "income": 495.0616961468124,
+        "cash": 1303.7712048261671,
+        "savings": 1411.6575634309472,
+        "expenses": 258,
+        "skill": 51.56000000000001,
+        "health": 57.60000000000001,
+        "businessSetup": 0,
+        "businessOverhead": 0,
+        "outcome": null
+      },
+      {
+        "income": 483.76136176950837,
+        "cash": 1438.4298397709936,
+        "savings": 1561.3198082423398,
+        "expenses": 233,
+        "skill": 50.08000000000001,
+        "health": 62.80000000000001,
+        "businessSetup": 0,
+        "businessOverhead": 0,
+        "outcome": null
+      }
+    ]
+  },
+  {
+    "save": {
+      "version": 2,
+      "dynamicFrom": 0,
+      "profile": {
+        "region": "city",
+        "job": "tech",
+        "priority": "balance",
+        "ai": "sometimes",
+        "gender": "undisclosed",
+        "household": "solo",
+        "companyType": "small",
+        "age": 30,
+        "income": 500,
+        "savings": 1000,
+        "monthlyCost": 12,
+        "stocks": 100,
+        "rent": 7,
+        "homeValue": 0,
+        "mortgage": 0,
+        "mortgageYears": 25,
+        "mortgageRate": 1.5,
+        "retirementAge": 65,
+        "pension": 120,
+        "company": "合成企業",
+        "housing": "rent",
+        "companyFacts": null
+      },
+      "scenario": "fast",
+      "seed": 49,
+      "decisions": [
+        "learn",
+        {
+          "id": "startup",
+          "venture": "ai",
+          "name": "合成事業"
+        },
+        "focus",
+        "rest"
+      ],
+      "scenes": {}
+    },
+    "expected": [
+      {
+        "income": 499.1240753497917,
+        "cash": 1041.3342972658418,
+        "savings": 1140.993989749796,
+        "expenses": 238,
+        "skill": 46.84,
+        "health": 63.2,
+        "businessSetup": 0,
+        "businessOverhead": 0,
+        "outcome": {
+          "kind": "success",
+          "title": "新しい力を、使える手応えが生まれた。",
+          "body": "取り組みが次の仕事につながった。得た成果を試す、相談するなど、次の選び方も広がる。",
+          "salaryFactor": 1.025,
+          "extraCost": 0
+        }
+      },
+      {
+        "income": 92.64437322764091,
+        "cash": 779.7440209188488,
+        "savings": 884.5909645620636,
+        "expenses": 332,
+        "skill": 51.68000000000001,
+        "health": 58.400000000000006,
+        "businessSetup": 60,
+        "businessOverhead": 24,
+        "outcome": {
+          "kind": "setback",
+          "title": "顧客が伸びず、事業の収支が悪化。",
+          "body": "見込んだ受注が得られず、事業収入が減った。次は事業の方向転換や撤退も選べる。",
+          "salaryFactor": 0.55,
+          "extraCost": 20
+        }
+      },
+      {
+        "income": 0,
+        "cash": 536.7440209188488,
+        "savings": 644.6303795236288,
+        "expenses": 243,
+        "skill": 51.52000000000001,
+        "health": 55.60000000000001,
+        "businessSetup": 0,
+        "businessOverhead": 0,
+        "outcome": {
+          "kind": "failure",
+          "title": "事業が続かず、いったん撤退。",
+          "body": "不調が続き、事業を閉じることになった。事業収入と運営費を止め、次の仕事と暮らしを立て直す。",
+          "salaryFactor": 0,
+          "extraCost": 15
+        }
+      },
+      {
+        "income": 0,
+        "cash": 303.74402091884883,
+        "savings": 426.6339893901951,
+        "expenses": 233,
+        "skill": 49.360000000000014,
+        "health": 60.80000000000001,
+        "businessSetup": 0,
+        "businessOverhead": 0,
+        "outcome": {
+          "kind": "steady",
+          "title": "暮らしのペースを、整える一年に。",
+          "body": "選んだ行動が家計やゆとり、人との関係に反映された。この変化を受けて次の一年を考える。",
+          "salaryFactor": 1,
+          "extraCost": 0
+        }
+      }
+    ]
+  }
+]

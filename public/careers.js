@@ -82,6 +82,14 @@ export const VENTURES = Object.freeze({
     overhead: 36,
     detail: "作品と顧客を育てる。制作道具の進歩と価格競争に向き合う。",
   },
+  agriculture: {
+    label: "小さな農園・地域の食の事業を始める",
+    sector: "physical",
+    setup: 140,
+    overhead: 48,
+    detail:
+      "架空の小規模農園。顧客づくりに加え、気候や物流の影響も受ける。設備・規模・費用はゲーム用の仮定。",
+  },
   community: {
     label: "地域の暮らしを支える事業をつくる",
     sector: "care",

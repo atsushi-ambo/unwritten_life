@@ -39,6 +39,7 @@ test("HTTP boundary: allowed assets, CSRF, local origin, body validation and sec
   for (const path of [
     "/app.js",
     "/engine.js",
+    "/world.js",
     "/careers.js",
     "/story.js",
     "/styles.css",

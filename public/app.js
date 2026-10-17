@@ -19,6 +19,13 @@ import {
   applyScene,
 } from "./engine.js";
 import { EMPLOYERS, VENTURES, careerCandidates } from "./careers.js";
+import {
+  worldAt,
+  worldEnabled,
+  HISTORICAL_FACTS,
+  TONES,
+  opportunityAt,
+} from "./world.js";
 import { storyRequest } from "./story.js";
 const $ = (id) => document.getElementById(id),
   saveKey = "unwritten-life:v2",
@@ -141,6 +148,7 @@ function readProfile() {
     "mortgageRate",
     "retirementAge",
     "pension",
+    "children",
   ])
     p[k] = Number(p[k]);
   if (p.housing === "rent") {
@@ -251,6 +259,7 @@ function renderGame() {
       "万円",
     ),
     stat("その他の借入", money(game.debt), "万円"),
+    stat("仕事とAIのスキル", String(Math.round(game.skill)), "/100"),
     stat(
       "心と体のゆとり",
       String(Math.round(game.health)),
@@ -277,6 +286,33 @@ function renderGame() {
   $("ai-stage").textContent =
     level < 0.3 ? "広がりはじめ" : level < 0.6 ? "日常の中へ" : "社会の基盤へ";
   $("ai-progress").value = level;
+  const worldPanel = $("world-context");
+  worldPanel.replaceChildren();
+  worldPanel.hidden = !worldEnabled(game);
+  $("capability-progress").value = worldAt(game).capability;
+  if (worldEnabled(game)) {
+    const w = worldAt(game),
+      f = game.family;
+    worldPanel.append(
+      node(
+        "p",
+        `${TONES[game.profile.tone]} / ${w.since}〜${w.until}年の架空の局面`,
+        "eyebrow",
+      ),
+      node("h2", w.shock.label),
+    );
+    const tags = node("div", undefined, "world-tags");
+    tags.append(node("span", w.economy.label), node("span", w.company.label));
+    worldPanel.append(tags, node("p", w.shock.body));
+    if (w.frontier) worldPanel.append(node("p", w.frontier, "insight"));
+    worldPanel.append(
+      node(
+        "p",
+        `${f.partner ? "パートナーあり" : game.profile.partner === "unspecified" ? "パートナー未設定" : "パートナーなし"} / 子ども ${f.childAges.length}人${f.childAges.length ? `（${f.childAges.join("・")}歳）` : ""} / 希望 ${f.desired === null ? "まだ未定" : `合計${f.desired}人`} / 学習の累計 ${nf.format(game.studyHours)}時間`,
+        "field-note",
+      ),
+    );
+  }
   const card = $("event-card");
   card.replaceChildren();
   const resultCard = $("year-result");
@@ -297,7 +333,7 @@ function renderGame() {
       ["純資産", "savings", "万円"],
       ["ゆとり", "health", ""],
       ["つながり", "connection", ""],
-      ["AIスキル", "skill", ""],
+      ["仕事・AIスキル", "skill", ""],
     ]) {
       const from = Math.round(before[key]),
         to = Math.round(game[key]),
@@ -310,6 +346,32 @@ function renderGame() {
       );
     }
     resultCard.append(changes);
+    if (h.familyOutcome && h.familyOutcome !== h.outcome)
+      resultCard.append(
+        node(
+          "p",
+          `${h.familyOutcome.title} ${h.familyOutcome.body}`,
+          "result-factors",
+        ),
+      );
+    if (h.world) {
+      const learning = h.studyHours - (game.history.at(-2)?.studyHours ?? 0);
+      resultCard.append(
+        node(
+          "p",
+          `外からの影響：${h.world.economy.label} / ${h.world.company.label} / ${h.world.shock.label}。収入・株式・生活費に反映。${learning ? ` 学びに${learning}時間を使い、スキルは蓄積。評価の結果は別に抽選。` : ""}${h.familyCost ? ` 新しく迎えた家族の追加費用：年${h.familyCost}万円。` : ""}`,
+          "result-factors",
+        ),
+      );
+      if (h.outcome?.chance !== undefined)
+        resultCard.append(
+          node(
+            "p",
+            `今回の取り組みが評価につながる抽選確率：${Math.round(h.outcome.chance * 100)}%（スキル・ゆとり・需要から決めたゲームの仮定）`,
+            "field-note",
+          ),
+        );
+    }
     if (h.businessSetup || h.businessOverhead || h.outcome?.extraCost)
       resultCard.append(
         node(
@@ -350,6 +412,7 @@ function renderGame() {
         game.scenario,
         game.seed,
         game.dynamicFrom,
+        game.worldFrom,
       );
       showGame(true);
     });
@@ -375,21 +438,16 @@ function renderGame() {
       node("summary", "ほかの働き方・お金・暮らしの選択"),
       extraButtons,
     );
-    for (const id of [
-      "switch",
-      "startup",
-      "invest",
-      "home",
-      "move",
-      "retire",
-    ]) {
+    for (const id of availableChoices(game)) {
       if (
         availableChoices(game).includes(id) &&
         !options.some((o) => o.id === id)
       ) {
         const extraButton = node(
           "button",
-          CHOICES[id].label + " ↗",
+          (id === "opportunity"
+            ? (opportunityAt(game)?.label ?? CHOICES[id].label)
+            : CHOICES[id].label) + " ↗",
           "text-button",
         );
         extraButton.disabled = generating;
@@ -416,12 +474,13 @@ function renderGame() {
       button.disabled = generating;
       button.dataset.choice = option.id;
       const c = CHOICES[option.id],
+        offer = option.id === "opportunity" ? opportunityAt(game) : null,
         copy = node("span");
       copy.append(
         node("b", option.label),
         node(
           "small",
-          `${option.hint}${event.generated ? " / 行動：" + c.label : ""}`,
+          `${option.hint}${offer ? ` / 開業費${offer.setup}万円・年間運営費${VENTURES[offer.venture].overhead}万円` : ""}${event.generated ? " / 行動：" + c.label : ""}`,
         ),
       );
       button.append(
@@ -701,6 +760,7 @@ $("undo-button").addEventListener("click", () => {
     scenes,
     false,
     game.dynamicFrom,
+    game.worldFrom,
   );
   revision++;
   renderGame();
@@ -713,8 +773,97 @@ function updateBudget() {
     own = f.elements.housing.value === "own";
   $("home-fields").hidden = !own;
   $("rent-field").hidden = own;
+  $("quick-summary").textContent =
+    `${f.elements.age.value}歳 / ${JOBS[f.elements.job.value].label} / 年収${f.elements.income.value}万円 / 金融資産${f.elements.savings.value}万円でスタート。`;
   $("budget-summary").textContent =
     `仮の初期設定：金融資産 ${f.elements.savings.value}万円（うち株式 ${f.elements.stocks.value}万円）、生活費 ${f.elements.monthlyCost.value}万円/月 ＋ ${own ? "持ち家の維持・返済費" : "家賃 " + f.elements.rent.value + "万円/月"}。退職 ${f.elements.retirementAge.value}歳、65歳以降の収入 ${f.elements.pension.value}万円/年。任意項目で調整できます。`;
+}
+$("quick-preset").addEventListener("change", () => {
+  const presets = {
+    balanced: {
+      age: 30,
+      region: "city",
+      income: 500,
+      savings: 300,
+      household: "solo",
+      partner: "unspecified",
+      children: 0,
+      monthlyCost: 12,
+      rent: 7,
+    },
+    starter: {
+      age: 23,
+      region: "metro",
+      income: 300,
+      savings: 80,
+      household: "solo",
+      partner: "solo",
+      children: 0,
+      monthlyCost: 12,
+      rent: 8,
+    },
+    experienced: {
+      age: 40,
+      region: "metro",
+      income: 700,
+      savings: 1000,
+      household: "solo",
+      partner: "unspecified",
+      children: 0,
+      monthlyCost: 15,
+      rent: 10,
+    },
+    family: {
+      age: 35,
+      region: "city",
+      income: 550,
+      savings: 500,
+      household: "care",
+      partner: "partner",
+      children: 2,
+      childStage: "young",
+      childrenWish: "two",
+      monthlyCost: 24,
+      rent: 9,
+    },
+    later: {
+      age: 55,
+      region: "city",
+      income: 650,
+      savings: 1800,
+      household: "shared",
+      partner: "partner",
+      children: 0,
+      monthlyCost: 20,
+      rent: 9,
+    },
+  };
+  const f = $("profile-form");
+  // Presets replace their visible assumptions; detailed company/assets remain user controlled.
+  for (const [k, v] of Object.entries({
+    childStage: "school",
+    childrenWish: "undecided",
+    ...presets[$("quick-preset").value],
+  }))
+    f.elements[k].value = String(v);
+  if (Number(f.elements.stocks.value) > Number(f.elements.savings.value))
+    f.elements.stocks.value = "0";
+  customCost = true;
+  updateBudget();
+});
+for (const fact of HISTORICAL_FACTS) {
+  const item = node("p"),
+    link = node("a", fact.source);
+  link.href = fact.url;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  item.append(
+    node("b", `${fact.year} / ${fact.title}`),
+    node("br"),
+    node("span", fact.detail + " "),
+    link,
+  );
+  $("historical-facts").append(item);
 }
 $("monthly-cost").addEventListener("input", () => {
   customCost = true;
@@ -800,7 +949,7 @@ function openCareer(mode) {
       : "次は、どこで働こう。";
   $("career-intro").textContent =
     mode === "startup"
-      ? "事業と名前を決めて、暮らしとのバランスを試してみよう。"
+      ? "事業を選ぶだけで始められます。名前をつけるのは任意です。"
       : `${game.year}年の分岐。会社と役割の組み合わせが、その後の物語と収支を変えます。`;
   $("career-job-fields").hidden = mode !== "switch";
   $("career-venture-fields").hidden = mode !== "startup";
@@ -948,12 +1097,17 @@ $("career-form").addEventListener("submit", (e) => {
       throw new Error("今の状態では選べません。");
     let decision;
     if (careerMode === "startup") {
-      if (!$("venture-name").value.trim())
-        throw new Error("あなたの事業に名前をつけてください。");
       decision = {
         id: "startup",
         venture: $("career-venture").value,
-        name: $("venture-name").value,
+        name:
+          $("venture-name").value.trim() ||
+          {
+            ai: "つなぐAI相談室",
+            studio: "灯りゲーム工房",
+            community: "まちの手サポート",
+            agriculture: "みのり循環農園",
+          }[$("career-venture").value],
       };
     } else {
       decision = {

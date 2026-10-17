@@ -460,7 +460,7 @@ test("learning and successful work unlock new actions, and risky business outcom
   const learned = advance(base, "learn");
   assert.ok(availableChoices(learned).includes("pilot"));
   const started = advance(
-    createGame({ ...profile, savings: 1000 }, "steady", 49),
+    createGame({ ...profile, savings: 1000 }, "steady", 70),
     { id: "startup", venture: "ai", name: "合成事業" },
   );
   assert.equal(started.history[0].outcome.kind, "setback");

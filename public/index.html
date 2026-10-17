@@ -27,7 +27,7 @@
         <button class="text-button" id="ai-settings-button">AIの接続 ↗</button>
         <button class="text-button" id="about-button">
           このゲームについて <span>↗</span></button
-        ><span class="version">LOCAL EDITION / 0.2</span>
+        ><span class="version">LOCAL EDITION / 0.3</span>
       </nav>
     </header>
     <main id="main" class="wrap">
@@ -102,7 +102,7 @@
               <p class="eyebrow">YOUR STARTING POINT</p>
               <h2 id="profile-title">まずは、いまのあなたから。</h2>
               <p>
-                8つの項目でスタート。お金や暮らしの詳細はあとから調整できます。
+                近い暮らしを選んですぐにスタート。年齢・仕事・資産は、必要なところだけ調整できます。
               </p>
             </div>
             <span class="step-label">CHAPTER 00 / 現在地</span>
@@ -122,102 +122,196 @@
             </button>
           </div>
           <form id="profile-form" class="profile-card" method="post" action="/">
-            <div class="form-grid">
+            <div class="form-grid quick-grid">
               <label
-                ><span class="field-label"><i>01</i> 年齢</span
-                ><span class="input-unit"
-                  ><input
-                    id="age"
-                    name="age"
-                    type="number"
-                    min="18"
-                    max="100"
-                    value="30"
-                    required
-                  /><span>歳</span></span
-                ></label
-              >
-              <label
-                ><span class="field-label"><i>02</i> 住んでいる地域</span
-                ><select name="region" id="region">
-                  <option value="metro">首都圏・大都市</option>
-                  <option value="city" selected>地方都市</option>
-                  <option value="rural">郊外・地方</option>
+                ><span class="field-label">近い現在地を選ぶ</span
+                ><select id="quick-preset">
+                  <option value="balanced">
+                    30歳・地方都市・仕事も暮らしも
+                  </option>
+                  <option value="starter">23歳・都市でキャリアを始める</option>
+                  <option value="experienced">40歳・経験を次の仕事へ</option>
+                  <option value="family">35歳・家族と仕事の両立</option>
+                  <option value="later">55歳・これからの働き方を考える</option>
                 </select></label
               >
               <label
-                ><span class="field-label"><i>03</i> 主な仕事・活動</span
-                ><select name="job">
-                  <option value="tech">IT・技術・研究</option>
-                  <option value="office">事務・管理・金融</option>
-                  <option value="creative">企画・デザイン・制作</option>
-                  <option value="people">営業・接客・教育</option>
-                  <option value="care">医療・介護・福祉</option>
-                  <option value="physical">現場・製造・運輸</option>
-                  <option value="independent">自営・経営・フリーランス</option>
-                  <option value="other">学生・休職中・その他</option>
+                ><span class="field-label">試してみたいキャリア</span
+                ><select name="careerGoal">
+                  <option value="growth">学びと経験で、仕事の幅を広げる</option>
+                  <option value="switch">別の企業・職種への転職</option>
+                  <option value="business">自分の事業をつくる</option>
+                  <option value="balance">家族・暮らしと仕事の両立</option>
                 </select></label
               >
               <label
-                ><span class="field-label"><i>04</i> 年収（税引き前）</span
-                ><span class="input-unit"
-                  ><input
-                    name="income"
-                    type="number"
-                    min="0"
-                    max="10000"
-                    value="500"
-                    required
-                  /><span>万円 / 年</span></span
-                ></label
-              >
-              <label
-                ><span class="field-label"><i>05</i> AIとの距離感</span
-                ><select name="ai">
-                  <option value="beginner">まだ、あまり使っていない</option>
-                  <option value="sometimes" selected>ときどき使っている</option>
-                  <option value="daily">日常的に活用している</option>
-                </select></label
-              >
-              <label
-                ><span class="field-label"><i>06</i> 大切にしたいこと</span
-                ><select name="priority">
-                  <option value="balance">無理なく、バランスよく</option>
-                  <option value="work">仕事で挑戦する</option>
-                  <option value="time">ゆとりと健康</option>
-                  <option value="people">家族や人とのつながり</option>
-                  <option value="freedom">自由と新しい体験</option>
-                </select></label
-              >
-              <label
-                ><span class="field-label"
-                  ><i>07</i> 金融資産の合計
-                  <small>預貯金・株式。借入超過ならマイナス</small></span
-                ><span class="input-unit"
-                  ><input
-                    name="savings"
-                    type="number"
-                    min="-10000"
-                    max="100000"
-                    value="300"
-                    required
-                  /><span>万円</span></span
-                ></label
-              >
-              <label
-                ><span class="field-label"><i>08</i> いまの住まい</span
-                ><select name="housing" id="housing">
-                  <option value="rent">賃貸・家族の住まいなど</option>
-                  <option value="own">持ち家</option>
+                ><span class="field-label">物語の雰囲気</span
+                ><select name="tone">
+                  <option value="realistic">現実寄りの未来</option>
+                  <option value="speculative">少しSFもある未来</option>
                 </select></label
               >
             </div>
+            <p id="quick-summary" class="field-note"></p>
+            <details class="optional-fields">
+              <summary>
+                年齢・仕事・資産を調整する<span>任意 · 基本の8項目</span>
+              </summary>
+              <div class="form-grid optional-grid">
+                <label
+                  ><span class="field-label"><i>01</i> 年齢</span
+                  ><span class="input-unit"
+                    ><input
+                      id="age"
+                      name="age"
+                      type="number"
+                      min="18"
+                      max="100"
+                      value="30"
+                      required
+                    /><span>歳</span></span
+                  ></label
+                >
+                <label
+                  ><span class="field-label"><i>02</i> 住んでいる地域</span
+                  ><select name="region" id="region">
+                    <option value="metro">首都圏・大都市</option>
+                    <option value="city" selected>地方都市</option>
+                    <option value="rural">郊外・地方</option>
+                  </select></label
+                >
+                <label
+                  ><span class="field-label"><i>03</i> 主な仕事・活動</span
+                  ><select name="job">
+                    <option value="tech">IT・技術・研究</option>
+                    <option value="office">事務・管理・金融</option>
+                    <option value="creative">企画・デザイン・制作</option>
+                    <option value="people">営業・接客・教育</option>
+                    <option value="care">医療・介護・福祉</option>
+                    <option value="physical">現場・製造・運輸</option>
+                    <option value="independent">
+                      自営・経営・フリーランス
+                    </option>
+                    <option value="other">学生・休職中・その他</option>
+                  </select></label
+                >
+                <label
+                  ><span class="field-label"><i>04</i> 年収（税引き前）</span
+                  ><span class="input-unit"
+                    ><input
+                      name="income"
+                      type="number"
+                      min="0"
+                      max="10000"
+                      value="500"
+                      required
+                    /><span>万円 / 年</span></span
+                  ></label
+                >
+                <label
+                  ><span class="field-label"><i>05</i> AIとの距離感</span
+                  ><select name="ai">
+                    <option value="beginner">まだ、あまり使っていない</option>
+                    <option value="sometimes" selected>
+                      ときどき使っている
+                    </option>
+                    <option value="daily">日常的に活用している</option>
+                  </select></label
+                >
+                <label
+                  ><span class="field-label"><i>06</i> 大切にしたいこと</span
+                  ><select name="priority">
+                    <option value="balance">無理なく、バランスよく</option>
+                    <option value="work">仕事で挑戦する</option>
+                    <option value="time">ゆとりと健康</option>
+                    <option value="people">家族や人とのつながり</option>
+                    <option value="freedom">自由と新しい体験</option>
+                  </select></label
+                >
+                <label
+                  ><span class="field-label"
+                    ><i>07</i> 金融資産の合計
+                    <small>預貯金・株式。借入超過ならマイナス</small></span
+                  ><span class="input-unit"
+                    ><input
+                      name="savings"
+                      type="number"
+                      min="-10000"
+                      max="100000"
+                      value="300"
+                      required
+                    /><span>万円</span></span
+                  ></label
+                >
+                <label
+                  ><span class="field-label"><i>08</i> いまの住まい</span
+                  ><select name="housing" id="housing">
+                    <option value="rent">賃貸・家族の住まいなど</option>
+                    <option value="own">持ち家</option>
+                  </select></label
+                >
+              </div>
+            </details>
             <details class="optional-fields">
               <summary>
                 もう少し、自分に近づける
-                <span>任意 · 家計 / 資産 / 退職 / 勤務先</span>
+                <span>任意 · 家族 / 家計 / 資産 / 職歴 / 勤務先</span>
               </summary>
               <div class="form-grid optional-grid">
+                <label
+                  ><span class="field-label">パートナーとの暮らし</span
+                  ><select name="partner">
+                    <option value="unspecified">設定しない</option>
+                    <option value="solo">いまはパートナーなし</option>
+                    <option value="partner">パートナーがいる</option>
+                  </select></label
+                >
+                <label
+                  ><span class="field-label">いまの子どもの人数</span
+                  ><select name="children">
+                    <option value="0">0人 / 設定しない</option>
+                    <option value="1">1人</option>
+                    <option value="2">2人</option>
+                    <option value="3">3人</option>
+                    <option value="4">4人</option>
+                    <option value="5">5人</option>
+                    <option value="6">6人</option>
+                  </select></label
+                >
+                <label
+                  ><span class="field-label">子どもの年代の目安</span
+                  ><select name="childStage">
+                    <option value="young">未就学（モデルでは3歳）</option>
+                    <option value="school" selected>
+                      就学中（モデルでは10歳）
+                    </option>
+                    <option value="adult">成人（モデルでは22歳）</option>
+                  </select></label
+                >
+                <label
+                  ><span class="field-label">これからの子どもの希望</span
+                  ><select name="childrenWish">
+                    <option value="undecided">まだ決めていない</option>
+                    <option value="none">増やす予定はない</option>
+                    <option value="one">合計1人くらい</option>
+                    <option value="two">合計2人くらい</option>
+                    <option value="three">合計3人くらい</option>
+                  </select></label
+                >
+                <label class="wide-field"
+                  ><span class="field-label"
+                    >職歴・得意なこと・試したい仕事
+                    <small>任意 / 1000文字まで</small></span
+                  ><textarea
+                    name="careerNotes"
+                    maxlength="1000"
+                    rows="3"
+                    placeholder="例：クラウド運用を経験。顧客に近いAIの仕事へ移りたい。"
+                  ></textarea>
+                </label>
+                <p class="field-note wide-field">
+                  いまの家族の支出は生活費に含めてください。全員を選んだ代表年齢として扱い、ゲーム開始後に迎えた子には年36万円を22歳まで追加する簡略モデルです。家族を迎える確率はゲーム用で、医学的な予測ではありません。職歴メモは物語の参考に使い、文章の長さで能力を加点しません。クラウドAI利用時はメモも送信されます。LinkedInの自動取得は未対応です。
+                </p>
                 <label
                   ><span class="field-label"
                     >性別 <small>計算・寿命に使いません</small></span
@@ -528,8 +622,20 @@
             <div id="stats"></div>
             <div class="ai-meter">
               <span>この世界のAI普及 <b id="ai-stage"></b></span
-              ><progress id="ai-progress" max="1" value="0"></progress>
-              <p>未来シナリオ上の指標です。</p>
+              ><progress
+                aria-label="職場でのAIの浸透"
+                id="ai-progress"
+                max="1"
+                value="0"
+              ></progress>
+              <p>能力の進歩と、現場への浸透を分けたゲーム上の指標です。</p>
+              <span>AIの能力の進歩</span
+              ><progress
+                aria-label="AIの能力の進歩"
+                id="capability-progress"
+                max="1"
+                value="0"
+              ></progress>
             </div>
             <div class="sidebar-note">
               人生のよさは、<br />ひとつの数字では測れない。
@@ -539,6 +645,18 @@
             </button>
           </aside>
           <div class="story-column">
+            <section
+              id="world-context"
+              class="world-context"
+              aria-label="世界と家族の状況"
+            ></section>
+            <details class="model-notes">
+              <summary>この世界の仕組みと、過去の参考資料</summary>
+              <p>
+                2026年から先の世界・勤務先の業況・成功率はゲーム上の仮定です。過去のデータは普及の遅れや業種差を考える参考で、AIの未来にそのまま当てはめていません。景気と国際情勢は原則3年の局面。学習・家族の結果は別に抽選し、同じ選択でも別の人生になります。「戻る」は同じ乱数を保つため、同じ選択は同じ結果です。
+              </p>
+              <div id="historical-facts"></div>
+            </details>
             <div class="game-toolbar">
               <button id="generate-button" class="button primary small">
                 この場面をAIで生成 ✳</button
@@ -770,9 +888,7 @@
         </div>
         <p id="ai-accounting" class="field-note"></p>
         <p id="ai-error" class="error" role="alert"></p>
-        <button class="button primary" type="submit">
-          この接続先を使う ↗
-        </button>
+        <button class="button primary" type="submit">この接続先を使う ↗</button>
       </form>
     </dialog>
     <dialog id="exchange-dialog">
@@ -881,10 +997,10 @@
         <div id="career-venture-fields" hidden>
           <label>始めたい事業<select id="career-venture"></select></label>
           <label
-            >あなたの事業の名前<input
+            >あなたの事業の名前（空欄なら自動）<input
               id="venture-name"
               maxlength="60"
-              placeholder="まだない会社に、名前をつけよう"
+              placeholder="名前を考えずに、そのまま始められます"
           /></label>
         </div>
         <div id="career-preview" class="career-preview"></div>

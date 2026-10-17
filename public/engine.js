@@ -1,4 +1,5 @@
 import { EMPLOYERS, VENTURES } from "./careers.js";
+import { worldAt, worldEnabled, opportunityAt, TONES } from "./world.js";
 // All monetary values are illustrative, in 2026 purchasing-power units of ¥10,000.
 export const VERSION = 2;
 export const START_YEAR = 2026;
@@ -63,6 +64,66 @@ export const CHOICES = Object.freeze({
     connection: -1,
     freedom: 1,
     icon: "↗",
+  },
+  studyDaily: {
+    label: "専門とAIを、1日1時間学ぶ",
+    hint: "年間365時間の学び。仕事に生かせる確率を育てるが、評価は保証されない",
+    cost: 12,
+    skill: 12,
+    health: -2,
+    connection: -2,
+    freedom: -2,
+    icon: "↗",
+  },
+  meet: {
+    label: "新しい出会いに時間を使う",
+    hint: "関係を育てる。パートナーと出会うとは限らない",
+    cost: 8,
+    skill: 0,
+    health: 1,
+    connection: 6,
+    freedom: 1,
+    icon: "♡",
+  },
+  familyPlan: {
+    label: "家族を迎える準備を進める",
+    hint: "育て方や支援を相談。すぐに家族が増えるとは限らない",
+    cost: 15,
+    skill: 0,
+    health: -1,
+    connection: 4,
+    freedom: -2,
+    icon: "♡",
+  },
+  reconsiderFamily: {
+    label: "もうひとり迎える暮らしを考える",
+    hint: "希望を見直す。選ぶだけで子どもが増えることはない",
+    cost: 0,
+    skill: 0,
+    health: 0,
+    connection: 2,
+    freedom: 0,
+    icon: "♡",
+  },
+  careLeave: {
+    label: "仕事の比重を下げ、家族を支える",
+    hint: "この年の労働収入を15%抑え、家族との時間とゆとりへ",
+    cost: 0,
+    skill: 0,
+    health: 4,
+    connection: 7,
+    freedom: 1,
+    icon: "♡",
+  },
+  opportunity: {
+    label: "思いがけない起業の誘いに乗る",
+    hint: "その年に現れた架空の事業を、用意された名前で始める。失敗もある",
+    cost: 0,
+    skill: 7,
+    health: -4,
+    connection: 4,
+    freedom: 8,
+    icon: "✧",
   },
   focus: {
     label: "いまの仕事を深める",
@@ -293,6 +354,25 @@ export function validateProfile(raw) {
   p.housing = raw.housing ?? "rent";
   if (!["rent", "own"].includes(p.housing)) fail();
   if (p.housing === "rent" && (p.homeValue || p.mortgage)) fail();
+  p.tone = raw.tone ?? "realistic";
+  p.partner = raw.partner ?? "unspecified";
+  p.childrenWish = raw.childrenWish ?? "undecided";
+  p.careerGoal = raw.careerGoal ?? "growth";
+  if (
+    !Object.hasOwn(TONES, p.tone) ||
+    !["unspecified", "solo", "partner"].includes(p.partner) ||
+    !["undecided", "none", "one", "two", "three"].includes(p.childrenWish) ||
+    !["growth", "switch", "business", "balance"].includes(p.careerGoal)
+  )
+    fail();
+  p.children = num(raw, "children", 0, 6, 0);
+  p.childStage = raw.childStage ?? "school";
+  if (
+    !Number.isInteger(p.children) ||
+    !["young", "school", "adult"].includes(p.childStage)
+  )
+    fail();
+  p.careerNotes = str(raw.careerNotes ?? "", 1000, true);
   p.companyFacts = validateCompanyFacts(raw.companyFacts ?? null);
   return p;
 }
@@ -327,6 +407,11 @@ export function validateDecision(raw, g) {
   const id = decisionId(raw);
   if (!availableChoices(g).includes(id)) fail();
   if (typeof raw === "string") {
+    if (id === "opportunity") {
+      const offer = opportunityAt(g);
+      if (!offer) fail();
+      return { id: "startup", venture: offer.venture, name: offer.name };
+    }
     if (id === "startup") fail();
     return raw;
   }
@@ -452,6 +537,7 @@ export function createGame(
   scenario = "steady",
   seed = 2026,
   dynamicFrom = 0,
+  worldFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -461,7 +547,10 @@ export function createGame(
     seed > 0xffffffff ||
     !Number.isInteger(dynamicFrom) ||
     dynamicFrom < 0 ||
-    dynamicFrom > MAX_AGE
+    dynamicFrom > MAX_AGE ||
+    !Number.isInteger(worldFrom) ||
+    worldFrom < 0 ||
+    worldFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -473,6 +562,19 @@ export function createGame(
     seed,
     decisions: [],
     dynamicFrom,
+    worldFrom,
+    studyHours: 0,
+    family: {
+      partner: p.partner === "partner",
+      childAges: Array(p.children).fill(
+        { young: 3, school: 10, adult: 22 }[p.childStage],
+      ),
+      desired: { undecided: null, none: 0, one: 1, two: 2, three: 3 }[
+        p.childrenWish
+      ],
+      lastPlan: -3,
+      lastWish: -4,
+    },
     businessStage: null,
     businessSetbacks: 0,
     year: START_YEAR,
@@ -511,6 +613,7 @@ export function createGame(
   };
 }
 export function technologyAt(g) {
+  if (worldEnabled(g)) return worldAt(g).adoption;
   return clamp(
     (0.12 + g.decisions.length * 0.037) * SCENARIOS[g.scenario].pace,
     0,
@@ -549,6 +652,32 @@ export function availableChoices(g) {
     )
       ids.push("recover");
   }
+  if (worldEnabled(g)) {
+    ids.push("studyDaily");
+    if (!g.family.partner && g.age < 75) ids.push("meet");
+    if (
+      g.age <= 65 &&
+      g.family.childAges.length < 6 &&
+      g.decisions.length - g.family.lastPlan >= 3 &&
+      (g.family.desired === null ||
+        g.family.childAges.length < g.family.desired)
+    )
+      ids.push("familyPlan");
+    if (
+      g.age <= 65 &&
+      g.family.desired !== null &&
+      g.family.desired > 0 &&
+      g.family.childAges.length >= g.family.desired &&
+      g.family.childAges.length < 6 &&
+      g.decisions.length - g.family.lastWish >= 4 &&
+      randomAt(g.seed, g.decisions.length, 75) < 0.35
+    )
+      ids.push("reconsiderFamily");
+    if (g.family.childAges.some((age) => age < 18) && !g.retired)
+      ids.push("careLeave");
+    if (opportunityAt(g) && randomAt(g.seed, g.decisions.length, 77) < 0.55)
+      ids.push("opportunity");
+  }
   if (!g.retired && g.age >= 45) ids.push("retire");
   return ids;
 }
@@ -573,9 +702,110 @@ export function suggestedChoices(g) {
     ["learn", "rest", "explore", "focus", "connect"],
     ["explore", "connect", "focus", "learn", "rest"],
   ];
+  const moments = [
+    "reconsiderFamily",
+    "familyPlan",
+    "meet",
+    "careLeave",
+    "opportunity",
+  ].filter((id) => allowed.includes(id));
+  const moment = moments.length
+    ? moments[g.decisions.length % moments.length]
+    : null;
+  if (worldEnabled(g)) {
+    const goal = {
+      switch: "switch",
+      business: "startup",
+      balance: allowed.includes("careLeave") ? "careLeave" : "connect",
+      growth: "studyDaily",
+    }[g.profile.careerGoal];
+    const career = [
+      "pivot",
+      "expand",
+      "recover",
+      "negotiate",
+      goal,
+      "pilot",
+    ].find((id) => allowed.includes(id));
+    return [
+      ...new Set([
+        career,
+        moment,
+        ...(g.decisions.length % 2 === 0 ? ["studyDaily"] : []),
+        ...contextual,
+        ...rotations[g.decisions.length % 3],
+      ]),
+    ]
+      .filter(Boolean)
+      .slice(0, 5);
+  }
   return [
     ...new Set([...contextual, ...rotations[g.decisions.length % 3]]),
   ].slice(0, 5);
+}
+export function workSuccessChance(g, employer = g.employer) {
+  const w = worldAt(g, employer);
+  return clamp(
+    0.24 + g.skill * 0.004 + g.health * 0.0015 + w.demand * 0.12,
+    0.15,
+    0.88,
+  );
+}
+function familyTurn(g, choice) {
+  const family = {
+    ...g.family,
+    childAges: g.family.childAges.map((age) => age + 1),
+  };
+  let outcome = null;
+  if (!worldEnabled(g)) return { family, outcome, cost: 0 };
+  const roll = randomAt(g.seed, g.decisions.length, 74);
+  const life = (title, body) => ({
+    kind: "life",
+    title,
+    body,
+    salaryFactor: choice === "careLeave" ? 0.85 : 1,
+    extraCost: 0,
+  });
+  if (choice === "meet") {
+    if (roll < 0.52) family.partner = true;
+    outcome = life(
+      family.partner
+        ? "出会いから、共に暮らす関係へ。"
+        : "出会いはあったが、関係はゆっくり。",
+      family.partner
+        ? "互いの希望を話し合い、パートナーとの暮らしを選んだ。家族の希望や仕事の比重を、また考えられる。"
+        : "時間を使っても、すぐに望む関係になるとは限らない。人とのつながりを残し、次の一年へ。",
+    );
+  }
+  if (choice === "reconsiderFamily") {
+    family.desired = Math.min(6, family.childAges.length + 1);
+    family.lastWish = g.decisions.length;
+    outcome = life(
+      "家族についての希望を、更新した。",
+      "もうひとり迎える可能性を考えることにした。次の年から準備を選べる。希望は結果の保証ではない。",
+    );
+  }
+  if (choice === "familyPlan") {
+    family.lastPlan = g.decisions.length;
+    if (roll < 0.58) family.childAges.push(0);
+    outcome = life(
+      roll < 0.58
+        ? "新しい家族を迎える暮らしが始まった。"
+        : "家族の準備は、もう少し続く。",
+      roll < 0.58
+        ? "育て方や周囲の支援を整え、新しい家族との生活へ。子どもの世話と仕事の時間をどう分けるか、次の選択が生まれた。"
+        : "話し合いや支援の準備には時間が必要だった。希望どおりの時期には進まなかったが、暮らしや希望を選び直せる。",
+    );
+  }
+  if (choice === "careLeave")
+    outcome = life(
+      "家族を支える時間へ、比重を移した。",
+      "この年の労働収入を抑え、家族との時間とゆとりを増やした。翌年も同じ働き方を続ける必要はない。",
+    );
+  const cost =
+    family.childAges.slice(g.profile.children).filter((age) => age < 22)
+      .length * 36;
+  return { family, outcome, cost };
 }
 function yearlyOutcome(g, choice, employer) {
   const i = g.decisions.length;
@@ -587,7 +817,9 @@ function yearlyOutcome(g, choice, employer) {
   )
     return null;
   const roll = randomAt(g.seed, i, 31),
-    ability = clamp(0.35 + g.skill * 0.004 + g.health * 0.002, 0.2, 0.85);
+    ability = worldEnabled(g)
+      ? workSuccessChance(g, employer)
+      : clamp(0.35 + g.skill * 0.004 + g.health * 0.002, 0.2, 0.85);
   if (choice === "closeBusiness")
     return {
       kind: "closure",
@@ -602,7 +834,10 @@ function yearlyOutcome(g, choice, employer) {
         (g.cash < g.livingCost * 12 ? 0.12 : 0) +
         technologyAt(g) * (1 - g.skill / 100) * 0.12 +
         (choice === "expand" ? 0.12 : 0) -
-        (choice === "pivot" ? 0.08 : 0),
+        (choice === "pivot" ? 0.08 : 0) +
+        (worldEnabled(g)
+          ? (0.5 - worldAt(g, employer).demand) * 0.25 - g.skill * 0.0005
+          : 0),
       0.1,
       0.55,
     );
@@ -627,7 +862,9 @@ function yearlyOutcome(g, choice, employer) {
           choice === "pivot"
             ? "方向転換が、次の顧客につながった。"
             : "仕事が紹介され、事業に手応え。",
-        body: "顧客との仕事が増え、事業収入が伸びた。次は追加投資して広げるか、暮らしとのバランスを選べる。",
+        body: worldEnabled(g)
+          ? "顧客との仕事に手応えがあった。事業を広げる道が見えてきたが、開業や運営の費用もかかる。収入と家計の変化を確かめ、次の一歩を選べる。"
+          : "顧客との仕事が増え、事業収入が伸びた。次は追加投資して広げるか、暮らしとのバランスを選べる。",
         salaryFactor: choice === "expand" ? 1.3 : 1.15,
         extraCost: 0,
       };
@@ -645,6 +882,7 @@ function yearlyOutcome(g, choice, employer) {
       "negotiate",
       "focus",
       "learn",
+      "studyDaily",
       "switch",
       "explore",
       "mentor",
@@ -659,6 +897,10 @@ function yearlyOutcome(g, choice, employer) {
       negotiate: [
         "成果が認められ、役割と収入が変化。",
         "今回の待遇の相談は見送りに。",
+      ],
+      studyDaily: [
+        "毎日の学びが、仕事に生きる場面へ。",
+        "学びを続けたが、今年の評価には届かず。",
       ],
       learn: [
         "新しい力を、使える手応えが生まれた。",
@@ -683,6 +925,7 @@ function yearlyOutcome(g, choice, employer) {
     };
     return {
       kind: success ? "success" : "setback",
+      ...(worldEnabled(g) ? { chance: ability } : {}),
       title: titles[choice][success ? 0 : 1],
       body: success
         ? "取り組みが次の仕事につながった。得た成果を試す、相談するなど、次の選び方も広がる。"
@@ -782,8 +1025,14 @@ export function eventFor(g) {
   if (cached) return { ...cached, generated: true };
   const options = suggestedChoices(g).map((id) => ({
     id,
-    label: CHOICES[id].label,
-    hint: CHOICES[id].hint,
+    label:
+      id === "opportunity"
+        ? (opportunityAt(g)?.label ?? CHOICES[id].label)
+        : CHOICES[id].label,
+    hint:
+      id === "opportunity"
+        ? `初期費用${opportunityAt(g)?.setup}万円。収入が減ることも、事業が失敗することもある`
+        : CHOICES[id].hint,
   }));
   const last = decisionId(g.decisions.at(-1)),
     company = g.employer.name;
@@ -817,11 +1066,13 @@ export function eventFor(g) {
       technologyAt(g) > 0.5
         ? "仕事のかたちを、作りなおす。"
         : `${company}で、次の役割を考える。`;
-    body = `${g.age}歳、${company}で${JOBS[g.employer.role].label}を担うあなた。${SCENARIOS[g.scenario].label}の世界では、AIを使う仕事の比重が${technologyAt(g) > 0.5 ? "大きく変わってきた" : "少しずつ増えている"}。${g.profile.household === "care" ? "育児やケアとの両立も、時間の使い方を左右する。" : ""}${last === "learn" ? "去年の学びを、実際の仕事で試す場面が見えてきた。" : last === "connect" ? "大切な人と過ごした時間が、選びたい働き方を考えるきっかけになった。" : "収入だけでなく、暮らしに残る時間も大切にしたい。"}`;
+    body = `${g.age}歳、${company}で${JOBS[g.employer.role].label}を担うあなた。${SCENARIOS[g.scenario].label}の世界では、AIを使う仕事の比重が${technologyAt(g) > 0.5 ? "大きく変わってきた" : "少しずつ増えている"}。${g.profile.household === "care" ? "育児やケアとの両立も、時間の使い方を左右する。" : ""}${["learn", "studyDaily"].includes(last) ? "去年の学びを、実際の仕事で試す場面が見えてきた。" : last === "connect" ? "大切な人と過ごした時間が、選びたい働き方を考えるきっかけになった。" : "収入だけでなく、暮らしに残る時間も大切にしたい。"}`;
   }
   return {
     title,
-    body,
+    body: worldEnabled(g)
+      ? `${body} ${worldAt(g).shock.body}${worldAt(g).frontier ? ` ${worldAt(g).frontier}` : ""}`
+      : body,
     insight: `仕事・資産・住まい・過去の選択を反映したローカルの物語。AI普及指標はゲーム上の仮定。`,
     options,
     generated: false,
@@ -833,7 +1084,14 @@ export function advance(g, rawDecision) {
   const decision = validateDecision(rawDecision, g),
     choice = decisionId(decision);
   let employer = nextEmployer(g, decision);
-  const outcome = yearlyOutcome(g, choice, employer);
+  const familyChange = familyTurn(g, choice);
+  const workOutcome = yearlyOutcome(g, choice, employer);
+  // Family events do not suspend business risk. Both can happen in one year.
+  const outcome =
+    employer.kind === "venture"
+      ? workOutcome
+      : (familyChange.outcome ?? workOutcome);
+  const world = worldEnabled(g) ? worldAt(g, employer) : null;
   if (outcome?.kind === "failure" || outcome?.kind === "closure")
     employer = {
       kind: "seeking",
@@ -900,6 +1158,7 @@ export function advance(g, rawDecision) {
     growth +=
       (randomAt(g.seed, i, 21) - 0.5) * 0.4 +
       tech * (g.skill / 100 - 0.5) * 0.1;
+  if (world) growth += world.growth;
   const transitionIncome =
     choice === "startup" ? 0.3 + randomAt(g.seed, i, 22) * 0.55 : 1;
   const salary = retired
@@ -912,7 +1171,13 @@ export function advance(g, rawDecision) {
             : g.salary) *
           (1 + growth) *
           transitionIncome *
-          (outcome?.salaryFactor ?? 1),
+          (outcome?.salaryFactor ?? 1) *
+          (familyChange.outcome && outcome !== familyChange.outcome
+            ? familyChange.outcome.salaryFactor
+            : 1) *
+          (world && decisionId(g.decisions.at(-1)) === "careLeave"
+            ? 1 / 0.85
+            : 1),
         0,
         20000,
       );
@@ -945,7 +1210,10 @@ export function advance(g, rawDecision) {
     livingCost *= REGIONS[region].cost / prev;
     rent *= REGIONS[region].cost / prev;
   }
-  const stockReturn = 0.025 + (randomAt(g.seed, i, 8) - 0.5) * 0.34,
+  const stockReturn =
+      0.025 +
+      (randomAt(g.seed, i, 8) - 0.5) * 0.34 +
+      (world?.shock.market ?? 0),
     propertyReturn = (randomAt(g.seed, i, 9) - 0.5) * 0.06;
   const investmentGain = investments * stockReturn;
   investments += investmentGain;
@@ -961,7 +1229,11 @@ export function advance(g, rawDecision) {
   const disposable = income * 0.76,
     bonus = choice === "explore" ? (randomAt(g.seed, i, 1) - 0.5) * 30 : 0;
   const expenses =
-    livingCost * 12 + housingCost + cost + (g.age >= 80 ? 12 : 0);
+    livingCost * 12 * (1 + (world?.shock.costs ?? 0)) +
+    housingCost +
+    cost +
+    familyChange.cost +
+    (g.age >= 80 ? 12 : 0);
   cash += disposable - expenses + bonus;
   let liquidation = 0;
   if (cash < 0 && investments > 0) {
@@ -987,7 +1259,17 @@ export function advance(g, rawDecision) {
   const freedom = clamp(
     g.freedom + c.freedom - 0.5 + (p.priority === "freedom" ? 0.8 : 0),
   );
-  const skill = clamp(g.skill + c.skill - 2 * SCENARIOS[g.scenario].pace);
+  const skill = clamp(
+    g.skill +
+      c.skill *
+        (world && ["learn", "studyDaily"].includes(choice)
+          ? 0.7 + randomAt(g.seed, i, 78) * 0.6
+          : 1) -
+      2 * SCENARIOS[g.scenario].pace,
+  );
+  const studyHours =
+    g.studyHours +
+    (world ? (choice === "studyDaily" ? 365 : choice === "learn" ? 90 : 0) : 0);
   const ended = randomAt(g.seed, i, 20) < deathChance(g);
   const savings = cash + investments + homeValue - mortgage - debt;
   const effects = {
@@ -1035,6 +1317,11 @@ export function advance(g, rawDecision) {
     freedom,
     skill,
     outcome,
+    world,
+    family: familyChange.family,
+    familyCost: familyChange.cost,
+    familyOutcome: familyChange.outcome,
+    studyHours,
     note: outcome
       ? `${outcome.title} ${effects[choice] ?? c.label}`
       : effects[choice],
@@ -1058,6 +1345,8 @@ export function advance(g, rawDecision) {
   return {
     ...g,
     employer,
+    family: familyChange.family,
+    studyHours,
     businessStage:
       employer.kind === "venture"
         ? outcome?.kind === "success"
@@ -1109,6 +1398,7 @@ export function replay(
   scenes = {},
   stopAtEnd = false,
   dynamicFrom = 0,
+  worldFrom = 0,
 ) {
   if (
     !Array.isArray(decisions) ||
@@ -1119,7 +1409,7 @@ export function replay(
     Object.keys(scenes).length > MAX_AGE
   )
     fail();
-  let g = createGame(profile, scenario, seed, dynamicFrom);
+  let g = createGame(profile, scenario, seed, dynamicFrom, worldFrom);
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
       if (stopAtEnd) break;
@@ -1146,13 +1436,23 @@ export function replay(
 }
 export function compareWorlds(g) {
   return Object.keys(SCENARIOS).map((s) =>
-    replay(g.profile, s, g.seed, g.decisions, {}, true, g.dynamicFrom),
+    replay(
+      g.profile,
+      s,
+      g.seed,
+      g.decisions,
+      {},
+      true,
+      g.dynamicFrom,
+      g.worldFrom,
+    ),
   );
 }
 export function encodeSave(g) {
   const value = JSON.stringify({
     version: VERSION,
     dynamicFrom: g.dynamicFrom,
+    worldFrom: g.worldFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
@@ -1178,5 +1478,6 @@ export function decodeSave(value) {
     d.scenes ?? {},
     false,
     d.dynamicFrom ?? d.decisions?.length,
+    d.worldFrom ?? d.decisions?.length,
   );
 }

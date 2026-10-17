@@ -1610,3 +1610,59 @@ textarea:focus-visible {
     animation: none;
   }
 }
+
+/* World context and causal results share the existing quiet paper palette. */
+.quick-grid {
+  margin-bottom: 14px;
+}
+.wide-field {
+  grid-column: 1 / -1;
+}
+.world-context {
+  padding: 24px 28px;
+  background: #e8eee6;
+  border: 1px solid #d4ded0;
+  border-radius: 14px;
+  margin-bottom: 16px;
+}
+.world-context h2 {
+  font-size: 1.35rem;
+  margin: 8px 0 14px;
+}
+.world-context p {
+  line-height: 1.8;
+}
+.world-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.world-tags span {
+  border: 1px solid #c3d0c0;
+  border-radius: 20px;
+  padding: 5px 12px;
+  font-size: 0.8rem;
+}
+.model-notes {
+  margin-bottom: 24px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.9;
+}
+.model-notes summary {
+  cursor: pointer;
+}
+.model-notes p {
+  margin: 12px 0;
+}
+.result-factors {
+  padding-top: 12px;
+  border-top: 1px solid #d4ded0;
+  font-size: 0.88rem;
+  line-height: 1.9;
+}
+@media (max-width: 600px) {
+  .world-context {
+    padding: 18px;
+  }
+}
