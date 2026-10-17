@@ -10,6 +10,7 @@ import {
   eventFor,
 } from "../public/engine.js";
 import { storyRequest, sceneSchema, groundScene } from "../public/story.js";
+import { memoryStopReason } from "./local-memory.mjs";
 
 const base = "http://127.0.0.1:11434";
 if (process.platform !== "darwin") {
@@ -19,6 +20,9 @@ if (process.platform !== "darwin") {
 }
 const model = process.argv[2];
 const variant = process.argv[3] ?? "current";
+// The older prompt experiments describe the legacy 3–5 choice contract.
+// Keep their schema and validation separate from today's personalized four.
+const personalized = variant === "current";
 const sampleSeed = Number(process.env.BENCH_SEED ?? 2026);
 if (
   !Number.isSafeInteger(sampleSeed) ||
@@ -210,12 +214,6 @@ const memory = () => ({
     encoding: "utf8",
   }).trim(),
 });
-const swapMiB = (text) => {
-  const used = text.match(/used\s*=\s*([\d.]+)([KMG])/u);
-  return used
-    ? Number(used[1]) * { K: 1 / 1024, M: 1, G: 1024 }[used[2]]
-    : null;
-};
 const modelInfoResponse = await fetch(`${base}/api/show`, {
   method: "POST",
   headers: { "Content-Type": "application/json" },
@@ -231,6 +229,9 @@ const report = {
   digest: installed.digest,
   size: installed.size,
   variant,
+  choiceContract: personalized
+    ? "personalized-four-v1"
+    : "legacy-three-to-five",
   details: modelInfo.details,
   capabilities: modelInfo.capabilities,
   modelParameters: modelInfo.parameters,
@@ -247,14 +248,14 @@ const report = {
   results: [],
 };
 const out = new URL(
-  `../artifacts/local-${model.replace(/[^a-z0-9.-]/gi, "_")}-${variant}${process.env.BENCH_SEED ? `-${sampleSeed}` : ""}.json`,
+  `../artifacts/local-${model.replace(/[^a-z0-9.-]/gi, "_")}-${variant}${process.env.BENCH_SEED ? `-${sampleSeed}` : ""}-${report.date.replace(/[^0-9TZ]/g, "")}.json`,
   import.meta.url,
 );
 await mkdir(new URL("../artifacts/", import.meta.url), { recursive: true });
 const save = () => writeFile(out, `${JSON.stringify(report, null, 2)}\n`);
 try {
   for (const [id, game] of cases) {
-    const request = storyRequest(game);
+    const request = storyRequest(game, { personalized });
     const messages =
       variant === "current"
         ? request.messages
@@ -271,7 +272,25 @@ try {
           ];
     const result = { id, seed: game.seed, context: request.context, messages };
     const start = performance.now();
+    let monitor;
     try {
+      const controller = new AbortController();
+      result.memorySamples = [];
+      monitor = setInterval(() => {
+        try {
+          const sample = memory();
+          result.memorySamples.push(sample);
+          const reason = memoryStopReason(report.before, sample);
+          if (reason) {
+            report.stoppedReason = reason;
+            result.interruptedForMemory = true;
+            controller.abort(new Error(reason));
+          }
+        } catch (error) {
+          // A broken monitor must not leave a large inference unbounded.
+          controller.abort(error);
+        }
+      }, 10_000);
       const response = await fetch(`${base}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -280,11 +299,14 @@ try {
           messages,
           stream: false,
           think: false,
-          format: sceneSchema(game),
+          format: sceneSchema(game, { personalized }),
           options: report.options,
           keep_alive: "2m",
         }),
-        signal: AbortSignal.timeout(120_000),
+        signal: AbortSignal.any([
+          AbortSignal.timeout(120_000),
+          controller.signal,
+        ]),
       });
       const data = await response.json();
       result.elapsedSeconds = (performance.now() - start) / 1000;
@@ -305,7 +327,7 @@ try {
         ].map((key) => [key, data[key]]),
       );
       const parsed = JSON.parse(result.raw);
-      const validated = validateGeneratedScene(parsed, game);
+      const validated = validateGeneratedScene(parsed, game, { personalized });
       result.contractUnchanged = isDeepStrictEqual(parsed, validated);
       result.scene = groundScene(validated, game);
       result.valid = true;
@@ -319,22 +341,13 @@ try {
       result.error = e.message;
       result.valid = false;
       result.elapsedSeconds ??= (performance.now() - start) / 1000;
+    } finally {
+      clearInterval(monitor);
     }
     result.loaded = await localJSON("/api/ps");
     result.memory = memory();
     report.results.push(result);
-    const initialSwap = swapMiB(report.before.swap);
-    const currentSwap = swapMiB(result.memory.swap);
-    const free = result.memory.pressure.match(/free percentage:\s*(\d+)%/u);
-    if (
-      (initialSwap !== null &&
-        currentSwap !== null &&
-        currentSwap - initialSwap >= 1024) ||
-      (free && Number(free[1]) < 10)
-    ) {
-      report.stoppedReason =
-        "Memory limit: swap grew by at least 1 GiB or system memory free fell below 10%. Remaining cases were not run.";
-    }
+    report.stoppedReason ??= memoryStopReason(report.before, result.memory);
     await save();
     console.log(
       JSON.stringify({
@@ -366,7 +379,7 @@ try {
   report.after = memory();
   await save();
 }
-if (report.cleanupError || report.results.some((r) => !r.valid))
-  process.exitCode = 1;
+if (report.cleanupError) process.exitCode = 1;
 else if (report.stoppedReason) process.exitCode = 2;
+else if (report.results.some((r) => !r.valid)) process.exitCode = 1;
 console.log(`Saved ${out.pathname}`);
