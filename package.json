@@ -1,0 +1,17 @@
+{
+  "name": "unwritten-life",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A private-first life simulation, starting from your life in 2026.",
+  "engines": {
+    "node": ">=24 <27"
+  },
+  "scripts": {
+    "dev": "node server.mjs",
+    "start": "node server.mjs",
+    "test": "node --test",
+    "check": "node --check server.mjs && node --check public/engine.js && node --check public/app.js && node --test",
+    "audit": "npm audit --omit=dev --audit-level=high"
+  }
+}

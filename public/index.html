@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="自分のままで、いくつもの未来を。2026年のあなたから始まる、AI時代の人生シミュレーションゲーム。"
+    />
+    <meta name="referrer" content="no-referrer" />
+    <title>Unwritten Life — 自分のままで、いくつもの未来を。</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <header class="header wrap">
+      <a class="brand" href="/" aria-label="Unwritten Life ホーム"
+        ><span class="brand-icon">u.</span
+        ><span
+          >unwritten life<span class="brand-sub"
+            >あなたから、はじまる物語。</span
+          ></span
+        ></a
+      >
+      <nav aria-label="メイン">
+        <button class="text-button" id="about-button">
+          このゲームについて <span>↗</span></button
+        ><span class="version">EARLY ACCESS / 0.1</span>
+      </nav>
+    </header>
+    <main id="main" class="wrap">
+      <div id="setup">
+        <section class="hero" aria-labelledby="hero-title">
+          <div class="hero-copy">
+            <p class="eyebrow">
+              <span class="live-dot"></span> A LIFE SIMULATOR FOR THE AI AGE
+            </p>
+            <h1 id="hero-title">
+              自分のままで、<br />いくつもの<span class="serif-accent"
+                >未来</span
+              >を。
+            </h1>
+            <p class="lead">
+              もし、あの選択の先をのぞけたら。<br />仕事も、家族も、あなたらしい暮らしも。<br />2026年のあなたから、まだ書かれていない人生がはじまる。
+            </p>
+            <div class="hero-actions">
+              <a class="button primary" href="#profile-section"
+                >自分の未来をはじめる <span>↗</span></a
+              ><button class="text-button" id="demo-button">
+                架空の人物で試す →
+              </button>
+            </div>
+            <p class="privacy-line">
+              <span>◈</span> ログイン不要 · 入力は外部に送信されません
+            </p>
+          </div>
+          <div
+            class="future-art"
+            aria-label="2026年の現在から、いくつもの未来へ分かれていく道のイラスト"
+            role="img"
+          >
+            <div class="art-caption">THE FUTURE IS STILL UNWRITTEN.</div>
+            <div class="sun"></div>
+            <div class="art-grain"></div>
+            <svg class="paths" viewBox="0 0 500 470" aria-hidden="true">
+              <path d="M250 480 C250 355 255 330 240 275 S150 180 132 75" />
+              <path d="M250 480 C250 355 255 330 270 270 S325 170 328 30" />
+              <path d="M250 480 C250 355 255 330 305 295 S430 230 455 135" />
+            </svg>
+            <span class="year-label year-now"
+              >2026<span>いまの、あなた</span></span
+            ><span class="year-label year-later">2036</span
+            ><span class="year-label year-end">2046</span>
+            <div class="art-note note-one">
+              <span class="note-symbol">✳</span>
+              <div>
+                新しい仕事に、出会う。<small>ひとつの選択が、道になる。</small>
+              </div>
+            </div>
+            <div class="art-note note-two">
+              <span class="note-symbol">♡</span>
+              <div>大切な人と、ゆっくり。</div>
+            </div>
+            <span class="art-star">✳</span>
+            <span class="art-bottom">ONE YOU. MANY POSSIBLE LIVES.</span>
+          </div>
+        </section>
+        <div class="feature-strip">
+          <span><b>01</b> あなた自身が主人公</span
+          ><span><b>02</b> AIで変わる3つの世界</span
+          ><span><b>03</b> 選びなおせる、20年の物語</span>
+        </div>
+        <section
+          id="profile-section"
+          class="profile-section"
+          aria-labelledby="profile-title"
+        >
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">YOUR STARTING POINT</p>
+              <h2 id="profile-title">まずは、いまのあなたから。</h2>
+              <p>6つの項目でスタート。迷ったら、仮の設定でも大丈夫。</p>
+            </div>
+            <span class="step-label">CHAPTER 00 / 現在地</span>
+          </div>
+          <div id="resume-banner" class="resume-banner" hidden>
+            <span>この端末に、物語の続きが残っています。</span
+            ><button id="resume-button" class="button small">
+              続きから遊ぶ →</button
+            ><button id="delete-save" class="text-button">保存を削除</button>
+          </div>
+          <form id="profile-form" class="profile-card" method="post" action="/">
+            <div class="form-grid">
+              <label
+                ><span class="field-label"><i>01</i> 年齢</span
+                ><span class="input-unit"
+                  ><input
+                    id="age"
+                    name="age"
+                    type="number"
+                    min="18"
+                    max="80"
+                    step="1"
+                    value="30"
+                    required
+                  /><span>歳</span></span
+                ></label
+              >
+              <label
+                ><span class="field-label"><i>02</i> 住んでいる地域</span
+                ><select name="region" id="region">
+                  <option value="metro">首都圏・大都市</option>
+                  <option value="city" selected>地方都市</option>
+                  <option value="rural">郊外・地方</option>
+                </select></label
+              >
+              <label
+                ><span class="field-label"><i>03</i> 主な仕事・活動</span
+                ><select name="job" id="job">
+                  <option value="tech">IT・技術・研究</option>
+                  <option value="office">事務・管理・金融</option>
+                  <option value="creative">企画・デザイン・制作</option>
+                  <option value="people">営業・接客・教育</option>
+                  <option value="care">医療・介護・福祉</option>
+                  <option value="physical">現場・製造・運輸</option>
+                  <option value="independent">自営・経営・フリーランス</option>
+                  <option value="other">学生・休職中・その他</option>
+                </select></label
+              >
+              <label
+                ><span class="field-label"
+                  ><i>04</i> いまの年収 <small>税引き前</small></span
+                ><span class="input-unit"
+                  ><input
+                    name="income"
+                    id="income"
+                    type="number"
+                    min="0"
+                    max="10000"
+                    step="1"
+                    value="500"
+                    required
+                  /><span>万円 / 年</span></span
+                ></label
+              >
+              <label
+                ><span class="field-label"><i>05</i> AIとの距離感</span
+                ><select name="ai" id="ai">
+                  <option value="beginner">まだ、あまり使っていない</option>
+                  <option value="sometimes" selected>ときどき使っている</option>
+                  <option value="daily">日常的に活用している</option>
+                </select></label
+              >
+              <label
+                ><span class="field-label"
+                  ><i>06</i> これから大切にしたいこと</span
+                ><select name="priority" id="priority">
+                  <option value="balance">無理なく、バランスよく</option>
+                  <option value="work">仕事で挑戦する</option>
+                  <option value="time">ゆとりと健康</option>
+                  <option value="people">家族や人とのつながり</option>
+                  <option value="freedom">自由と新しい体験</option>
+                </select></label
+              >
+            </div>
+            <details class="optional-fields">
+              <summary>
+                もう少し、自分に近づける
+                <span>任意 · 暮らし / お金 / 勤務先</span>
+              </summary>
+              <div class="form-grid optional-grid">
+                <label
+                  ><span class="field-label"
+                    >性別 <small>表示のみ・計算には使いません</small></span
+                  ><select name="gender">
+                    <option value="undisclosed">回答しない</option>
+                    <option value="woman">女性</option>
+                    <option value="man">男性</option>
+                    <option value="other">その他</option>
+                  </select></label
+                >
+                <label
+                  ><span class="field-label">暮らしのかたち</span
+                  ><select name="household" id="household">
+                    <option value="solo">ひとり暮らし</option>
+                    <option value="shared">家族・パートナーなどと暮らす</option>
+                    <option value="care">育児やケアのある暮らし</option>
+                  </select></label
+                >
+                <label
+                  ><span class="field-label"
+                    >貯蓄 − 借入 <small>仮の初期値：300万円</small></span
+                  ><span class="input-unit"
+                    ><input
+                      name="savings"
+                      type="number"
+                      min="-10000"
+                      max="100000"
+                      step="1"
+                      value="300"
+                      required
+                    /><span>万円</span></span
+                  ></label
+                >
+                <label
+                  ><span class="field-label"
+                    >毎月の生活費 <small>仮の初期値：地域で変化</small></span
+                  ><span class="input-unit"
+                    ><input
+                      name="monthlyCost"
+                      id="monthly-cost"
+                      type="number"
+                      min="0"
+                      max="500"
+                      step="0.1"
+                      value="17"
+                      required
+                    /><span>万円 / 月</span></span
+                  ></label
+                >
+                <label
+                  ><span class="field-label">勤務先のタイプ</span
+                  ><select name="companyType">
+                    <option value="unknown">指定しない</option>
+                    <option value="large">大企業</option>
+                    <option value="small">中小企業・スタートアップ</option>
+                    <option value="public">公的機関・非営利</option>
+                    <option value="self">自営・フリーランス</option>
+                  </select></label
+                >
+                <label
+                  ><span class="field-label"
+                    >勤務先の名前 <small>物語への表示だけ</small></span
+                  ><input
+                    name="company"
+                    type="text"
+                    maxlength="60"
+                    autocomplete="off"
+                    placeholder="ニックネームでも、空欄でも"
+                /></label>
+              </div>
+              <p class="field-note">
+                企業ごとの将来や、個人の寿命は予測しません。支出・貯蓄は初期値を使うため、気になる方は調整してください。
+              </p>
+            </details>
+            <p id="budget-summary" class="field-note">
+              初期設定：貯蓄300万円・生活費17万円/月。任意項目で調整できます。
+            </p>
+            <fieldset class="world-picker">
+              <legend>
+                どんな未来で遊ぶ？
+                <span>あとで、同じ選択を別の世界でも比較できます。</span>
+              </legend>
+              <div class="world-options">
+                <label
+                  ><input type="radio" name="scenario" value="slow" /><span
+                    ><b>ゆるやかな普及</b
+                    ><small>変化に、時間をかける世界</small></span
+                  ></label
+                >
+                <label
+                  ><input
+                    type="radio"
+                    name="scenario"
+                    value="steady"
+                    checked
+                  /><span
+                    ><b>着実な変化</b
+                    ><small>仕事と暮らしが、少しずつ変わる</small></span
+                  ></label
+                >
+                <label
+                  ><input type="radio" name="scenario" value="fast" /><span
+                    ><b>急速な変革</b
+                    ><small>機会も、戸惑いも、大きくなる</small></span
+                  ></label
+                >
+              </div>
+            </fieldset>
+            <div class="form-bottom">
+              <label class="save-toggle"
+                ><input type="checkbox" id="remember" />
+                この端末に物語を保存する
+                <small>共有PCではオフを推奨</small></label
+              ><button type="submit" class="button primary">
+                この私で、はじめる <span>↗</span>
+              </button>
+            </div>
+            <p class="model-note">
+              これは未来を考えるためのゲームです。数値は独自の仮定で、実際の年収・資産・健康の予測ではありません。
+            </p>
+            <p class="error" id="form-error" role="alert"></p>
+          </form>
+        </section>
+      </div>
+      <section id="game" class="game" aria-labelledby="chapter-title" hidden>
+        <div class="game-top">
+          <button id="back-setup" class="text-button">
+            ← 現在地を設定しなおす</button
+          ><span id="world-badge" class="pill"></span>
+        </div>
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow" id="chapter-label"></p>
+            <h1 id="chapter-title" tabindex="-1"></h1>
+            <p id="profile-caption"></p>
+          </div>
+          <button id="compare-button" class="button secondary">
+            3つの世界を比べる ↗
+          </button>
+        </div>
+        <progress
+          id="progress"
+          max="20"
+          value="0"
+          aria-label="20年間の進み具合"
+        ></progress>
+        <div class="game-grid">
+          <aside class="life-sidebar">
+            <p class="eyebrow">YOUR LIFE, RIGHT NOW</p>
+            <div id="stats"></div>
+            <div class="ai-meter">
+              <span>この世界のAI普及 <b id="ai-stage"></b></span
+              ><progress id="ai-progress" max="1" value="0"></progress>
+              <p>未来シナリオ上の指標です。</p>
+            </div>
+            <div class="sidebar-note">
+              人生のよさは、<br />ひとつの数字では測れない。
+            </div>
+            <button id="game-delete-save" class="text-button" hidden>
+              端末の保存を削除
+            </button>
+          </aside>
+          <div class="story-column">
+            <div id="event-card" class="event-card"></div>
+            <div class="choice-heading">
+              <h2 id="choice-title">この一年、何を大切にする？</h2>
+              <span>ひとつ、選んでみよう。</span>
+            </div>
+            <div id="choices" class="choices"></div>
+            <div class="game-controls">
+              <button id="undo-button" class="text-button">
+                ↶ ひとつ前の年に戻る</button
+              ><span id="save-status"></span>
+            </div>
+            <p class="model-note">
+              金額は2026年の購買力にそろえたゲーム内の概算。生活の指標はゲーム上の表現です。
+            </p>
+          </div>
+        </div>
+        <section class="journal">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">PAGES YOU HAVE WRITTEN</p>
+              <h2>これまでの、あなた。</h2>
+            </div>
+          </div>
+          <div id="history"></div>
+        </section>
+      </section>
+      <div id="notice" role="status" aria-live="polite"></div>
+    </main>
+    <footer class="footer wrap">
+      <span>unwritten life <small>© 2026</small></span
+      ><span>未来は、まだ書かれていない。</span
+      ><button id="assumptions-button" class="text-button">
+        前提とプライバシー ↗
+      </button>
+    </footer>
+    <dialog id="about-dialog">
+      <div class="dialog-top">
+        <p class="eyebrow">ABOUT THIS EXPERIENCE</p>
+        <button class="close-button" data-close aria-label="閉じる">×</button>
+      </div>
+      <h2>決まっていない未来を、<br />少しだけ遊んでみる。</h2>
+      <p>
+        2026年の自分を起点に、1年ずつ選びながら20年を過ごす人生ゲームです。仕事、お金、健康、つながり、自由。何を大切にするかに、唯一の正解はありません。
+      </p>
+      <p>
+        AIの未来は「ゆるやかな普及」「着実な変化」「急速な変革」の3つ。同じ出発点・同じ選択・同じ偶然をそろえ、普及の速さが変わったときの違いを比較できます。
+      </p>
+      <h3>遊び方</h3>
+      <ol>
+        <li>現在地を入力。架空の人物でも遊べます。</li>
+        <li>物語を読み、一年の過ごし方を選びます。</li>
+        <li>巻き戻したり、別の世界と比べたりして、自分の続きを探します。</li>
+      </ol>
+      <p class="field-note">
+        「80億分の1」の人生を体験する着想を参考に、現在の自分から始める独自のゲームを制作しています。公式な提携や同一のモデルはありません。
+      </p>
+    </dialog>
+    <dialog id="assumptions-dialog">
+      <div class="dialog-top">
+        <p class="eyebrow">ASSUMPTIONS & PRIVACY</p>
+        <button class="close-button" data-close aria-label="閉じる">×</button>
+      </div>
+      <h2>仮定を知って、遊ぶ。</h2>
+      <h3>未来の予測ではありません</h3>
+      <p>
+        3つの世界に発生確率は設定していません。職業ごとのAI影響、収入変化、生活の指標は、研究の考え方を参考にした独自のゲーム係数です。統計的な較正や個人への予測精度の検証はしていません。
+      </p>
+      <p>
+        仕事の一部が置き換わる負担と、AIを活用する利益を分けています。学びの時間、働く負担、人との時間の間にはトレードオフがあります。企業名・性別は計算に使いません。
+      </p>
+      <h3>お金と暮らしの計算</h3>
+      <p>
+        年収の76%を使えるお金とし、生活費と選択に伴う費用を差し引きます。年収の年変化率は±12%以内。税金・年金の実制度、退職、物価の個別差、運用益、出産費用、病気や寿命はモデル化していません。勤務先タイプ・家族構成は物語の表示や生活費の初期設定に使います。金額は万円単位、2026年の購買力の想定です。健康・つながり・自由は0〜100のゲーム指標です。
+      </p>
+      <h3>入力は、ブラウザの中に</h3>
+      <p>
+        入力内容は外部送信しません。AIモデルへの送信、アクセス解析、広告、Cookieはありません。「この端末に保存する」を選ぶと、入力と選択をブラウザのlocalStorageに保存します。端末を共有する人は読める可能性があります。オフにするか「保存を削除」で消せます。URLや共有リンクには個人情報を入れません。
+      </p>
+      <h3>参考にした公開資料</h3>
+      <ul>
+        <li>
+          <a
+            href="https://www.ilo.org/publications/generative-ai-and-jobs-refined-global-index-occupational-exposure"
+            target="_blank"
+            rel="noopener noreferrer"
+            >ILO / Generative AI and Jobs（2025）</a
+          >：職業全体でなく、仕事内容ごとの変化を考える枠組み。
+        </li>
+        <li>
+          <a
+            href="https://www.ilo.org/resource/news/new-ilo-brief-explains-what-ai-exposure-indicators-reveal-about-jobs"
+            target="_blank"
+            rel="noopener noreferrer"
+            >ILO / AI exposure indicators（2026-04-17）</a
+          >：AIへの曝露は、実際の失業や賃金の予測と同じではない。
+        </li>
+        <li>
+          <a
+            href="https://1in8b.life/ja/"
+            target="_blank"
+            rel="noopener noreferrer"
+            >80億分の1</a
+          >：人生を体験し、選択するという着想。文章・画像・プログラム・統計モデルは流用していません。
+        </li>
+      </ul>
+      <p class="field-note">公開資料の確認日：2026-10-17 / ゲームモデル v0.1</p>
+    </dialog>
+    <dialog id="compare-dialog">
+      <div class="dialog-top">
+        <p class="eyebrow">SAME YOU. DIFFERENT WORLDS.</p>
+        <button class="close-button" data-close aria-label="閉じる">×</button>
+      </div>
+      <h2>同じ選択、ちがう未来。</h2>
+      <p id="compare-caption"></p>
+      <div id="comparison"></div>
+      <p class="field-note">
+        出発点・選択・偶然をそろえ、AIの普及速度だけを変更した比較です。どの世界も仮定であり、予測の確率や信頼区間ではありません。
+      </p>
+    </dialog>
+    <noscript
+      ><p class="wrap">
+        このゲームはJavaScriptを有効にすると遊べます。入力はブラウザ内で処理します。
+      </p></noscript
+    >
+  </body>
+</html>
