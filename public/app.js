@@ -1129,6 +1129,8 @@ for (const id of [
 ])
   $(id).addEventListener("input", () => {
     $("company-confirmed").checked = false;
+    $("research-status").textContent =
+      "会社情報を変更しました。内容を確認し、「物語に反映する」をチェックしてください。";
   });
 $("company-name").addEventListener("input", () => {
   companyResearchRevision++;
@@ -1137,8 +1139,23 @@ $("company-name").addEventListener("input", () => {
   $("company-summary").value = "";
   $("company-sources").replaceChildren();
   $("company-confirmed").checked = false;
+  $("research-status").textContent = "会社名から候補を検索してください。";
   $("company-research-panel").open = false;
   updateBudget();
+});
+$("company-confirmed").addEventListener("change", () => {
+  if (
+    $("company-confirmed").checked &&
+    (!$("company-summary").value.trim() || !companySources.length)
+  ) {
+    $("company-confirmed").checked = false;
+    $("research-status").textContent =
+      "先に会社の候補を選び、出典のある会社情報を取得してください。";
+    return;
+  }
+  $("research-status").textContent = $("company-confirmed").checked
+    ? "✓ この会社情報を物語に反映します。"
+    : "会社名のみで開始します。事業・特徴の情報は物語に反映しません。";
 });
 document.querySelector(".company-research").hidden = true;
 $("company-name").addEventListener("keydown", (event) => {
@@ -1553,10 +1570,14 @@ function setupNameSearch(career = false) {
     list = $(career ? "career-candidates" : "company-candidates"),
     message = $(career ? "career-research-status" : "research-status");
   button.addEventListener("click", async () => {
+    const prefix = career ? "career" : "company";
     const originalLabel = button.textContent;
     const rev = career ? ++careerResearchRevision : ++companyResearchRevision;
+    let requestedName = name.value,
+      loading = false;
     const current = () =>
       rev === (career ? careerResearchRevision : companyResearchRevision) &&
+      name.value === requestedName &&
       (career || (profileLevel !== "quick" && !$("company-field").hidden));
     button.disabled = true;
     button.textContent = "調べています…";
@@ -1565,9 +1586,18 @@ function setupNameSearch(career = false) {
       $("company-research-panel").open = true;
     }
     list.replaceChildren();
+    $(prefix + "-confirmed").checked = false;
+    $(prefix + "-summary").value = "";
+    if (career) careerSources = [];
+    else {
+      companySources = [];
+      $("company-sources").replaceChildren();
+    }
     message.textContent = "企業名から会社情報と公式サイトを探しています…";
     async function load(candidate) {
-      if (!current()) return;
+      if (!current() || loading) return;
+      loading = true;
+      for (const el of list.querySelectorAll("button")) el.disabled = true;
       message.textContent = `${candidate.name}の公開ページを取得しています…`;
       try {
         let facts,
@@ -1590,11 +1620,13 @@ function setupNameSearch(career = false) {
           };
         } else ({ facts } = await api("/api/company", { url: candidate.url }));
         if (!current()) return;
-        const prefix = career ? "career" : "company";
+        // Identity was explicitly accepted. For built-in evidence the full
+        // summary/source was already shown on the candidate card.
+        name.value = requestedName = candidate.name;
         $(prefix + "-url").value = candidate.url;
         $(prefix + "-summary").value = facts.summary;
         $(prefix + "-sector").value = candidate.sector ?? "unknown";
-        $(prefix + "-confirmed").checked = false;
+        $(prefix + "-confirmed").checked = Boolean(candidate.known);
         if (career) {
           careerSources = facts.sources;
           $("career-research-details").open = true;
@@ -1610,52 +1642,73 @@ function setupNameSearch(career = false) {
             "field-note",
           ),
         );
-        const officialLink = node("a", "候補の公式サイトを開く ↗");
+        const officialLink = node("a", "選んだ会社の公式サイトを開く ↗");
         officialLink.href = candidate.url;
         officialLink.target = "_blank";
         officialLink.rel = "noopener noreferrer";
         list.append(officialLink);
         message.textContent = directoryOnly
-          ? "Wikidataの会社概要と公式サイト候補を取得しました。公式ページの本文は未取得です。同じ会社か確認して使えます。"
+          ? "会社を選びました。Wikidataの概要を表示しています（公式本文は未取得）。内容を確認し、下の「物語に反映する」をチェックしてください。"
           : candidate.known
-            ? `内蔵の公式事業資料を表示しました（確認 ${candidate.checkedAt}）。同じ会社か確認して使えます。`
-            : "公式サイトの本文を取得しました。取得元と企業の一致を確認して使えます。";
+            ? `✓ ${candidate.name}の会社情報を物語に反映します。公式資料の確認日：${candidate.checkedAt}。下で編集・解除できます。`
+            : "公式サイトの本文を取得しました。取得元と内容を確認し、下の「物語に反映する」をチェックしてください。";
+        if (!career) updateBudget();
       } catch (error) {
         if (current())
           message.textContent = `${error.message} URLを指定する方法も使えます。`;
+      } finally {
+        loading = false;
+        if (current())
+          for (const el of list.querySelectorAll("button")) el.disabled = false;
       }
     }
     try {
       const candidates =
         standalone || hosted
           ? await makeDirectorySearch({ transport: browserDirectoryText })(
-              name.value,
+              requestedName,
             )
-          : (await api("/api/company/search", { name: name.value })).candidates;
+          : (await api("/api/company/search", { name: requestedName }))
+              .candidates;
       if (!current()) return;
       if (!candidates.length) {
         message.textContent =
-          "会社の候補が見つかりませんでした。正式名称を試すか、会社名だけのまま始められます。";
+          "候補が見つかりませんでした。略称・英語名、または「株式会社」を除いた名前でも試せます。見つからない場合は会社名だけで始められます。";
         return;
       }
-      if (candidates.length === 1) await load(candidates[0]);
-      else {
-        message.textContent =
-          "同名・関連する候補があります。調べたい企業を選んでください。";
-        for (const c of candidates) {
-          const b = node(
-            "button",
-            `${c.name} — ${c.description} / ${new URL(c.url).hostname}`,
-            "button secondary small",
+      message.textContent =
+        "この会社で合っていますか？ 事業と公式サイトを確認して選んでください。違う場合は会社名を直して再検索できます。";
+      for (const c of candidates) {
+        const card = node("article", "", "company-candidate");
+        card.append(
+          node("strong", c.name),
+          node("p", c.match ?? "会社名の候補", "field-note"),
+          node("p", c.description),
+        );
+        const link = node("a", `公式サイト候補：${new URL(c.url).hostname} ↗`);
+        link.href = c.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        card.append(link);
+        if (c.checkedAt)
+          card.append(
+            node(
+              "p",
+              `公式資料の確認日：${c.checkedAt} / 上の事業情報を使用します。`,
+              "field-note",
+            ),
           );
-          b.type = "button";
-          b.addEventListener("click", async () => {
-            for (const el of list.querySelectorAll("button"))
-              el.disabled = true;
-            await load(c);
-          });
-          list.append(b);
-        }
+        const b = node(
+          "button",
+          c.known
+            ? "この会社で合っています。情報を使う"
+            : "この会社で合っています。情報を取得",
+          "button secondary small",
+        );
+        b.type = "button";
+        b.addEventListener("click", () => load(c));
+        card.append(b);
+        list.append(card);
       }
     } catch (error) {
       if (current()) message.textContent = error.message;

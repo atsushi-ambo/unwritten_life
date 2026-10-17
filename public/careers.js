@@ -504,13 +504,56 @@ const normalizeLookup = (s) =>
   s
     .normalize("NFKC")
     .toLowerCase()
-    .replace(/株式会社|有限会社|[\s・.]/gu, "");
+    .replace(/株式会社|有限会社|合同会社|\(株\)|\(有\)/gu, "")
+    .replace(/[\s\p{P}]/gu, "");
 const directoryAliases = {
   microsoft: ["マイクロソフト", "日本マイクロソフト"],
   toyota: ["トヨタ", "toyota"],
   nintendo: ["nintendo", "ニンテンドー"],
   layerx: ["レイヤーエックス"],
 };
+// Lookup evidence is separate from the game's possible job offers/pay assumptions.
+const lookupCompanies = {
+  ...EMPLOYERS,
+  kyndrylJapan: {
+    name: "キンドリルジャパン株式会社",
+    aliases: ["キンドリルジャパン", "Kyndryl Japan", "Kyndryl Japan KK"],
+    kind: "real",
+    sector: "tech",
+    summary:
+      "キンドリルの日本法人。情報通信業。企業のITインフラの設計・構築・管理・モダナイズを行い、アドバイザリーやマネージドサービスを提供する。",
+    url: "https://www.kyndryl.com/jp/ja/about-us/kyndryl-japan-kk",
+    checkedAt: "2026-10-17",
+  },
+  kyndrylJapanTechnology: {
+    name: "キンドリルジャパン・テクノロジーサービス株式会社",
+    aliases: ["KJTS", "Kyndryl Japan Technology Service KK"],
+    kind: "real",
+    sector: "tech",
+    summary:
+      "キンドリルジャパンの関連会社。情報システムの企画・設計・開発・保守・運用に関するコンサルティング、技術支援、受託サービスなどを提供する。",
+    url: "https://www.kyndryl.com/jp/ja/about-us/kjts",
+    checkedAt: "2026-10-17",
+  },
+};
+// Bounded edit distance, including adjacent transpositions. Similarity only
+// proposes candidates; the player must explicitly choose the legal entity.
+function lookupDistance(a, b) {
+  const rows = Array.from({ length: a.length + 1 }, () => []);
+  for (let i = 0; i <= a.length; i++) rows[i][0] = i;
+  for (let j = 0; j <= b.length; j++) rows[0][j] = j;
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++) {
+      rows[i][j] = Math.min(
+        rows[i - 1][j] + 1,
+        rows[i][j - 1] + 1,
+        rows[i - 1][j - 1] + Number(a[i - 1] !== b[j - 1]),
+      );
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1])
+        rows[i][j] = Math.min(rows[i][j], rows[i - 2][j - 2] + 1);
+    }
+  return rows[a.length][b.length];
+}
 export function makeDirectorySearch({ transport } = {}) {
   async function wikidata(params) {
     const url = new URL("https://www.wikidata.org/w/api.php");
@@ -537,30 +580,49 @@ export function makeDirectorySearch({ transport } = {}) {
     )
       throw new Error("調べたい企業名を60文字以内で入力してください。");
     const query = normalizeLookup(name.trim());
-    for (const [id, c] of Object.entries(EMPLOYERS)) {
-      if (
-        c.kind === "real" &&
-        [
-          c.name,
-          id,
-          ...(c.aliases ?? []),
-          ...(directoryAliases[id] ?? []),
-        ].some((s) => normalizeLookup(s) === query)
-      ) {
-        return [
-          {
-            name: c.name,
-            url: c.url,
-            description: c.summary,
-            sector: c.sector,
-            directory: "公式資料リスト",
-            known: true,
-            checkedAt: c.checkedAt,
-          },
-        ];
+    if (!query)
+      throw new Error("「株式会社」などを除いた会社名を入力してください。");
+    const local = [];
+    for (const [id, c] of Object.entries(lookupCompanies)) {
+      if (c.kind !== "real") continue;
+      const aliases = [
+        c.name,
+        id,
+        ...(c.aliases ?? []),
+        ...(directoryAliases[id] ?? []),
+      ].map(normalizeLookup);
+      const exact = aliases.includes(query);
+      const partial =
+        query.length >= 3 && aliases.some((s) => s.startsWith(query));
+      const near =
+        query.length >= 4 &&
+        aliases.some(
+          (s) =>
+            Math.abs(s.length - query.length) <= 2 &&
+            lookupDistance(s, query) <=
+              (Math.min(s.length, query.length) >= 9 ? 2 : 1),
+        );
+      if (exact || partial || near) {
+        local.push({
+          name: c.name,
+          url: c.url,
+          description: c.summary,
+          sector: c.sector,
+          directory: "公式資料リスト",
+          known: true,
+          checkedAt: c.checkedAt,
+          match: exact
+            ? "名前・別名が一致"
+            : partial
+              ? "入力名を含む候補"
+              : "近い名前の候補（入力違いの可能性）",
+          score: exact ? 0 : partial ? 1 : 2,
+        });
       }
     }
-    const result = await wikidata({
+    if (local.length)
+      return local.sort((a, b) => a.score - b.score).slice(0, 5);
+    const params = {
       action: "wbsearchentities",
       search: name.trim(),
       language: /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(
@@ -571,7 +633,16 @@ export function makeDirectorySearch({ transport } = {}) {
       uselang: "ja",
       limit: "5",
       type: "item",
-    });
+    };
+    let result = await wikidata(params);
+    // Some directory labels omit a legal suffix. At most one second search;
+    // keep the readable spelling instead of sending the normalized lowercase key.
+    const shortName = name
+      .trim()
+      .replace(/株式会社|有限会社|合同会社|[（(](?:株|有)[）)]/gu, "")
+      .trim();
+    if (!result.search?.length && shortName && shortName !== name.trim())
+      result = await wikidata({ ...params, search: shortName });
     const hits = (Array.isArray(result.search) ? result.search : [])
       .filter((x) => /^Q\d+$/.test(x.id))
       .slice(0, 5);
@@ -633,8 +704,7 @@ export function makeDirectorySearch({ transport } = {}) {
             (u.port && u.port !== "443")
           )
             continue;
-          if (candidates.some((c) => new URL(c.url).hostname === u.hostname))
-            continue;
+          if (candidates.some((c) => c.entityId === hit.id)) continue;
           candidates.push({
             name: String(
               entity.labels?.ja?.value ?? entity.labels?.en?.value ?? hit.label,
@@ -643,6 +713,8 @@ export function makeDirectorySearch({ transport } = {}) {
             description: String(description).slice(0, 180),
             directory: "Wikidataの公式サイト項目（候補）",
             known: false,
+            entityId: hit.id,
+            match: "外部ディレクトリの候補（会社の一致は未確認）",
             directoryURL: `https://www.wikidata.org/wiki/${hit.id}`,
             sector: "unknown",
           });

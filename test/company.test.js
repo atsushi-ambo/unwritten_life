@@ -97,3 +97,78 @@ test("no result and search failure never produce a guessed official URL", async 
   });
   await assert.rejects(() => broken("合成企業"));
 });
+
+test("company spelling variants and typos propose dated legal entities without confusing related companies", async () => {
+  let calls = 0;
+  const search = makeCompanySearch({
+    transport: async () => {
+      calls++;
+      return { status: 200, text: '{"search":[]}' };
+    },
+  });
+  const exact = await search("キンドリルジャパン株式会社");
+  assert.equal(exact[0].name, "キンドリルジャパン株式会社");
+  assert.match(exact[0].url, /kyndryl-japan-kk$/);
+  assert.match(exact[0].description, /ITインフラ/);
+  assert.equal(exact[0].checkedAt, "2026-10-17");
+  assert.match((await search("キンドリルジャバン"))[0].match, /近い名前/);
+  assert.equal(
+    (await search("Ｋｙｎｄｒｙｌ Ｊａｐａｎ ＫＫ"))[0].name,
+    exact[0].name,
+  );
+  assert.equal((await search("（株）ＮＴＴ データ"))[0].name, "NTTデータ");
+  const related = await search("キンドリル");
+  assert.equal(related.length, 2);
+  assert.notEqual(related[0].name, related[1].name);
+  assert.notEqual(related[0].url, related[1].url);
+  assert.match((await search("KJTS"))[0].name, /テクノロジーサービス/);
+  assert.equal(calls, 0);
+  assert.deepEqual(await search("まったく別の合成企業"), []);
+  await assert.rejects(() => search("株式会社"));
+});
+
+test("a legal-suffix fallback is bounded and companies sharing an official domain stay separate", async () => {
+  const calls = [];
+  const search = makeCompanySearch({
+    transport: async (url) => {
+      const u = new URL(url);
+      calls.push(u);
+      const isSearch = u.searchParams.get("action") === "wbsearchentities";
+      return {
+        status: 200,
+        text: JSON.stringify(
+          isSearch
+            ? { search: calls.length === 1 ? [] : [{ id: "Q1" }, { id: "Q2" }] }
+            : {
+                entities: Object.fromEntries(
+                  ["Q1", "Q2"].map((id, i) => [
+                    id,
+                    {
+                      labels: { ja: { value: `合成企業${i}` } },
+                      descriptions: { ja: { value: "日本の会社" } },
+                      claims: {
+                        P856: [
+                          {
+                            mainsnak: {
+                              datavalue: {
+                                value: `https://official.example.com/legal-${i}`,
+                              },
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  ]),
+                ),
+              },
+        ),
+      };
+    },
+  });
+  const result = await search("株式会社合成企業");
+  assert.equal(calls.length, 3);
+  assert.equal(calls[1].searchParams.get("search"), "合成企業");
+  assert.equal(result.length, 2);
+  assert.notEqual(result[0].entityId, result[1].entityId);
+  assert.notEqual(result[0].url, result[1].url);
+});

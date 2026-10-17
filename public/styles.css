@@ -1713,6 +1713,18 @@ textarea:focus-visible {
   overflow-wrap: anywhere;
   text-align: left;
 }
+.company-candidate {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.company-candidate p {
+  margin: 0;
+}
 #model-list-controls {
   margin: 14px 0;
 }
