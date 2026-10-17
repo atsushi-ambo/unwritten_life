@@ -169,6 +169,7 @@ export function storyRequest(
       choice: h.choiceLabel,
       intention: h.intention ?? null,
       result: h.note,
+      episode: h.episode ?? null,
     })),
     allowedActions: [
       ...new Set([

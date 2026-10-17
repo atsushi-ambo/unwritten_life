@@ -56,7 +56,7 @@ test("mobile build contains only public assets, opts out of network calls, and k
   assert.deepEqual((await readdir(dir)).sort(), result.files.sort());
   const html = await readFile(resolve(dir, "index.html"), "utf8");
   assert.match(html, /data-edition="mobile"/);
-  assert.match(html, /connect-src 'none'/);
+  assert.match(html, /connect-src https:\/\/www\.wikidata\.org\/w\/api\.php;/);
   assert.match(html, /API課金は発生しません/);
   const scriptURL = new URL(
     html.match(/<script[^>]+src="([^"]+)"/)[1],

@@ -10,6 +10,9 @@ import {
   availableChoices,
   createGame,
   advance,
+  advanceYears,
+  optionalProfileInputs,
+  PROFILE_DEFAULTS,
   replay,
   compareWorlds,
   eventFor,
@@ -25,6 +28,8 @@ import {
   careerCandidates,
   careerOffers,
   workContext,
+  makeDirectorySearch,
+  browserDirectoryText,
 } from "./careers.js";
 import {
   worldAt,
@@ -38,6 +43,8 @@ import {
 } from "./world.js";
 import { storyRequest } from "./story.js";
 let knowledgeCatalog = KNOWLEDGE;
+let lastJourney = null;
+let profileDefaults = { ...PROFILE_DEFAULTS };
 const $ = (id) => document.getElementById(id),
   saveKey = "unwritten-life:v2",
   nf = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 0 });
@@ -208,23 +215,10 @@ function persist() {
   }
 }
 function readProfile() {
-  const p = Object.fromEntries(new FormData($("profile-form")));
-  for (const k of [
-    "age",
-    "income",
-    "savings",
-    "monthlyCost",
-    "stocks",
-    "rent",
-    "homeValue",
-    "mortgage",
-    "mortgageYears",
-    "mortgageRate",
-    "retirementAge",
-    "pension",
-    "children",
-  ])
-    p[k] = Number(p[k]);
+  const p = optionalProfileInputs(
+    Object.fromEntries(new FormData($("profile-form"))),
+    profileDefaults,
+  );
   if (p.housing === "rent") {
     p.homeValue = 0;
     p.mortgage = 0;
@@ -241,6 +235,7 @@ function readProfile() {
   return p;
 }
 function showGame(focus = false) {
+  lastJourney = null;
   revision++;
   $("setup").hidden = true;
   $("game").hidden = false;
@@ -273,7 +268,63 @@ function moveToStory() {
     $("event-card").scrollIntoView({ block: "start", behavior: "instant" });
   $("chapter-title").focus({ preventScroll: true });
 }
+function commitChoice(decision) {
+  try {
+    const journey = advanceYears(game, decision, Number($("year-step").value));
+    game = journey.game;
+    lastJourney = journey;
+    revision++;
+    renderGame();
+    showJourney(journey);
+  } catch (error) {
+    toast(error.message);
+  }
+}
+function showJourney(journey) {
+  const first = journey.entries[0],
+    last = journey.entries.at(-1);
+  $("journey-title").textContent =
+    journey.entries.length === 1
+      ? `${first.year}年、こんな一年だった。`
+      : `${first.year}〜${last.year}年、あなたが過ごした時間。`;
+  $("journey-caption").textContent =
+    `選んだ方針：${first.choiceLabel}。${journey.stopReason || `${journey.entries.length}年分のできごとを振り返り、次の方針を選べます。`}`;
+  const list = $("journey-years");
+  list.replaceChildren();
+  let previousIncome =
+    game.history.at(-journey.entries.length - 1)?.income ?? game.profile.income;
+  for (const h of journey.entries) {
+    const row = node("article", undefined, "journey-year");
+    row.append(
+      node("p", `${h.year} / ${h.age}歳`, "eyebrow"),
+      node("h3", h.episode?.title ?? h.outcome?.title ?? h.title),
+      node("p", h.episode?.body ?? h.note),
+    );
+    const delta = Math.round(h.income) - Math.round(previousIncome);
+    row.append(
+      node(
+        "small",
+        `年収 ${nf.format(Math.round(h.income))}万円（${delta >= 0 ? "+" : ""}${delta}） · 純資産 ${nf.format(Math.round(h.savings))}万円 · スキル ${Math.round(h.skill)} · ゆとり ${Math.round(h.health)}`,
+      ),
+    );
+    previousIncome = h.income;
+    list.append(row);
+  }
+  $("journey-next").textContent = game.ended
+    ? "この人生を振り返る →"
+    : `${game.year}年の選択へ →`;
+  $("journey-dialog").showModal();
+}
+$("journey-next").addEventListener("click", () => {
+  $("journey-dialog").close();
+  moveToStory();
+  void maybeGenerateScene();
+});
+$("journey-review").addEventListener("click", () => {
+  if (lastJourney) showJourney(lastJourney);
+});
 function renderGame() {
+  $("journey-review").hidden = !lastJourney;
   const complete = game.ended,
     initial = createGame(game.profile, game.scenario, game.seed),
     previous = game.history.length > 1 ? game.history.at(-2) : initial;
@@ -393,7 +444,7 @@ function renderGame() {
   card.replaceChildren();
   const resultCard = $("year-result");
   resultCard.replaceChildren();
-  resultCard.hidden = !game.history.length;
+  resultCard.hidden = !game.history.length || !!lastJourney;
   if (game.history.length) {
     const h = game.history.at(-1),
       before = game.history.at(-2) ?? initial;
@@ -534,11 +585,7 @@ function renderGame() {
             openCareer(id);
             return;
           }
-          game = advance(game, id);
-          revision++;
-          renderGame();
-          moveToStory();
-          void maybeGenerateScene();
+          commitChoice(id);
         });
         extraButtons.append(extraButton);
       }
@@ -576,29 +623,14 @@ function renderGame() {
       button.addEventListener("click", () => {
         if (!button.isConnected || game.ended || generating) return;
         if (option.decision) {
-          game = advance(game, option.decision);
-          revision++;
-          renderGame();
-          moveToStory();
-          void maybeGenerateScene();
+          commitChoice(option.decision);
           return;
         }
         if (["switch", "startup"].includes(option.id)) {
           openCareer(option.id);
           return;
         }
-        const step = autoLocal() ? 1 : Number($("year-step").value);
-        for (let i = 0; i < step && !game.ended; i++) {
-          try {
-            game = advance(game, option.id);
-          } catch {
-            break;
-          }
-        }
-        revision++;
-        renderGame();
-        moveToStory();
-        void maybeGenerateScene();
+        commitChoice(option.id);
       });
       choices.append(button);
     }
@@ -615,6 +647,12 @@ function renderGame() {
       text = node("div");
     year.append(node("small", `${h.age}歳`));
     text.append(node("h3", h.title), node("p", h.note));
+    if (h.episode) {
+      text.replaceChildren(
+        node("h3", h.episode.title),
+        node("p", h.episode.body),
+      );
+    }
     row.append(year, text, node("span", h.choiceLabel, "history-choice"));
     history.append(row);
   }
@@ -631,8 +669,7 @@ function renderAI() {
   if (!aiState) return;
   const local = !aiState.cloud;
   $("auto-scene-label").hidden = !local || aiState.provider === "disabled";
-  $("year-step").disabled = autoLocal();
-  if (autoLocal()) $("year-step").value = "1";
+  $("year-step").disabled = generating;
   $("ai-status").classList.toggle("is-generating", generating);
   $("event-card").setAttribute("aria-busy", String(generating));
   $("ai-status").textContent = generating
@@ -645,20 +682,20 @@ function renderAI() {
     $("ai-status").textContent +=
       " 新しいプロフィール別4択は、更新したPCサーバーの次回起動後に使えます。今はAIなし・手動交換で続けられます。";
   $("cloud-consent-label").hidden = local;
-  $("generate-button").disabled =
-    generating ||
-    !game ||
-    game.ended ||
+  $("generate-button").disabled = generating || !game || game.ended;
+  const manualAI =
     aiState.provider === "disabled" ||
-    needsCareerServerUpdate() ||
-    needsChoiceServerUpdate();
+    needsChoiceServerUpdate() ||
+    needsCareerServerUpdate();
+  $("generate-button").textContent = manualAI
+    ? "好きなAIで展開を作る ↗"
+    : "この場面をAIで生成 ✳";
+  $("exchange-button").hidden = manualAI;
   $("career-generate").disabled =
-    generating ||
-    !game ||
-    game.ended ||
-    game.retired ||
-    aiState.provider === "disabled" ||
-    needsChoiceServerUpdate();
+    generating || !game || game.ended || game.retired;
+  $("career-generate").textContent = manualAI
+    ? "好きなAIで4択を作る ↗"
+    : "AIで4択を生成 ✳";
   $("career-exchange").disabled =
     generating || !game || game.ended || game.retired;
   $("career-consent-label").hidden = local;
@@ -717,7 +754,15 @@ $("auto-scene").addEventListener("change", () => {
 });
 async function generateScene() {
   if (!game || game.ended || generating) return;
-  if (needsCareerServerUpdate() || needsChoiceServerUpdate()) return;
+  if (
+    !aiState ||
+    aiState.provider === "disabled" ||
+    needsCareerServerUpdate() ||
+    needsChoiceServerUpdate()
+  ) {
+    openExchange();
+    return;
+  }
   const current = revision;
   const timingKey = connectionKey(aiState);
   generationStarted = performance.now();
@@ -836,11 +881,6 @@ $("profile-form").addEventListener("submit", (e) => {
       crypto.getRandomValues(new Uint32Array(1))[0],
     );
     remember = $("remember").checked;
-    if (!remember) {
-      try {
-        localStorage.removeItem(saveKey);
-      } catch {}
-    }
     showGame(true);
   } catch (error) {
     $("form-error").textContent = error.message;
@@ -893,6 +933,7 @@ $("back-setup").addEventListener("click", () => {
 });
 $("undo-button").addEventListener("click", () => {
   if (!game.decisions.length || generating) return;
+  lastJourney = null;
   const length = game.decisions.length - 1,
     scenes = Object.fromEntries(
       Object.entries(game.scenes).filter(([k]) => Number(k) <= length),
@@ -915,13 +956,27 @@ $("compare-button").addEventListener("click", openComparison);
 $("generate-button").addEventListener("click", generateScene);
 function updateBudget() {
   const f = $("profile-form"),
+    values = optionalProfileInputs(
+      Object.fromEntries(new FormData(f)),
+      profileDefaults,
+    ),
     own = f.elements.housing.value === "own";
   $("home-fields").hidden = !own;
   $("rent-field").hidden = own;
   $("quick-summary").textContent =
-    `${f.elements.age.value}歳 / ${JOBS[f.elements.job.value].label} / 年収${f.elements.income.value}万円 / 金融資産${f.elements.savings.value}万円でスタート。`;
+    `${values.age}歳 / ${JOBS[f.elements.job.value].label}でスタート。年収・資産・会社名は任意。お金が未入力なら年収${values.income}万円・資産${values.savings}万円などの仮値を使います。`;
   $("budget-summary").textContent =
-    `仮の初期設定：金融資産 ${f.elements.savings.value}万円（うち株式 ${f.elements.stocks.value}万円）、生活費 ${f.elements.monthlyCost.value}万円/月 ＋ ${own ? "持ち家の維持・返済費" : "家賃 " + f.elements.rent.value + "万円/月"}。退職 ${f.elements.retirementAge.value}歳、65歳以降の収入 ${f.elements.pension.value}万円/年。任意項目で調整できます。`;
+    `このゲームの初期設定：年収 ${values.income}万円、金融資産 ${values.savings}万円（うち株式 ${values.stocks}万円）、生活費 ${values.monthlyCost}万円/月 ＋ ${own ? "持ち家の維持・返済費" : "家賃 " + values.rent + "万円/月"}。空欄の項目は選んだ現在地の仮値です。実際の資産を入力する必要はありません。`;
+}
+for (const button of document.querySelectorAll("[data-profile-level]")) {
+  button.addEventListener("click", () => {
+    const level = button.dataset.profileLevel;
+    $("quick-start").hidden = level !== "quick";
+    $("profile-standard").open = level !== "quick";
+    $("profile-advanced").open = level === "advanced";
+    for (const b of document.querySelectorAll("[data-profile-level]"))
+      b.setAttribute("aria-pressed", String(b === button));
+  });
 }
 $("quick-preset").addEventListener("change", () => {
   const presets = {
@@ -984,6 +1039,10 @@ $("quick-preset").addEventListener("change", () => {
     },
   };
   const f = $("profile-form");
+  profileDefaults = {
+    ...PROFILE_DEFAULTS,
+    ...presets[$("quick-preset").value],
+  };
   // Presets replace their visible assumptions; detailed company/assets remain user controlled.
   for (const [k, v] of Object.entries({
     childStage: "school",
@@ -1086,6 +1145,14 @@ $("company-name").addEventListener("input", () => {
   $("company-summary").value = "";
   $("company-sources").replaceChildren();
   $("company-confirmed").checked = false;
+  document.querySelector(".company-research").hidden = true;
+});
+document.querySelector(".company-research").hidden = true;
+$("company-name").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    $("company-search").click();
+  }
 });
 $("research-button").addEventListener("click", async () => {
   const button = $("research-button"),
@@ -1196,6 +1263,16 @@ function openCareer(mode) {
 }
 async function generateCareerChoices() {
   if (
+    game &&
+    !game.ended &&
+    !game.retired &&
+    !generating &&
+    (!aiState || aiState.provider === "disabled" || needsChoiceServerUpdate())
+  ) {
+    openExchange("career");
+    return;
+  }
+  if (
     !game ||
     game.ended ||
     game.retired ||
@@ -1238,15 +1315,8 @@ $("career-exchange").addEventListener("click", () => openExchange("career"));
 function takeCareerDecision(decision) {
   if (generating || !availableChoices(game).includes(decisionId(decision)))
     throw new Error("今の状態では選べません。");
-  game = advance(game, decision);
-  revision++;
   $("career-dialog").close();
-  renderGame();
-  moveToStory();
-  void maybeGenerateScene();
-  toast(
-    "この分岐で1年進みました。選んだ仕事と結果を、次の物語へ引き継ぎます。",
-  );
+  commitChoice(decision);
 }
 function renderCareerOffers() {
   const container = $("career-offers");
@@ -1494,16 +1564,35 @@ function setupNameSearch(career = false) {
     const current = () =>
       rev === (career ? careerResearchRevision : companyResearchRevision);
     button.disabled = true;
+    if (!career) document.querySelector(".company-research").hidden = false;
     list.replaceChildren();
-    message.textContent = "企業名から公式サイトを探しています…";
+    message.textContent = "企業名から会社情報と公式サイトを探しています…";
     async function load(candidate) {
       if (!current()) return;
       message.textContent = `${candidate.name}の公開ページを取得しています…`;
       try {
-        const { facts } = await api("/api/company", { url: candidate.url });
+        let facts,
+          directoryOnly = false;
+        if (candidate.known || standalone || hosted) {
+          directoryOnly = !candidate.known;
+          facts = {
+            summary: candidate.description,
+            sector: candidate.sector ?? "unknown",
+            sources: [
+              {
+                url: candidate.known ? candidate.url : candidate.directoryURL,
+                title: candidate.known
+                  ? `${candidate.name} / 公式事業資料（内蔵）`
+                  : `${candidate.name} / Wikidataの会社概要（公式本文は未取得）`,
+                checkedAt:
+                  candidate.checkedAt ?? new Date().toISOString().slice(0, 10),
+              },
+            ],
+          };
+        } else ({ facts } = await api("/api/company", { url: candidate.url }));
         if (!current()) return;
         const prefix = career ? "career" : "company";
-        $(prefix + "-url").value = facts.sources[0]?.url ?? candidate.url;
+        $(prefix + "-url").value = candidate.url;
         $(prefix + "-summary").value = facts.summary;
         $(prefix + "-sector").value = candidate.sector ?? "unknown";
         $(prefix + "-confirmed").checked = false;
@@ -1522,21 +1611,32 @@ function setupNameSearch(career = false) {
             "field-note",
           ),
         );
-        message.textContent =
-          "公式サイトの本文を取得しました。取得元と企業の一致を確認してチェックしてください。";
+        const officialLink = node("a", "候補の公式サイトを開く ↗");
+        officialLink.href = candidate.url;
+        officialLink.target = "_blank";
+        officialLink.rel = "noopener noreferrer";
+        list.append(officialLink);
+        message.textContent = directoryOnly
+          ? "Wikidataの会社概要と公式サイト候補を取得しました。公式ページの本文は未取得です。同じ会社か確認して使えます。"
+          : candidate.known
+            ? `内蔵の公式事業資料を表示しました（確認 ${candidate.checkedAt}）。同じ会社か確認して使えます。`
+            : "公式サイトの本文を取得しました。取得元と企業の一致を確認して使えます。";
       } catch (error) {
         if (current())
           message.textContent = `${error.message} URLを指定する方法も使えます。`;
       }
     }
     try {
-      const { candidates } = await api("/api/company/search", {
-        name: name.value,
-      });
+      const candidates =
+        standalone || hosted
+          ? await makeDirectorySearch({ transport: browserDirectoryText })(
+              name.value,
+            )
+          : (await api("/api/company/search", { name: name.value })).candidates;
       if (!current()) return;
       if (!candidates.length) {
         message.textContent =
-          "公式サイトの候補が見つかりませんでした。企業の正式名称か、URL指定をお試しください。";
+          "会社の候補が見つかりませんでした。正式名称を試すか、会社名だけのまま始められます。";
         return;
       }
       if (candidates.length === 1) await load(candidates[0]);
@@ -1785,15 +1885,12 @@ if (standalone || hosted) {
   $("ai-form").hidden = true;
   $("ai-description").textContent = hosted
     ? "OpenAIで場面と選択肢を生成できます。送信内容を確認し、同意を入れて生成ボタンを押してください。累計の見積り上限$0.10・100回まで。自動生成と自動再試行はしません。セーブはこの端末内です。"
-    : "スマホ体験版はAI接続なしで動きます。PCのOllama・APIキー・セーブとはつながっていません。場面と選択肢はゲーム内のルールで変化します。好きなAIとの手動交換も使えます。";
+    : "AI未接続でも、各年のできごとと選択の結果が続きます。AIを使う場合は、依頼文をコピーして好きなAIの返答を取り込めます。PCのOllamaやAPIキーとは自動接続しません。";
   $("auto-scene").checked = false;
-  for (const id of [
-    "company-search",
-    "research-button",
-    "career-search",
-    "career-research",
-  ])
-    if ($(id)) $(id).disabled = true;
+  for (const id of ["research-button", "career-research"])
+    if ($(id)) $(id).hidden = true;
+  for (const el of document.querySelectorAll("[data-pc-only]"))
+    el.hidden = true;
 }
 readStoredGame();
 updateBudget();

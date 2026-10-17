@@ -65,9 +65,15 @@
             <div class="sun"></div>
             <div class="art-grain"></div>
             <svg class="paths" viewBox="0 0 500 470" aria-hidden="true">
-              <path d="M250 480 C250 355 255 330 240 275 S150 180 132 75" />
-              <path d="M250 480 C250 355 255 330 270 270 S325 170 328 30" />
-              <path d="M250 480 C250 355 255 330 305 295 S430 230 455 135" />
+              <path
+                d="M250 480 C250 355 255 330 240 275 S150 180 132 75"
+              ></path>
+              <path
+                d="M250 480 C250 355 255 330 270 270 S325 170 328 30"
+              ></path>
+              <path
+                d="M250 480 C250 355 255 330 305 295 S430 230 455 135"
+              ></path>
             </svg>
             <span class="year-label year-now"
               >2026<span>いまの、あなた</span></span
@@ -102,7 +108,7 @@
               <p class="eyebrow">YOUR STARTING POINT</p>
               <h2 id="profile-title">まずは、いまのあなたから。</h2>
               <p>
-                近い暮らしを選んですぐにスタート。年齢・仕事・資産は、必要なところだけ調整できます。
+                選ぶだけですぐにスタート。仕事や会社、資産は、好きなところだけ詳しくできます。
               </p>
             </div>
             <span class="step-label">CHAPTER 00 / 現在地</span>
@@ -121,7 +127,39 @@
               旧版データを書き出す
             </button>
           </div>
-          <form id="profile-form" class="profile-card" method="post" action="/">
+          <form
+            id="profile-form"
+            class="profile-card"
+            method="post"
+            action="/"
+            novalidate=""
+          >
+            <div class="profile-levels" role="group" aria-label="入力の詳しさ">
+              <button
+                type="button"
+                data-profile-level="quick"
+                aria-pressed="true"
+              >
+                <b>1 · すぐ始める</b
+                ><small>選ぶだけ・入力なしでOK</small></button
+              ><button
+                type="button"
+                data-profile-level="standard"
+                aria-pressed="false"
+              >
+                <b>2 · 詳しく</b
+                ><small>仕事や会社を自分に近づける</small></button
+              ><button
+                type="button"
+                data-profile-level="advanced"
+                aria-pressed="false"
+              >
+                <b>3 · さらに詳しく</b><small>家族・資産・家計まで</small>
+              </button>
+            </div>
+            <p class="field-note">
+              必須の自由入力はありません。分からない項目は空欄でOK。未入力の年収や資産には、下に表示するゲーム用の仮値を使います。
+            </p>
             <div class="form-grid quick-grid">
               <label
                 ><span class="field-label">近い現在地を選ぶ</span
@@ -153,13 +191,17 @@
               >
             </div>
             <p id="quick-summary" class="field-note"></p>
-            <details class="optional-fields">
+            <button id="quick-start" type="submit" class="button primary">
+              この設定ですぐ始める ↗
+            </button>
+            <details class="optional-fields" id="profile-standard">
               <summary>
-                年齢・仕事・資産を調整する<span>任意 · 基本の8項目</span>
+                2 · 詳しく入れる
+                <span>すべて任意 · 年齢 / 仕事 / 会社 / 年収</span>
               </summary>
               <div class="form-grid optional-grid">
                 <label
-                  ><span class="field-label"><i>01</i> 年齢</span
+                  ><span class="field-label">年齢</span
                   ><span class="input-unit"
                     ><input
                       id="age"
@@ -168,20 +210,17 @@
                       min="18"
                       max="100"
                       value="30"
-                      required
                     /><span>歳</span></span
                   ></label
-                >
-                <label
-                  ><span class="field-label"><i>02</i> 住んでいる地域</span
+                ><label
+                  ><span class="field-label">住んでいる地域</span
                   ><select name="region" id="region">
                     <option value="metro">首都圏・大都市</option>
                     <option value="city" selected>地方都市</option>
                     <option value="rural">郊外・地方</option>
                   </select></label
-                >
-                <label
-                  ><span class="field-label"><i>03</i> 主な仕事・活動</span
+                ><label
+                  ><span class="field-label">主な仕事・活動</span
                   ><select name="job">
                     <option value="tech">IT・技術・研究</option>
                     <option value="marketing">マーケティング・広報</option>
@@ -195,22 +234,54 @@
                     </option>
                     <option value="other">学生・休職中・その他</option>
                   </select></label
-                >
-                <label
-                  ><span class="field-label"><i>04</i> 年収（税引き前）</span
-                  ><span class="input-unit"
-                    ><input
-                      name="income"
-                      type="number"
-                      min="0"
-                      max="10000"
-                      value="500"
-                      required
-                    /><span>万円 / 年</span></span
-                  ></label
-                >
-                <label
-                  ><span class="field-label"><i>05</i> AIとの距離感</span
+                ><label
+                  ><span class="field-label"
+                    >勤務先の名前 <small>初期の物語の前提</small></span
+                  >
+                  <div class="company-search-row">
+                    <input
+                      name="company"
+                      id="company-name"
+                      type="text"
+                      maxlength="60"
+                      autocomplete="off"
+                      placeholder="例：NTTデータ、GMO、任天堂（任意）"
+                    /><button
+                      type="button"
+                      id="company-search"
+                      class="button secondary small"
+                    >
+                      会社情報を取得
+                    </button>
+                  </div></label
+                ><label
+                  ><span class="field-label"
+                    >仕事の形
+                    <small>任意。会社の規模や職種とは別の背景</small></span
+                  >
+                  <select name="workModel">
+                    <option value="unknown">まだ指定しない</option>
+                    <option value="product">
+                      自社サービス・自社製品を育てる
+                    </option>
+                    <option value="services">
+                      受託開発・SI・顧客の案件を支える
+                    </option>
+                    <option value="inhouse">事業会社の社内IT・業務部門</option>
+                    <option value="public">公共・非営利の仕事</option>
+                    <option value="self">自営・フリーランス</option>
+                  </select> </label
+                ><label
+                  ><span class="field-label">勤務先のタイプ</span
+                  ><select name="companyType">
+                    <option value="unknown">指定しない</option>
+                    <option value="large">大企業</option>
+                    <option value="small">中小企業・スタートアップ</option>
+                    <option value="public">公的機関・非営利</option>
+                    <option value="self">自営・フリーランス</option>
+                  </select></label
+                ><label
+                  ><span class="field-label">AIとの距離感</span
                   ><select name="ai">
                     <option value="beginner">まだ、あまり使っていない</option>
                     <option value="sometimes" selected>
@@ -218,9 +289,8 @@
                     </option>
                     <option value="daily">日常的に活用している</option>
                   </select></label
-                >
-                <label
-                  ><span class="field-label"><i>06</i> 大切にしたいこと</span
+                ><label
+                  ><span class="field-label">大切にしたいこと</span
                   ><select name="priority">
                     <option value="balance">無理なく、バランスよく</option>
                     <option value="work">仕事で挑戦する</option>
@@ -228,35 +298,84 @@
                     <option value="people">家族や人とのつながり</option>
                     <option value="freedom">自由と新しい体験</option>
                   </select></label
-                >
-                <label
-                  ><span class="field-label"
-                    ><i>07</i> 金融資産の合計
-                    <small>預貯金・株式。借入超過ならマイナス</small></span
+                ><label
+                  ><span class="field-label">年収（税引き前）</span
                   ><span class="input-unit"
                     ><input
-                      name="savings"
+                      name="income"
                       type="number"
-                      min="-10000"
-                      max="100000"
-                      value="300"
-                      required
-                    /><span>万円</span></span
+                      min="0"
+                      max="10000"
+                      placeholder="未入力なら仮の500万円"
+                    /><span>万円 / 年</span></span
                   ></label
                 >
+              </div>
+              <section class="company-research">
+                <h3>取得した会社情報</h3>
+                <p class="field-note">
+                  会社名の横の「会社情報を取得」で調べます。会社を入れずに始めてもかまいません。
+                </p>
+
+                <p class="field-note">
+                  企業名だけをWikidataへ送って候補と公式サイトを探します。収入・資産・職歴は送りません。内蔵済みの企業は通信せず表示します。
+                </p>
+                <div id="company-candidates" class="company-candidates"></div>
+                <details id="company-manual" data-pc-only="">
+                  <summary>URLを指定して取得する</summary>
+                  <label
+                    ><span class="field-label">公式ページのURL（HTTPS）</span
+                    ><input
+                      type="url"
+                      id="company-url"
+                      placeholder="https://公式サイト/会社概要" /></label
+                  ><button
+                    type="button"
+                    id="research-button"
+                    class="button secondary small"
+                  >
+                    指定したページを取得
+                  </button>
+                </details>
                 <label
-                  ><span class="field-label"><i>08</i> いまの住まい</span
-                  ><select name="housing" id="housing">
-                    <option value="rent">賃貸・家族の住まいなど</option>
-                    <option value="own">持ち家</option>
+                  ><span class="field-label"
+                    >確認した会社の事業・特徴
+                    <small>取得本文を編集できます</small></span
+                  ><textarea
+                    id="company-summary"
+                    maxlength="1800"
+                    rows="4"
+                    placeholder="事業、業界、AIの導入状況など。出典がある現在の事実を記入。"
+                  ></textarea>
+                </label>
+                <div id="company-sources" class="field-note"></div>
+                <label
+                  ><span class="field-label"
+                    >事業に近い分類
+                    <small>仕事内容とは別に、業界の変化を反映</small></span
+                  ><select id="company-sector">
+                    <option value="unknown">不明・計算には反映しない</option>
+                    <option value="tech">IT・技術・研究</option>
+                    <option value="office">事務・管理・金融</option>
+                    <option value="creative">企画・デザイン・制作</option>
+                    <option value="people">営業・接客・教育</option>
+                    <option value="care">医療・介護・福祉</option>
+                    <option value="physical">現場・製造・運輸</option>
+                    <option value="independent">自営・経営</option>
+                    <option value="other">その他</option>
                   </select></label
                 >
-              </div>
+                <label class="save-toggle"
+                  ><input type="checkbox" id="company-confirmed" />
+                  内容・会社の一致を確認し、この情報を前提として使う</label
+                >
+                <p id="research-status" class="field-note" role="status"></p>
+              </section>
             </details>
-            <details class="optional-fields">
+            <details class="optional-fields" id="profile-advanced">
               <summary>
-                もう少し、自分に近づける
-                <span>任意 · 家族 / 家計 / 資産 / 職歴 / 勤務先</span>
+                3 · さらに詳しく入れる
+                <span>すべて任意 · 資産 / 家計 / 家族 / 職歴</span>
               </summary>
               <div class="form-grid optional-grid">
                 <label
@@ -342,8 +461,7 @@
                       min="0"
                       max="500"
                       step="0.1"
-                      value="12"
-                      required
+                      placeholder="未入力なら仮の12万円"
                     /><span>万円 / 月</span></span
                   ></label
                 >
@@ -357,8 +475,7 @@
                       type="number"
                       min="0"
                       max="100000"
-                      value="0"
-                      required
+                      placeholder="未入力なら仮の0万円"
                     /><span>万円</span></span
                   ></label
                 >
@@ -371,8 +488,7 @@
                       min="0"
                       max="500"
                       step="0.1"
-                      value="7"
-                      required
+                      placeholder="未入力なら仮の7万円"
                     /><span>万円 / 月</span></span
                   ></label
                 >
@@ -385,7 +501,6 @@
                       min="40"
                       max="85"
                       value="65"
-                      required
                     /><span>歳</span></span
                   ></label
                 >
@@ -399,50 +514,31 @@
                       type="number"
                       min="0"
                       max="2000"
-                      value="180"
-                      required
+                      placeholder="未入力なら仮の180万円"
                     /><span>万円 / 年</span></span
                   ></label
                 >
+
                 <label
-                  ><span class="field-label">勤務先のタイプ</span
-                  ><select name="companyType">
-                    <option value="unknown">指定しない</option>
-                    <option value="large">大企業</option>
-                    <option value="small">中小企業・スタートアップ</option>
-                    <option value="public">公的機関・非営利</option>
-                    <option value="self">自営・フリーランス</option>
+                  ><span class="field-label">いまの住まい</span
+                  ><select name="housing" id="housing">
+                    <option value="rent">賃貸・家族の住まいなど</option>
+                    <option value="own">持ち家</option>
                   </select></label
+                ><label
+                  ><span class="field-label"
+                    >金融資産の合計
+                    <small>預貯金・株式。借入超過ならマイナス</small></span
+                  ><span class="input-unit"
+                    ><input
+                      name="savings"
+                      type="number"
+                      min="-10000"
+                      max="100000"
+                      placeholder="未入力なら仮の300万円"
+                    /><span>万円</span></span
+                  ></label
                 >
-                <label
-                  ><span class="field-label"
-                    >勤務先の名前 <small>初期の物語の前提</small></span
-                  ><input
-                    name="company"
-                    id="company-name"
-                    type="text"
-                    maxlength="60"
-                    autocomplete="off"
-                    placeholder="空欄・ニックネームでも可"
-                /></label>
-                <label
-                  ><span class="field-label"
-                    >仕事の形
-                    <small>任意。会社の規模や職種とは別の背景</small></span
-                  >
-                  <select name="workModel">
-                    <option value="unknown">まだ指定しない</option>
-                    <option value="product">
-                      自社サービス・自社製品を育てる
-                    </option>
-                    <option value="services">
-                      受託開発・SI・顧客の案件を支える
-                    </option>
-                    <option value="inhouse">事業会社の社内IT・業務部門</option>
-                    <option value="public">公共・非営利の仕事</option>
-                    <option value="self">自営・フリーランス</option>
-                  </select>
-                </label>
               </div>
               <div id="home-fields" class="form-grid optional-grid" hidden>
                 <label
@@ -455,7 +551,6 @@
                       min="0"
                       max="100000"
                       value="3000"
-                      required
                     /><span>万円</span></span
                   ></label
                 >
@@ -468,7 +563,6 @@
                       min="0"
                       max="100000"
                       value="0"
-                      required
                     /><span>万円</span></span
                   ></label
                 >
@@ -481,7 +575,6 @@
                       min="1"
                       max="50"
                       value="25"
-                      required
                     /><span>年</span></span
                   ></label
                 >
@@ -495,77 +588,10 @@
                       max="15"
                       step="0.1"
                       value="1.5"
-                      required
                     /><span>% / 年</span></span
                   ></label
                 >
               </div>
-              <section class="company-research">
-                <h3>会社の公開情報を、物語の前提に。</h3>
-                <p class="field-note">
-                  勤務先の名前を入力し、ボタンを押すと公式情報を探して取り込みます。取得元と内容を確認して使えます。
-                </p>
-                <button
-                  type="button"
-                  id="company-search"
-                  class="button secondary small"
-                >
-                  企業名から公式情報を調べる
-                </button>
-                <p class="field-note">
-                  入力した企業名だけをWikidataで検索し、見つけた公式サイトの本文を取得します。同名の企業がある場合は候補を選びます。
-                </p>
-                <div id="company-candidates" class="company-candidates"></div>
-                <details id="company-manual">
-                  <summary>URLを指定して取得する</summary>
-                  <label
-                    ><span class="field-label">公式ページのURL（HTTPS）</span
-                    ><input
-                      type="url"
-                      id="company-url"
-                      placeholder="https://公式サイト/会社概要" /></label
-                  ><button
-                    type="button"
-                    id="research-button"
-                    class="button secondary small"
-                  >
-                    指定したページを取得
-                  </button>
-                </details>
-                <label
-                  ><span class="field-label"
-                    >確認した会社の事業・特徴
-                    <small>取得本文を編集できます</small></span
-                  ><textarea
-                    id="company-summary"
-                    maxlength="1800"
-                    rows="4"
-                    placeholder="事業、業界、AIの導入状況など。出典がある現在の事実を記入。"
-                  ></textarea>
-                </label>
-                <div id="company-sources" class="field-note"></div>
-                <label
-                  ><span class="field-label"
-                    >事業に近い分類
-                    <small>仕事内容とは別に、業界の変化を反映</small></span
-                  ><select id="company-sector">
-                    <option value="unknown">不明・計算には反映しない</option>
-                    <option value="tech">IT・技術・研究</option>
-                    <option value="office">事務・管理・金融</option>
-                    <option value="creative">企画・デザイン・制作</option>
-                    <option value="people">営業・接客・教育</option>
-                    <option value="care">医療・介護・福祉</option>
-                    <option value="physical">現場・製造・運輸</option>
-                    <option value="independent">自営・経営</option>
-                    <option value="other">その他</option>
-                  </select></label
-                >
-                <label class="save-toggle"
-                  ><input type="checkbox" id="company-confirmed" />
-                  内容・会社の一致を確認し、この情報を前提として使う</label
-                >
-                <p id="research-status" class="field-note" role="status"></p>
-              </section>
             </details>
             <p id="budget-summary" class="field-note"></p>
             <fieldset class="world-picker">
@@ -697,13 +723,21 @@
               ><button id="exchange-button" class="text-button">
                 好きなAIと手動で交換 ↗</button
               ><label
-                >一度に進める年数
+                >この方針で進める期間
                 <select id="year-step">
-                  <option value="1">1年</option>
-                  <option value="5">5年（同じ重点）</option>
-                  <option value="10">10年（同じ重点）</option>
+                  <option value="1">1年ずつ</option>
+                  <option value="5">最大5年（節目で止まる）</option>
+                  <option value="10">最大10年（節目で止まる）</option>
                 </select></label
               >
+              <button
+                id="journey-review"
+                type="button"
+                class="text-button"
+                hidden
+              >
+                直前のできごとを振り返る ↗
+              </button>
             </div>
             <p id="ai-status" class="field-note" role="status"></p>
             <p id="ai-timing" class="field-note" aria-live="off" hidden></p>
@@ -783,7 +817,7 @@
     </dialog>
     <dialog id="assumptions-dialog">
       <div class="dialog-top">
-        <p class="eyebrow">ASSUMPTIONS & PRIVACY</p>
+        <p class="eyebrow">ASSUMPTIONS &amp; PRIVACY</p>
         <button class="close-button" data-close aria-label="閉じる">×</button>
       </div>
       <h2>仮定を知って、遊ぶ。</h2>
@@ -851,7 +885,7 @@
               type="url"
               value="http://127.0.0.1:11434"
               required
-              readonly
+              readonly=""
           /></label>
           <label
             ><span class="field-label"
@@ -991,7 +1025,7 @@
       </p>
       <label
         ><span class="field-label">AIに渡す文章</span
-        ><textarea id="exchange-prompt" rows="7" readonly></textarea></label
+        ><textarea id="exchange-prompt" rows="7" readonly=""></textarea></label
       ><button id="copy-prompt" class="button secondary small">
         文章をコピー</button
       ><label
@@ -1152,5 +1186,34 @@
         このゲームはJavaScriptを有効にすると遊べます。入力はブラウザ内で処理します。
       </p></noscript
     >
+
+    <dialog
+      id="journey-dialog"
+      class="journey-dialog"
+      aria-labelledby="journey-title"
+    >
+      <div class="dialog-heading">
+        <p class="eyebrow">THE YEARS YOU LIVED</p>
+        <button
+          type="button"
+          class="text-button"
+          data-close
+          aria-label="年ごとの記録を閉じる"
+        >
+          閉じる ×
+        </button>
+      </div>
+      <h2 id="journey-title"></h2>
+      <p id="journey-caption"></p>
+      <p class="field-note">
+        この人生で起きた、ゲーム内の物語です。各年の結果をもとに組み立てています。
+      </p>
+      <div id="journey-years" class="journey-years"></div>
+      <div class="journey-footer">
+        <button type="button" id="journey-next" class="button primary">
+          次の選択へ →
+        </button>
+      </div>
+    </dialog>
   </body>
 </html>

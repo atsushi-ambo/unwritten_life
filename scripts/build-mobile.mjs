@@ -77,7 +77,7 @@ export async function buildMobile(output, { cloud = false } = {}) {
   });
   const head = html.childNodes.find((n) => n.tagName === "head");
   const csp = parse(
-    `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src ${cloud ? "'self'" : "'none'"}; object-src 'none'; base-uri 'none'; form-action 'none'">`,
+    `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src ${cloud ? "'self' " : ""}https://www.wikidata.org/w/api.php; object-src 'none'; base-uri 'none'; form-action 'none'">`,
   )
     .childNodes.find((n) => n.tagName === "html")
     .childNodes.find((n) => n.tagName === "head").childNodes[0];
@@ -87,7 +87,7 @@ export async function buildMobile(output, { cloud = false } = {}) {
   const banner = parse(
     cloud
       ? '<aside class="mobile-edition-banner"><strong>スマホ体験版 · OpenAIは手動生成</strong><span>AI生成を押したときだけプロフィールと選択履歴をOpenAIへ送ります。見積り累計$0.10・100回まで。セーブはこの端末のブラウザに保存します。</span></aside>'
-      : '<aside class="mobile-edition-banner"><strong>スマホ体験版 · AI接続なし</strong><span>入力はこのブラウザで処理します。PCのAPIキーやセーブとは接続せず、API課金は発生しません。保存を選んだ場合はこの端末のブラウザに保存します。</span></aside>',
+      : '<aside class="mobile-edition-banner"><strong>スマホ体験版 · 端末内で遊べます</strong><span>会社情報を取得するときだけ企業名をWikidataへ送ります。AIは手動交換で使えます。PCのAPIキーとは接続せず、API課金は発生しません。</span></aside>',
   )
     .childNodes.find((n) => n.tagName === "html")
     .childNodes.find((n) => n.tagName === "body").childNodes[0];

@@ -389,6 +389,35 @@ export function validateProfile(raw) {
   p.companyFacts = validateCompanyFacts(raw.companyFacts ?? null);
   return p;
 }
+// Only for the new-game form. Save imports still use strict validateProfile.
+export const PROFILE_DEFAULTS = Object.freeze({
+  age: 30,
+  income: 500,
+  savings: 300,
+  monthlyCost: 12,
+  stocks: 0,
+  rent: 7,
+  homeValue: 0,
+  mortgage: 0,
+  mortgageYears: 25,
+  mortgageRate: 1.5,
+  retirementAge: 65,
+  pension: 180,
+  children: 0,
+});
+export function optionalProfileInputs(raw, defaults = PROFILE_DEFAULTS) {
+  const result = { ...raw };
+  for (const [key, value] of Object.entries(PROFILE_DEFAULTS))
+    if (
+      raw[key] === undefined ||
+      (typeof raw[key] === "string" && raw[key].trim() === "")
+    )
+      result[key] = defaults[key] ?? value;
+    else if (["number", "string"].includes(typeof raw[key]))
+      result[key] = Number(raw[key]);
+    else fail();
+  return result;
+}
 export function validateCompanyFacts(raw) {
   if (raw === null) return null;
   if (
@@ -1258,6 +1287,21 @@ export function eventFor(g) {
         : `${company}で、次の役割を考える。`;
     body = `${g.age}歳、${company}で${JOBS[g.employer.role].label}を担うあなた。${SCENARIOS[g.scenario].label}の世界では、AIを使う仕事の比重が${technologyAt(g) > 0.5 ? "大きく変わってきた" : "少しずつ増えている"}。${g.profile.household === "care" ? "育児やケアとの両立も、時間の使い方を左右する。" : ""}${["learn", "studyDaily"].includes(last) ? "去年の学びを、実際の仕事で試す場面が見えてきた。" : last === "connect" ? "大切な人と過ごした時間が、選びたい働き方を考えるきっかけになった。" : "収入だけでなく、暮らしに残る時間も大切にしたい。"}`;
   }
+  const continuation =
+    worldEnabled(g) &&
+    !g.retired &&
+    !["venture", "seeking"].includes(g.employer.kind) &&
+    last !== "switch" &&
+    g.cash >= g.livingCost * 6 &&
+    g.history.at(-1)?.episode;
+  if (continuation) {
+    title = continuation.nextTitle;
+    const workplace = workContext(g).model;
+    const setting = g.retired
+      ? "仕事の区切りを越えた今、これまでの経験と暮らしの時間をどう使うか。"
+      : `${company}で迎えた新しい年。${{ product: "利用者から届く声を、サービスの改善につなげたい。", services: "顧客の課題と、任される仕事の範囲を見つめ直す。", inhouse: "社内の現場と、仕事を支える仕組みを見渡す。" }[workplace] ?? `${JOBS[g.employer.role].label}の経験を、次にどう生かそう。`}`;
+    body = `${continuation.title} ${REGIONS[g.region].label}の${g.housing === "own" ? "持ち家" : "賃貸等の住まい"}で迎えた${g.year}年。${setting} ${continuation.next}${g.family?.childAges.length ? `子ども${g.family.childAges.length}人との時間も、同じ一年の中にある。` : ""}`;
+  }
   return {
     title,
     body: worldEnabled(g)
@@ -1267,6 +1311,167 @@ export function eventFor(g) {
     options,
     generated: false,
   };
+}
+// Small fictional scenes built from the actual calculated outcome. They never
+// add money, relatives, a job offer or a historical event to the game state.
+export function annualEpisode(before, record) {
+  const id = record.choice,
+    ok = record.outcome?.kind === "success";
+  const model = workContext(before).model;
+  const setting =
+    {
+      product: "利用者の声とサービスの改善",
+      services: "顧客の現場と案件の進め方",
+      inhouse: "社内の業務と仕組み",
+    }[model] ?? JOBS[record.employer.role].label;
+  const variation = Math.floor(
+    randomAt(before.seed, before.decisions.length, 91) * 3,
+  );
+  const learning = [
+    "机に向かう時間を、日々の暮らしに組み込んだ。",
+    "すぐに答えの出ない課題を、少しずつ調べ続けた。",
+    "前なら読み飛ばした説明が、少し分かるようになった。",
+  ][variation];
+  let title = record.outcome?.title ?? CHOICES[id].label;
+  let body = record.outcome?.body ?? record.note;
+  let nextTitle = [
+    "次の一歩を、誰と考える？",
+    "続けることと、変えること。",
+    "少し先の自分へ、何を残す？",
+  ][variation];
+  let next =
+    "同じ方針を続けるか、別のことに時間を使うか。次の一年の重点を選ぼう。";
+  if (["learn", "studyDaily"].includes(id)) {
+    title = ok
+      ? "学んだことが、現場の言葉になった。"
+      : "ノートは増えた。評価はまだ、追いつかない。";
+    const studiedYears = before.history.filter((h) =>
+      ["learn", "studyDaily"].includes(h.choice),
+    ).length;
+    const progress =
+      studiedYears === 0
+        ? "まずは、自分に合う学び方を探した。"
+        : studiedYears === 1
+          ? "去年のノートを開くと、分かることが増えていた。"
+          : studiedYears === 2
+            ? "続けてみて、次に学びたい課題も見えてきた。"
+            : "積み重ねた時間を、どこで使うか考えるようになった。";
+    body = `${progress}${learning}${id === "studyDaily" ? "1日1時間、年間365時間。" : "学びに使った時間が積み重なる。"}${ok ? `${setting}で、取り組みが評価につながった。` : `${setting}へ生かしたいが、今年は目に見える評価につながらなかった。学んだ力は残る。`}`;
+    nextTitle = ok
+      ? "この手応えを、次はどこで試す？"
+      : "続ける？ やり方を変えてみる？";
+    next = ok
+      ? "小さく仕事で試す、成果をもとに相談する、学びを続ける。手応えの先にも選び方がある。"
+      : "もう一年続けるか、小さな実践へ移るか。それとも、いったん息をつくか。";
+  } else if (id === "focus" || id === "pilot" || id === "negotiate") {
+    body = `${record.employer.name}で、${setting}に向き合った。${record.outcome?.body ?? record.note}`;
+    nextTitle = ok
+      ? "任されることが増えた、その先。"
+      : "この場所で、もう一度試す？";
+    next = ok
+      ? "経験を深める道と、外の仕事を知る道。成果をどう使うかは、まだ選べる。"
+      : "成果が見えにくい時期をどう過ごすか。学ぶ、人に会う、働く場所を変えることも考えられる。";
+  } else if (id === "rest") {
+    title = [
+      "何もしない予定を、ひとつ入れた。",
+      "久しぶりに、帰り道を急がなかった。",
+      "忙しさから、少し距離を置いた。",
+    ][variation];
+    body = `予定を詰めない時間を作り、自分のペースを確かめた。${record.note}次に何をしたいかを考える余地も生まれた。`;
+    nextTitle = "取り戻した時間を、何に使う？";
+  } else if (id === "connect") {
+    title = [
+      "久しぶりの会話に、ヒントがあった。",
+      "仕事以外の話を、ゆっくりした。",
+      "予定を合わせて、人に会う時間を作った。",
+    ][variation];
+    body = `${record.note}${before.family.childAges.length ? "家族と、これからの時間の使い方も話した。" : "何を大切にしたいか、誰かと話すうちに少し形が見えてきた。"}`;
+    nextTitle = "会話から浮かんだ、次の選択。";
+  } else if (id === "switch") {
+    title = "いつもの朝が、新しい職場の朝に変わった。";
+    body = `${record.employer.name}へ、${JOBS[record.employer.role].label}の役割で移った。仕事の進め方と人との距離を、一つずつ覚えていく。これは架空の転職の結果。`;
+    nextTitle = "新しい職場で、何から始める？";
+  } else if (
+    id === "startup" ||
+    record.employer.kind === "venture" ||
+    record.outcome?.kind === "failure" ||
+    record.outcome?.kind === "closure"
+  ) {
+    body = `${record.outcome?.body ?? record.note}${record.outcome?.kind === "failure" || record.outcome?.kind === "closure" ? "事業を終えた経験を持って、暮らしと次の仕事を組み直す。" : "顧客を探す時間と運営の負担。その両方が、仕事を選ぶ意味を変えていく。"}`;
+    nextTitle =
+      record.employer.kind === "seeking"
+        ? "この経験を、次の暮らしへ。"
+        : ok
+          ? "広げる前に、何を確かめる？"
+          : "続け方を、変えてみる？";
+  } else if (["home", "move", "invest"].includes(id)) {
+    title =
+      id === "move"
+        ? "暮らしの地図を、描き直した。"
+        : id === "home"
+          ? "帰る場所に、新しい責任が増えた。"
+          : "お金の置き場所を、見直した。";
+    body = `${record.note}働くための時間、手元の余裕、これから守りたい暮らしを、改めて考える。`;
+    nextTitle = "この暮らしに合う、働き方は？";
+  }
+  if (record.familyOutcome && record.familyOutcome !== record.outcome)
+    body += ` ${record.familyOutcome.body}`;
+  if (record.world?.shock.id !== "calm" && record.world)
+    body += ` ${record.world.shock.body}`;
+  if (record.intention) body += `選んだ方針は「${record.intention}」。`;
+  return { title, body, nextTitle, next };
+}
+export function advanceYears(game, decision, years = 1) {
+  if (![1, 5, 10].includes(years)) fail();
+  const repeated = new Set([
+    "learn",
+    "studyDaily",
+    "focus",
+    "rest",
+    "connect",
+    "explore",
+    "careLeave",
+    "recover",
+    "pilot",
+  ]);
+  const id = decisionId(decision),
+    requested = years;
+  const entries = [];
+  let next = game,
+    stopReason = "";
+  for (let i = 0; i < (repeated.has(id) ? years : 1); i++) {
+    if (next.ended) break;
+    if (!availableChoices(next).includes(id)) {
+      stopReason = "状況が変わり、この方針を続けられなくなりました。";
+      break;
+    }
+    const before = next;
+    next = advance(next, decision);
+    entries.push(next.history.at(-1));
+    if (next.ended) {
+      stopReason = "この人生の物語が完結しました。";
+      break;
+    }
+    if (
+      next.family.childAges.length !== before.family.childAges.length ||
+      next.family.partner !== before.family.partner
+    ) {
+      stopReason = "家族の節目です。次の一年を選び直せます。";
+      break;
+    }
+    if (
+      next.retired !== before.retired ||
+      ["failure", "closure"].includes(next.history.at(-1).outcome?.kind)
+    ) {
+      stopReason = "働き方の節目です。ここからの方針を選び直せます。";
+      break;
+    }
+  }
+  if (!entries.length)
+    throw new Error("現在の状況では、この選択を実行できません。");
+  if (years > 1 && !repeated.has(id))
+    stopReason = "暮らしが変わる選択なので、まず一年の結果を見ます。";
+  return { game: next, entries, requested, stopReason };
 }
 export function advance(g, rawDecision) {
   if (g.ended || g.decisions.length >= MAX_AGE)
@@ -1538,6 +1743,7 @@ export function advance(g, rawDecision) {
     liquidation,
     ended,
   };
+  if (worldEnabled(g)) record.episode = annualEpisode(g, record);
   return {
     ...g,
     employer,
