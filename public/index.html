@@ -24,9 +24,10 @@
         ></a
       >
       <nav aria-label="メイン">
+        <button class="text-button" id="ai-settings-button">AIの接続 ↗</button>
         <button class="text-button" id="about-button">
           このゲームについて <span>↗</span></button
-        ><span class="version">EARLY ACCESS / 0.1</span>
+        ><span class="version">LOCAL EDITION / 0.2</span>
       </nav>
     </header>
     <main id="main" class="wrap">
@@ -52,7 +53,7 @@
               </button>
             </div>
             <p class="privacy-line">
-              <span>◈</span> ログイン不要 · 入力は外部に送信されません
+              <span>◈</span> ローカルで遊べる · AIの接続先は自分で選べます
             </p>
           </div>
           <div
@@ -89,7 +90,7 @@
         <div class="feature-strip">
           <span><b>01</b> あなた自身が主人公</span
           ><span><b>02</b> AIで変わる3つの世界</span
-          ><span><b>03</b> 選びなおせる、20年の物語</span>
+          ><span><b>03</b> 選びなおせる、生涯の物語</span>
         </div>
         <section
           id="profile-section"
@@ -100,7 +101,9 @@
             <div>
               <p class="eyebrow">YOUR STARTING POINT</p>
               <h2 id="profile-title">まずは、いまのあなたから。</h2>
-              <p>6つの項目でスタート。迷ったら、仮の設定でも大丈夫。</p>
+              <p>
+                8つの項目でスタート。お金や暮らしの詳細はあとから調整できます。
+              </p>
             </div>
             <span class="step-label">CHAPTER 00 / 現在地</span>
           </div>
@@ -109,6 +112,14 @@
             ><button id="resume-button" class="button small">
               続きから遊ぶ →</button
             ><button id="delete-save" class="text-button">保存を削除</button>
+          </div>
+          <div id="legacy-banner" class="resume-banner" hidden>
+            旧20年版の保存を保持しています。新モデルで勝手に上書きしません。<button
+              id="export-legacy"
+              class="text-button"
+            >
+              旧版データを書き出す
+            </button>
           </div>
           <form id="profile-form" class="profile-card" method="post" action="/">
             <div class="form-grid">
@@ -120,8 +131,7 @@
                     name="age"
                     type="number"
                     min="18"
-                    max="80"
-                    step="1"
+                    max="100"
                     value="30"
                     required
                   /><span>歳</span></span
@@ -137,7 +147,7 @@
               >
               <label
                 ><span class="field-label"><i>03</i> 主な仕事・活動</span
-                ><select name="job" id="job">
+                ><select name="job">
                   <option value="tech">IT・技術・研究</option>
                   <option value="office">事務・管理・金融</option>
                   <option value="creative">企画・デザイン・制作</option>
@@ -149,16 +159,13 @@
                 </select></label
               >
               <label
-                ><span class="field-label"
-                  ><i>04</i> いまの年収 <small>税引き前</small></span
+                ><span class="field-label"><i>04</i> 年収（税引き前）</span
                 ><span class="input-unit"
                   ><input
                     name="income"
-                    id="income"
                     type="number"
                     min="0"
                     max="10000"
-                    step="1"
                     value="500"
                     required
                   /><span>万円 / 年</span></span
@@ -166,16 +173,15 @@
               >
               <label
                 ><span class="field-label"><i>05</i> AIとの距離感</span
-                ><select name="ai" id="ai">
+                ><select name="ai">
                   <option value="beginner">まだ、あまり使っていない</option>
                   <option value="sometimes" selected>ときどき使っている</option>
                   <option value="daily">日常的に活用している</option>
                 </select></label
               >
               <label
-                ><span class="field-label"
-                  ><i>06</i> これから大切にしたいこと</span
-                ><select name="priority" id="priority">
+                ><span class="field-label"><i>06</i> 大切にしたいこと</span
+                ><select name="priority">
                   <option value="balance">無理なく、バランスよく</option>
                   <option value="work">仕事で挑戦する</option>
                   <option value="time">ゆとりと健康</option>
@@ -183,16 +189,38 @@
                   <option value="freedom">自由と新しい体験</option>
                 </select></label
               >
+              <label
+                ><span class="field-label"
+                  ><i>07</i> 金融資産の合計
+                  <small>預貯金・株式。借入超過ならマイナス</small></span
+                ><span class="input-unit"
+                  ><input
+                    name="savings"
+                    type="number"
+                    min="-10000"
+                    max="100000"
+                    value="300"
+                    required
+                  /><span>万円</span></span
+                ></label
+              >
+              <label
+                ><span class="field-label"><i>08</i> いまの住まい</span
+                ><select name="housing" id="housing">
+                  <option value="rent">賃貸・家族の住まいなど</option>
+                  <option value="own">持ち家</option>
+                </select></label
+              >
             </div>
             <details class="optional-fields">
               <summary>
                 もう少し、自分に近づける
-                <span>任意 · 暮らし / お金 / 勤務先</span>
+                <span>任意 · 家計 / 資産 / 退職 / 勤務先</span>
               </summary>
               <div class="form-grid optional-grid">
                 <label
                   ><span class="field-label"
-                    >性別 <small>表示のみ・計算には使いません</small></span
+                    >性別 <small>計算・寿命に使いません</small></span
                   ><select name="gender">
                     <option value="undisclosed">回答しない</option>
                     <option value="woman">女性</option>
@@ -210,22 +238,7 @@
                 >
                 <label
                   ><span class="field-label"
-                    >貯蓄 − 借入 <small>仮の初期値：300万円</small></span
-                  ><span class="input-unit"
-                    ><input
-                      name="savings"
-                      type="number"
-                      min="-10000"
-                      max="100000"
-                      step="1"
-                      value="300"
-                      required
-                    /><span>万円</span></span
-                  ></label
-                >
-                <label
-                  ><span class="field-label"
-                    >毎月の生活費 <small>仮の初期値：地域で変化</small></span
+                    >毎月の生活費 <small>住居費を除く</small></span
                   ><span class="input-unit"
                     ><input
                       name="monthlyCost"
@@ -234,9 +247,66 @@
                       min="0"
                       max="500"
                       step="0.1"
-                      value="17"
+                      value="12"
                       required
                     /><span>万円 / 月</span></span
+                  ></label
+                >
+                <label
+                  ><span class="field-label"
+                    >金融資産のうち株式・投信
+                    <small>合計に含まれる内訳。二重加算しません</small></span
+                  ><span class="input-unit"
+                    ><input
+                      name="stocks"
+                      type="number"
+                      min="0"
+                      max="100000"
+                      value="0"
+                      required
+                    /><span>万円</span></span
+                  ></label
+                >
+                <label id="rent-field"
+                  ><span class="field-label">家賃などの住居費</span
+                  ><span class="input-unit"
+                    ><input
+                      name="rent"
+                      type="number"
+                      min="0"
+                      max="500"
+                      step="0.1"
+                      value="7"
+                      required
+                    /><span>万円 / 月</span></span
+                  ></label
+                >
+                <label
+                  ><span class="field-label">仕事を退く年齢</span
+                  ><span class="input-unit"
+                    ><input
+                      name="retirementAge"
+                      type="number"
+                      min="40"
+                      max="85"
+                      value="65"
+                      required
+                    /><span>歳</span></span
+                  ></label
+                >
+                <label
+                  ><span class="field-label"
+                    >65歳以降の年金など
+                    <small>世帯での年間収入の仮置き</small></span
+                  ><span class="input-unit"
+                    ><input
+                      name="pension"
+                      type="number"
+                      min="0"
+                      max="2000"
+                      value="180"
+                      required
+                    /><span>万円 / 年</span></span
                   ></label
                 >
                 <label
@@ -251,26 +321,138 @@
                 >
                 <label
                   ><span class="field-label"
-                    >勤務先の名前 <small>物語への表示だけ</small></span
+                    >勤務先の名前 <small>初期の物語の前提</small></span
                   ><input
                     name="company"
+                    id="company-name"
                     type="text"
                     maxlength="60"
                     autocomplete="off"
-                    placeholder="ニックネームでも、空欄でも"
+                    placeholder="空欄・ニックネームでも可"
                 /></label>
               </div>
-              <p class="field-note">
-                企業ごとの将来や、個人の寿命は予測しません。支出・貯蓄は初期値を使うため、気になる方は調整してください。
-              </p>
+              <div id="home-fields" class="form-grid optional-grid" hidden>
+                <label
+                  ><span class="field-label"
+                    >不動産の評価額 <small>金融資産に加算する別枠</small></span
+                  ><span class="input-unit"
+                    ><input
+                      name="homeValue"
+                      type="number"
+                      min="0"
+                      max="100000"
+                      value="3000"
+                      required
+                    /><span>万円</span></span
+                  ></label
+                >
+                <label
+                  ><span class="field-label">住宅ローンの残高</span
+                  ><span class="input-unit"
+                    ><input
+                      name="mortgage"
+                      type="number"
+                      min="0"
+                      max="100000"
+                      value="0"
+                      required
+                    /><span>万円</span></span
+                  ></label
+                >
+                <label
+                  ><span class="field-label">残りの返済期間</span
+                  ><span class="input-unit"
+                    ><input
+                      name="mortgageYears"
+                      type="number"
+                      min="1"
+                      max="50"
+                      value="25"
+                      required
+                    /><span>年</span></span
+                  ></label
+                >
+                <label
+                  ><span class="field-label">住宅ローン金利</span
+                  ><span class="input-unit"
+                    ><input
+                      name="mortgageRate"
+                      type="number"
+                      min="0"
+                      max="15"
+                      step="0.1"
+                      value="1.5"
+                      required
+                    /><span>% / 年</span></span
+                  ></label
+                >
+              </div>
+              <section class="company-research">
+                <h3>会社の公開情報を、物語の前提に。</h3>
+                <p class="field-note">
+                  公式の会社概要や事業・AI戦略のページを指定して取得します。情報は現在の事実で、未来の業績・解雇・年収を保証しません。
+                </p>
+                <a
+                  id="company-search"
+                  class="text-button"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  href="https://www.google.com/"
+                  >会社名だけをGoogleで検索 ↗</a
+                >
+                <label
+                  ><span class="field-label">公式ページのURL（HTTPS）</span
+                  ><input
+                    type="url"
+                    id="company-url"
+                    placeholder="https://公式サイト/会社概要" /></label
+                ><button
+                  type="button"
+                  id="research-button"
+                  class="button secondary small"
+                >
+                  公開情報を取得する
+                </button>
+                <label
+                  ><span class="field-label"
+                    >確認した会社の事業・特徴
+                    <small>取得本文を編集できます</small></span
+                  ><textarea
+                    id="company-summary"
+                    maxlength="1800"
+                    rows="4"
+                    placeholder="事業、業界、AIの導入状況など。出典がある現在の事実を記入。"
+                  ></textarea>
+                </label>
+                <div id="company-sources" class="field-note"></div>
+                <label
+                  ><span class="field-label"
+                    >事業に近い分類
+                    <small>仕事内容とは別に、業界の変化を反映</small></span
+                  ><select id="company-sector">
+                    <option value="unknown">不明・計算には反映しない</option>
+                    <option value="tech">IT・技術・研究</option>
+                    <option value="office">事務・管理・金融</option>
+                    <option value="creative">企画・デザイン・制作</option>
+                    <option value="people">営業・接客・教育</option>
+                    <option value="care">医療・介護・福祉</option>
+                    <option value="physical">現場・製造・運輸</option>
+                    <option value="independent">自営・経営</option>
+                    <option value="other">その他</option>
+                  </select></label
+                >
+                <label class="save-toggle"
+                  ><input type="checkbox" id="company-confirmed" />
+                  内容・会社の一致を確認し、この情報を前提として使う</label
+                >
+                <p id="research-status" class="field-note" role="status"></p>
+              </section>
             </details>
-            <p id="budget-summary" class="field-note">
-              初期設定：貯蓄300万円・生活費17万円/月。任意項目で調整できます。
-            </p>
+            <p id="budget-summary" class="field-note"></p>
             <fieldset class="world-picker">
               <legend>
-                どんな未来で遊ぶ？
-                <span>あとで、同じ選択を別の世界でも比較できます。</span>
+                どんなAIの未来で遊ぶ？
+                <span>同じ選択で、別の世界とも比較できます。</span>
               </legend>
               <div class="world-options">
                 <label
@@ -278,8 +460,7 @@
                     ><b>ゆるやかな普及</b
                     ><small>変化に、時間をかける世界</small></span
                   ></label
-                >
-                <label
+                ><label
                   ><input
                     type="radio"
                     name="scenario"
@@ -289,8 +470,7 @@
                     ><b>着実な変化</b
                     ><small>仕事と暮らしが、少しずつ変わる</small></span
                   ></label
-                >
-                <label
+                ><label
                   ><input type="radio" name="scenario" value="fast" /><span
                     ><b>急速な変革</b
                     ><small>機会も、戸惑いも、大きくなる</small></span
@@ -304,11 +484,11 @@
                 この端末に物語を保存する
                 <small>共有PCではオフを推奨</small></label
               ><button type="submit" class="button primary">
-                この私で、はじめる <span>↗</span>
+                この私で、はじめる ↗
               </button>
             </div>
             <p class="model-note">
-              これは未来を考えるためのゲームです。数値は独自の仮定で、実際の年収・資産・健康の予測ではありません。
+              人生の終わりまで進む架空のゲームです。寿命・収入・資産の個人予測ではありません。AIがなくても入力と選択で結果が変わります。
             </p>
             <p class="error" id="form-error" role="alert"></p>
           </form>
@@ -332,9 +512,9 @@
         </div>
         <progress
           id="progress"
-          max="20"
+          max="110"
           value="0"
-          aria-label="20年間の進み具合"
+          aria-label="経過した年数"
         ></progress>
         <div class="game-grid">
           <aside class="life-sidebar">
@@ -353,6 +533,29 @@
             </button>
           </aside>
           <div class="story-column">
+            <div class="game-toolbar">
+              <button id="generate-button" class="button primary small">
+                この場面をAIで生成 ✳</button
+              ><button id="exchange-button" class="text-button">
+                好きなAIと手動で交換 ↗</button
+              ><label
+                >一度に進める年数
+                <select id="year-step">
+                  <option value="1">1年</option>
+                  <option value="5">5年（同じ重点）</option>
+                  <option value="10">10年（同じ重点）</option>
+                </select></label
+              >
+            </div>
+            <p id="ai-status" class="field-note" role="status"></p>
+            <label id="cloud-consent-label" class="save-toggle" hidden
+              ><input id="cloud-consent" type="checkbox" />
+              選択したクラウドAIへ、年齢・家計・勤務先・選択履歴を送信する</label
+            >
+            <details class="context-preview">
+              <summary>AIに渡す情報を確認</summary>
+              <pre id="context-preview"></pre>
+            </details>
             <div id="event-card" class="event-card"></div>
             <div class="choice-heading">
               <h2 id="choice-title">この一年、何を大切にする？</h2>
@@ -393,21 +596,16 @@
         <p class="eyebrow">ABOUT THIS EXPERIENCE</p>
         <button class="close-button" data-close aria-label="閉じる">×</button>
       </div>
-      <h2>決まっていない未来を、<br />少しだけ遊んでみる。</h2>
+      <h2>あなた自身から、<br />生涯の物語を。</h2>
       <p>
-        2026年の自分を起点に、1年ずつ選びながら20年を過ごす人生ゲームです。仕事、お金、健康、つながり、自由。何を大切にするかに、唯一の正解はありません。
+        2026年の自分から始め、仕事、資産、住まい、人との時間を選ぶゲームです。転職、学び、休養、転居、住居購入、資産配分などで、その後の暮らしと出来事が変わります。退職後も進み、架空の人生の最期で物語を振り返ります。
       </p>
       <p>
-        AIの未来は「ゆるやかな普及」「着実な変化」「急速な変革」の3つ。同じ出発点・同じ選択・同じ偶然をそろえ、普及の速さが変わったときの違いを比較できます。
+        「この場面をAIで生成」で、現在の状態と過去の選択を使う個別の場面を作れます。Ollama・LM
+        Studio・OpenAI・OpenRouter・互換APIに接続でき、ChatGPTやOpenCodeなどへ手動で依頼して返答を取り込むこともできます。接続しなくても遊べます。
       </p>
-      <h3>遊び方</h3>
-      <ol>
-        <li>現在地を入力。架空の人物でも遊べます。</li>
-        <li>物語を読み、一年の過ごし方を選びます。</li>
-        <li>巻き戻したり、別の世界と比べたりして、自分の続きを探します。</li>
-      </ol>
-      <p class="field-note">
-        「80億分の1」の人生を体験する着想を参考に、現在の自分から始める独自のゲームを制作しています。公式な提携や同一のモデルはありません。
+      <p>
+        1年ずつ、または5年・10年を同じ重点で進められます。複数年進行は途中の年をルールで処理し、勝手にAIを呼びません。いつでも巻き戻して選びなおせます。
       </p>
     </dialog>
     <dialog id="assumptions-dialog">
@@ -416,49 +614,162 @@
         <button class="close-button" data-close aria-label="閉じる">×</button>
       </div>
       <h2>仮定を知って、遊ぶ。</h2>
-      <h3>未来の予測ではありません</h3>
+      <h3>精度と前提</h3>
       <p>
-        3つの世界に発生確率は設定していません。職業ごとのAI影響、収入変化、生活の指標は、研究の考え方を参考にした独自のゲーム係数です。統計的な較正や個人への予測精度の検証はしていません。
+        個人の人生・寿命・企業の将来を予測するモデルではありません。家計の会計と状態の変化はアプリが計算し、AIは場面と選択肢を作ります。生成文が正しいとは限らず、選択肢の実際の作用は画面と計算で確認できます。
       </p>
       <p>
-        仕事の一部が置き換わる負担と、AIを活用する利益を分けています。学びの時間、働く負担、人との時間の間にはトレードオフがあります。企業名・性別は計算に使いません。
+        金額は2026年の購買力、万円単位。年収の76%を使えるお金とし、生活費、住居費、選択費用を差し引きます。株式は年2.5%を中心に±17%、不動産は年±3%の架空の変動。投資判断に使える予測ではありません。住居の維持費、ローン元利返済、資産売却による生活費の補填を含みます。年金は入力した仮定で、65歳から反映します。
       </p>
-      <h3>お金と暮らしの計算</h3>
       <p>
-        年収の76%を使えるお金とし、生活費と選択に伴う費用を差し引きます。年収の年変化率は±12%以内。税金・年金の実制度、退職、物価の個別差、運用益、出産費用、病気や寿命はモデル化していません。勤務先タイプ・家族構成は物語の表示や生活費の初期設定に使います。金額は万円単位、2026年の購買力の想定です。健康・つながり・自由は0〜100のゲーム指標です。
+        加齢・ゆとり・技術のシナリオから、独自の終了確率を設定しています。最長110歳で終了するゲーム上の境界です。性別から収入や寿命を決めません。健康指標は診断ではありません。
       </p>
-      <h3>入力は、ブラウザの中に</h3>
+      <h3>入力とAIの接続先</h3>
       <p>
-        入力内容は外部送信しません。AIモデルへの送信、アクセス解析、広告、Cookieはありません。「この端末に保存する」を選ぶと、入力と選択をブラウザのlocalStorageに保存します。端末を共有する人は読める可能性があります。オフにするか「保存を削除」で消せます。URLや共有リンクには個人情報を入れません。
+        初期設定はPC内のOllama。クラウドAIへ送る場合は画面で接続先と内容を確認して選択します。APIキーはローカルサーバーのメモリにのみ保持し、セーブやGitには含めません。アプリを終了すると消えます。端末保存は任意で、共有ブラウザからは見られる可能性があります。
       </p>
-      <h3>参考にした公開資料</h3>
-      <ul>
-        <li>
-          <a
-            href="https://www.ilo.org/publications/generative-ai-and-jobs-refined-global-index-occupational-exposure"
-            target="_blank"
-            rel="noopener noreferrer"
-            >ILO / Generative AI and Jobs（2025）</a
-          >：職業全体でなく、仕事内容ごとの変化を考える枠組み。
-        </li>
-        <li>
-          <a
-            href="https://www.ilo.org/resource/news/new-ilo-brief-explains-what-ai-exposure-indicators-reveal-about-jobs"
-            target="_blank"
-            rel="noopener noreferrer"
-            >ILO / AI exposure indicators（2026-04-17）</a
-          >：AIへの曝露は、実際の失業や賃金の予測と同じではない。
-        </li>
-        <li>
-          <a
-            href="https://1in8b.life/ja/"
-            target="_blank"
-            rel="noopener noreferrer"
-            >80億分の1</a
-          >：人生を体験し、選択するという着想。文章・画像・プログラム・統計モデルは流用していません。
-        </li>
-      </ul>
-      <p class="field-note">公開資料の確認日：2026-10-17 / ゲームモデル v0.1</p>
+      <p>
+        会社情報の取得では指定した公開ページだけにアクセスします。本文は未確認の資料として扱い、内容と会社の一致を利用者が確認します。AIや外部ページにPCの操作・ファイル・送信先を決める権限はありません。
+      </p>
+      <h3>参考と詳しい説明</h3>
+      <p>
+        <a
+          href="https://www.ilo.org/resource/news/new-ilo-brief-explains-what-ai-exposure-indicators-reveal-about-jobs"
+          target="_blank"
+          rel="noopener noreferrer"
+          >ILOのAI曝露指標の解説（2026）</a
+        >を参考に、補完と置き換え、導入速度を分けています。具体的な係数は独自の仮定です。「80億分の1」の人生を選択する着想を参考に、コードや文章・モデルは独自に作っています。
+      </p>
+    </dialog>
+    <dialog id="ai-dialog">
+      <div class="dialog-top">
+        <p class="eyebrow">BRING YOUR OWN AI</p>
+        <button class="close-button" data-close aria-label="閉じる">×</button>
+      </div>
+      <h2>好きなAIを、つなぐ。</h2>
+      <p>
+        接続設定・APIキーはこの起動中だけ保持します。自動課金・自動リトライはしません。
+      </p>
+      <form id="ai-form" method="post" action="/">
+        <div class="form-grid">
+          <label
+            ><span class="field-label">接続方式</span
+            ><select id="ai-provider">
+              <option value="ollama">Ollama（PC内・API課金なし）</option>
+              <option value="lmstudio">LM Studio（PC内）</option>
+              <option value="openai">OpenAI API</option>
+              <option value="openrouter">OpenRouter</option>
+              <option value="custom">OpenAI互換API</option>
+              <option value="disabled">接続しない・手動交換</option>
+            </select></label
+          >
+          <label
+            ><span class="field-label">モデルID</span
+            ><input id="ai-model" value="qwen3:8b" maxlength="150" required
+          /></label>
+          <label
+            ><span class="field-label">接続先のベースURL</span
+            ><input
+              id="ai-base-url"
+              type="url"
+              value="http://127.0.0.1:11434"
+              required
+              readonly
+          /></label>
+          <label
+            ><span class="field-label"
+              >APIキー <small>ローカルでは空欄</small></span
+            ><input
+              id="ai-key"
+              type="password"
+              autocomplete="off"
+              maxlength="4096"
+              placeholder="この画面やセーブには保存しません"
+          /></label>
+          <label
+            ><span class="field-label">入力100万トークンの単価</span
+            ><span class="input-unit"
+              ><input
+                id="ai-input-rate"
+                type="number"
+                min="0"
+                max="10000"
+                step="0.001"
+                value="0"
+              /><span>USD</span></span
+            ></label
+          >
+          <label
+            ><span class="field-label">出力100万トークンの単価</span
+            ><span class="input-unit"
+              ><input
+                id="ai-output-rate"
+                type="number"
+                min="0"
+                max="10000"
+                step="0.001"
+                value="0"
+              /><span>USD</span></span
+            ></label
+          >
+          <label
+            ><span class="field-label">起動中の見積り費用の上限</span
+            ><span class="input-unit"
+              ><input
+                id="ai-usd-cap"
+                type="number"
+                min="0.001"
+                max="100"
+                step="0.001"
+                value="1"
+              /><span>USD</span></span
+            ></label
+          >
+          <label
+            ><span class="field-label">起動中の呼び出し回数の上限</span
+            ><input
+              id="ai-request-cap"
+              type="number"
+              min="1"
+              max="300"
+              value="100"
+          /></label>
+        </div>
+        <p class="field-note">
+          単価は利用モデルの公式料金に合わせてください。費用上限は設定単価からの保守的な見積りで、提供者の請求額を保証する上限ではありません。出力は1回1500トークンまで。プロバイダ側の予算制限も併用できます。
+        </p>
+        <p id="ai-accounting" class="field-note"></p>
+        <p id="ai-error" class="error" role="alert"></p>
+        <button class="button primary" type="submit">この接続先を使う ↗</button>
+      </form>
+    </dialog>
+    <dialog id="exchange-dialog">
+      <div class="dialog-top">
+        <p class="eyebrow">YOUR AI. YOUR CHOICE.</p>
+        <button class="close-button" data-close aria-label="閉じる">×</button>
+      </div>
+      <h2>好きなAIと、物語を作る。</h2>
+      <p>
+        下の文章をChatGPT・OpenCodeなどに渡し、返ってきたJSONを貼り付けます。送信先は自分で選べます。
+      </p>
+      <label
+        ><span class="field-label">AIに渡す文章</span
+        ><textarea id="exchange-prompt" rows="7" readonly></textarea></label
+      ><button id="copy-prompt" class="button secondary small">
+        文章をコピー</button
+      ><label
+        ><span class="field-label">AIの返答（JSON）</span
+        ><textarea
+          id="exchange-result"
+          rows="7"
+          maxlength="18000"
+          placeholder='{"title":"...","body":"...","insight":"...","options":[...]}'
+        ></textarea>
+      </label>
+      <p id="exchange-error" class="error" role="alert"></p>
+      <button id="import-scene" class="button primary">
+        この場面を取り込む ↗
+      </button>
     </dialog>
     <dialog id="compare-dialog">
       <div class="dialog-top">

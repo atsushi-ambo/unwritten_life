@@ -1,7 +1,8 @@
 // All monetary values are illustrative, in 2026 purchasing-power units of ¥10,000.
-export const VERSION = 1;
+export const VERSION = 2;
 export const START_YEAR = 2026;
-export const YEARS = 20;
+export const MAX_AGE = 110;
+export const YEARS = MAX_AGE; // absolute replay bound, not a predicted lifespan
 export const SCENARIOS = Object.freeze({
   slow: {
     label: "ゆるやかな普及",
@@ -54,27 +55,27 @@ export const PRIORITIES = Object.freeze({
 export const CHOICES = Object.freeze({
   learn: {
     label: "新しい力を身につける",
-    hint: "AIや仕事の学びに時間を投資する",
+    hint: "学びとAIの活用に時間を投資",
     cost: 10,
     skill: 9,
-    health: -2,
+    health: -1,
     connection: -1,
     freedom: 1,
     icon: "↗",
   },
   focus: {
     label: "いまの仕事を深める",
-    hint: "経験と信頼を積み上げる",
+    hint: "経験を積む。退職後は地域で経験を生かす",
     cost: 0,
     skill: 2,
-    health: -3,
-    connection: -1,
+    health: -2,
+    connection: 0,
     freedom: -1,
     icon: "◎",
   },
   connect: {
     label: "大切な人と過ごす",
-    hint: "家族、友人、身近な人に時間を使う",
+    hint: "家族や友人との時間をつくる",
     cost: 7,
     skill: 0,
     health: 2,
@@ -84,17 +85,17 @@ export const CHOICES = Object.freeze({
   },
   rest: {
     label: "暮らしと体を整える",
-    hint: "休養や運動に、自分のペースで取り組む",
+    hint: "休養、運動、日々のケア",
     cost: 5,
     skill: 0,
-    health: 8,
+    health: 6,
     connection: 1,
     freedom: 3,
     icon: "◡",
   },
   explore: {
     label: "小さな挑戦を始める",
-    hint: "副業、旅、創作。気になることを試す",
+    hint: "旅、創作、副業を試す",
     cost: 18,
     skill: 4,
     health: 0,
@@ -102,59 +103,73 @@ export const CHOICES = Object.freeze({
     freedom: 7,
     icon: "✳",
   },
+  switch: {
+    label: "働く環境を変える",
+    hint: "転職・独立。収入が上下する可能性",
+    cost: 30,
+    skill: 5,
+    health: -2,
+    connection: 2,
+    freedom: 4,
+    icon: "⇄",
+  },
+  invest: {
+    label: "金融資産の配分を変える",
+    hint: "現金の一部を株式へ。価格変動あり",
+    cost: 0,
+    skill: 0,
+    health: 0,
+    connection: 0,
+    freedom: 0,
+    icon: "◈",
+  },
+  home: {
+    label: "住まいを購入する",
+    hint: "頭金・諸費用を払い、住宅ローンを組む",
+    cost: 0,
+    skill: 0,
+    health: -1,
+    connection: 2,
+    freedom: -2,
+    icon: "⌂",
+  },
+  move: {
+    label: "住む地域を変える",
+    hint: "生活費・住居費と人との距離が変わる",
+    cost: 35,
+    skill: 0,
+    health: 1,
+    connection: -4,
+    freedom: 4,
+    icon: "↝",
+  },
+  retire: {
+    label: "仕事から距離を置く",
+    hint: "給与収入を止め、暮らしを組み直す",
+    cost: 0,
+    skill: 0,
+    health: 4,
+    connection: 1,
+    freedom: 6,
+    icon: "☼",
+  },
 });
-const EVENTS = [
-  [
-    "いつもの仕事に、新しい相棒。",
-    "資料の下書きや情報整理をAIに任せる人が増えてきた。空いた時間を何に使うかは、まだ自分で選べる。",
-    "仕事の一部が道具に移り、人の役割も少しずつ変わる。",
-  ],
-  [
-    "変わらないものも、ある。",
-    "便利な道具が増えても、誰かの相談に耳を傾ける時間は短くならない。今日はいつもより、相手の顔を見て話せた。",
-    "効率化で生まれた時間が、そのまま余暇になるとは限らない。",
-  ],
-  [
-    "学び直しへの招待状。",
-    "地域の講座に、新しい仕事の進め方を学ぶコースができた。気になる。でも、いまの暮らしにも手いっぱいだ。",
-    "学ぶ機会へのアクセスと時間が、変化への対応を左右する。",
-  ],
-  [
-    "働く場所を、選びなおす。",
-    "遠隔でできる仕事の範囲が広がった。住む場所を変える友人もいる。自分にとって、心地よい暮らしはどこだろう。",
-    "働き方の変化は、仕事の外側の暮らしにも波及する。",
-  ],
-  [
-    "得意なことが、つながった。",
-    "今まで積み上げた経験を頼られる場面があった。新しい道具と自分の得意を組み合わせる余地が、少し見えてきた。",
-    "専門知識と人への理解が、AIを使う場面でも役に立つ。",
-  ],
-  [
-    "予定のない、日曜日。",
-    "新しいことを追いかける日々の間に、何もしない一日ができた。続けたいことと、手放したいことを考える。",
-    "技術の速さと、自分の暮らしの速さは同じでなくていい。",
-  ],
-  [
-    "チームのかたちが変わる。",
-    "役割の見直しが話題になった。慣れた作業が減る一方で、確認や調整を担う新しい役割が生まれている。",
-    "AIへの影響の受けやすさは、職業全体がなくなる確率を意味しない。",
-  ],
-  [
-    "小さな「やってみたい」。",
-    "前から気になっていた活動が、道具のおかげで少ない準備で始められそうだ。うまくいく保証はない。でも、試すことはできる。",
-    "始めやすさが増えても、収入や成功が保証されるわけではない。",
-  ],
-  [
-    "暮らしを支える人たち。",
-    "身近な人の予定に合わせて、自分の時間を組み替えた。助ける日も、助けられる日もある。暮らしは一人では完結しない。",
-    "ケアやつながりにも時間が必要。収入だけでは測れない価値がある。",
-  ],
-  [
-    "便利さの、その先へ。",
-    "選択肢が増えたからこそ、何を選ばないかが気になり始めた。十年前とは少し違う、自分のものさしができてきた。",
-    "普及の速度だけでなく、使い方と制度でも結果は変わる。",
-  ],
-];
+const clamp = (n, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, n));
+function fail() {
+  throw new Error("入力内容・保存データの範囲と項目を確認してください。");
+}
+function num(raw, key, lo, hi, fallback) {
+  const v = raw[key] === undefined ? fallback : raw[key];
+  if (typeof v !== "number" || !Number.isFinite(v) || v < lo || v > hi) fail();
+  return v;
+}
+function str(v, max, multiline = false) {
+  const bad = multiline
+    ? /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u
+    : /[\u0000-\u001f\u007f]/u;
+  if (typeof v !== "string" || v.length > max || bad.test(v)) fail();
+  return v.trim();
+}
 const enums = {
   region: REGIONS,
   job: JOBS,
@@ -164,45 +179,66 @@ const enums = {
   household: { solo: 1, shared: 1, care: 1 },
   companyType: { unknown: 1, large: 1, small: 1, public: 1, self: 1 },
 };
-const fail = () => {
-  throw new Error(
-    "入力内容を確認してください。数値の範囲と選択項目を見直してください。",
-  );
-};
 export function validateProfile(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail();
   const p = {};
-  for (const [key, options] of Object.entries(enums)) {
-    if (typeof raw[key] !== "string" || !Object.hasOwn(options, raw[key]))
-      fail();
-    p[key] = raw[key];
+  for (const [k, values] of Object.entries(enums)) {
+    if (typeof raw[k] !== "string" || !Object.hasOwn(values, raw[k])) fail();
+    p[k] = raw[k];
   }
-  for (const [key, min, max] of [
-    ["age", 18, 80],
-    ["income", 0, 10000],
-    ["savings", -10000, 100000],
-    ["monthlyCost", 0, 500],
-  ]) {
-    if (
-      typeof raw[key] !== "number" ||
-      !Number.isFinite(raw[key]) ||
-      raw[key] < min ||
-      raw[key] > max ||
-      (key === "age" && !Number.isInteger(raw[key]))
-    )
-      fail();
-    p[key] = raw[key];
-  }
+  for (const [k, lo, hi, def] of [
+    ["age", 18, 100, 30],
+    ["income", 0, 10000, 500],
+    ["savings", -10000, 100000, 300],
+    ["monthlyCost", 0, 500, 12],
+    ["stocks", 0, 100000, 0],
+    ["rent", 0, 500, 0],
+    ["homeValue", 0, 100000, 0],
+    ["mortgage", 0, 100000, 0],
+    ["mortgageYears", 1, 50, 25],
+    ["mortgageRate", 0, 15, 1.5],
+    ["retirementAge", 40, 85, 65],
+    ["pension", 0, 2000, 120],
+  ])
+    p[k] = num(raw, k, lo, hi, def);
   if (
-    typeof raw.company !== "string" ||
-    raw.company.length > 60 ||
-    /[\u0000-\u001f\u007f]/u.test(raw.company)
+    !Number.isInteger(p.age) ||
+    !Number.isInteger(p.retirementAge) ||
+    !Number.isInteger(p.mortgageYears) ||
+    p.stocks > Math.max(0, p.savings)
   )
     fail();
-  p.company = raw.company.trim();
+  p.company = str(raw.company ?? "", 60);
+  p.housing = raw.housing ?? "rent";
+  if (!["rent", "own"].includes(p.housing)) fail();
+  if (p.housing === "rent" && (p.homeValue || p.mortgage)) fail();
+  p.companyFacts = validateCompanyFacts(raw.companyFacts ?? null);
   return p;
 }
-const clamp = (n, low = 0, high = 100) => Math.max(low, Math.min(high, n));
+export function validateCompanyFacts(raw) {
+  if (raw === null) return null;
+  if (
+    !raw ||
+    typeof raw !== "object" ||
+    typeof raw.confirmed !== "boolean" ||
+    !Array.isArray(raw.sources) ||
+    raw.sources.length > 3
+  )
+    fail();
+  const summary = str(raw.summary, 1800, true),
+    sector = raw.sector ?? "unknown";
+  if (!["unknown", ...Object.keys(JOBS)].includes(sector)) fail();
+  const sources = raw.sources.map((s) => {
+    const u = new URL(str(s.url, 2048));
+    if (u.protocol !== "https:" || u.username || u.password) fail();
+    return {
+      url: u.href,
+      title: str(s.title ?? "", 160),
+      checkedAt: str(s.checkedAt ?? "", 30),
+    };
+  });
+  return { summary, sector, confirmed: raw.confirmed, sources };
+}
 export function randomAt(seed, year, channel = 0) {
   let n =
     (seed ^
@@ -222,6 +258,9 @@ export function createGame(profile, scenario = "steady", seed = 2026) {
     seed > 0xffffffff
   )
     fail();
+  const cash = Math.max(p.savings, 0) - p.stocks,
+    investments = p.stocks,
+    debt = Math.max(-p.savings, 0);
   return {
     profile: p,
     scenario,
@@ -230,141 +269,415 @@ export function createGame(profile, scenario = "steady", seed = 2026) {
     year: START_YEAR,
     age: p.age,
     income: p.income,
-    savings: p.savings,
+    salary: p.income,
+    cash,
+    investments,
+    debt,
+    homeValue: p.homeValue,
+    mortgage: p.mortgage,
+    mortgageYears: p.mortgageYears,
+    housing: p.housing,
+    region: p.region,
+    livingCost: p.monthlyCost,
+    rent: p.rent,
+    savings: cash + investments + p.homeValue - p.mortgage - debt,
     health: 65,
     connection: 55,
     freedom: 55,
     skill: { beginner: 15, sometimes: 40, daily: 65 }[p.ai],
+    retired: p.age >= p.retirementAge,
+    careerMoves: 0,
+    ended: false,
     history: [],
+    scenes: {},
   };
 }
-export function technologyAt(game) {
+export function technologyAt(g) {
   return clamp(
-    (0.12 + game.decisions.length * 0.037) * SCENARIOS[game.scenario].pace,
+    (0.12 + g.decisions.length * 0.037) * SCENARIOS[g.scenario].pace,
     0,
-    0.95,
+    0.97,
   );
 }
-export function eventFor(game) {
-  const i = game.decisions.length;
-  const event =
-    EVENTS[(i + Math.floor(randomAt(game.seed, i, 4) * 3)) % EVENTS.length];
+export function availableChoices(g) {
+  const ids = ["learn", "focus", "connect", "rest", "explore"];
+  if (!g.retired) ids.push("switch");
+  if (g.cash > 30) ids.push("invest");
+  if (
+    g.housing === "rent" &&
+    g.cash > homePrice(g.region) * 0.25 &&
+    g.salary > 250 &&
+    !g.retired
+  )
+    ids.push("home");
+  if (g.housing === "rent") ids.push("move");
+  if (!g.retired && g.age >= 45) ids.push("retire");
+  return ids;
+}
+const homePrice = (region) =>
+  ({ metro: 4500, city: 3000, rural: 2000 })[region];
+export function mortgagePayment(balance, rate, years) {
+  if (balance <= 0) return 0;
+  const r = rate / 100 / 12,
+    n = Math.max(1, years * 12);
+  return r === 0 ? balance / n : (balance * r) / (1 - (1 + r) ** -n);
+}
+export function amortizeYear(balance, rate, years) {
+  const monthly = mortgagePayment(balance, rate, years);
+  let payment = 0,
+    interest = 0,
+    principal = 0;
+  for (let i = 0; i < 12 && balance > 1e-9; i++) {
+    const fee = (balance * rate) / 100 / 12;
+    const paid = Math.min(monthly, balance + fee);
+    const repayment = paid - fee;
+    balance = Math.max(0, balance - repayment);
+    payment += paid;
+    interest += fee;
+    principal += repayment;
+  }
+  return { balance, payment, interest, principal };
+}
+export function deathChance(g) {
+  if (g.age + 1 >= MAX_AGE) return 1;
+  return clamp(
+    (0.0005 *
+      Math.exp(Math.max(0, g.age - 35) / 10) *
+      (1 + (50 - g.health) / 180)) /
+      (1 + technologyAt(g) * 0.08),
+    0.0002,
+    0.6,
+  );
+}
+export function sceneKey(g) {
+  return String(g.decisions.length);
+}
+export function validateScene(raw, g) {
+  if (
+    !raw ||
+    typeof raw !== "object" ||
+    !Array.isArray(raw.options) ||
+    raw.options.length < 3 ||
+    raw.options.length > 5
+  )
+    fail();
+  const allowed = availableChoices(g),
+    seen = new Set();
+  const options = raw.options.map((o) => {
+    if (!o || !allowed.includes(o.id) || seen.has(o.id)) fail();
+    seen.add(o.id);
+    return { id: o.id, label: str(o.label, 50), hint: str(o.hint, 100) };
+  });
+  if (options.some((o) => !o.label) || !raw.title || !raw.body) fail();
   return {
-    title: event[0],
-    body: event[1],
-    insight: event[2],
-    level: technologyAt(game),
-    world: SCENARIOS[game.scenario].label,
+    title: str(raw.title, 100),
+    body: str(raw.body, 1400, true),
+    insight: str(raw.insight ?? "", 300, true),
+    options,
   };
 }
-export function advance(game, choice) {
-  if (!Object.hasOwn(CHOICES, choice)) fail();
-  if (game.decisions.length >= YEARS)
-    throw new Error("この物語は20年間を迎えました。");
+export function applyScene(g, scene) {
+  if (g.ended) fail();
+  return {
+    ...g,
+    scenes: { ...g.scenes, [sceneKey(g)]: validateScene(scene, g) },
+  };
+}
+export function eventFor(g) {
+  const cached = g.scenes[sceneKey(g)];
+  if (cached) return { ...cached, generated: true };
+  const options = availableChoices(g).map((id) => ({
+    id,
+    label: CHOICES[id].label,
+    hint: CHOICES[id].hint,
+  }));
+  const last = g.decisions.at(-1),
+    company = g.careerMoves ? "新しい職場" : g.profile.company || "いまの職場";
+  let title, body;
+  if (g.retired) {
+    title =
+      g.age >= 80
+        ? "自分のペースで、暮らしをつなぐ。"
+        : "仕事の先にある、毎日。";
+    body = `${g.age}歳。${REGIONS[g.region].label}で、${g.housing === "own" ? "持ち家を手入れしながら" : "住まいの費用を払いながら"}暮らしている。給与に代わる収入と、これまでの資産をどう使うか。人との時間や新しい楽しみにも、目を向けたい。`;
+  } else if (last === "switch") {
+    title = "新しい環境の、一年目。";
+    body = `働く環境を変え、慣れないことにも向き合う日々。${JOBS[g.profile.job].label}での経験を、新しい役割にどう生かすか。${g.skill > 50 ? "学んだAIの使い方を試せる機会も見えてきた。" : "新しい道具と仕事の進め方に、学ぶ余地がありそうだ。"}`;
+  } else if (g.cash < g.livingCost * 6) {
+    title = "暮らしの収支を、見つめなおす。";
+    body = `手元の現金が、生活費の半年分を下回っている。${g.investments > 0 ? "株式を持っていても、必要な時に同じ価格で売れるとは限らない。" : ""}${g.housing === "own" ? "住まいの維持とローンにも費用がかかる。" : "家賃も毎月の支出のひとつ。"}仕事や暮らしの組み合わせを考える一年になりそうだ。`;
+  } else {
+    title =
+      technologyAt(g) > 0.5
+        ? "仕事のかたちを、作りなおす。"
+        : `${company}で、次の役割を考える。`;
+    body = `${g.age}歳、${JOBS[g.profile.job].label}のあなた。${SCENARIOS[g.scenario].label}の世界では、AIを使う仕事の比重が${technologyAt(g) > 0.5 ? "大きく変わってきた" : "少しずつ増えている"}。${g.profile.household === "care" ? "育児やケアとの両立も、時間の使い方を左右する。" : ""}${last === "learn" ? "去年の学びを、実際の仕事で試す場面が見えてきた。" : last === "connect" ? "大切な人と過ごした時間が、選びたい働き方を考えるきっかけになった。" : "収入だけでなく、暮らしに残る時間も大切にしたい。"}`;
+  }
+  return {
+    title,
+    body,
+    insight: `仕事・資産・住まい・過去の選択を反映したローカルの物語。AI普及指標はゲーム上の仮定。`,
+    options,
+    generated: false,
+  };
+}
+export function advance(g, choice) {
+  if (g.ended || g.decisions.length >= MAX_AGE)
+    throw new Error("この人生の物語は完結しました。");
+  if (!availableChoices(g).includes(choice)) fail();
   const c = CHOICES[choice],
-    p = game.profile,
-    job = JOBS[p.job],
-    tech = technologyAt(game),
-    i = game.decisions.length;
-  const volatility = (randomAt(game.seed, i) - 0.5) * 0.07;
-  const aiBenefit = tech * job.complement * (game.skill / 100) * 0.1;
-  const transitionCost = tech * job.exposure * (1 - game.skill / 125) * 0.075;
-  const burnout = game.health < 30 ? -0.035 : 0;
-  const growth = clamp(
+    p = g.profile,
+    tech = technologyAt(g),
+    i = g.decisions.length,
+    job = JOBS[p.job];
+  let {
+    cash,
+    investments,
+    debt,
+    homeValue,
+    mortgage,
+    mortgageYears,
+    housing,
+    region,
+    livingCost,
+    rent,
+  } = g;
+  const retired = g.retired || g.age >= p.retirementAge || choice === "retire";
+  const adoption = {
+    unknown: 1,
+    large: 1.05,
+    small: 1.1,
+    public: 0.75,
+    self: 1.15,
+  }[p.companyType];
+  const sector =
+    !g.careerMoves &&
+    p.companyFacts?.confirmed &&
+    p.companyFacts.sector !== "unknown"
+      ? JOBS[p.companyFacts.sector]
+      : null;
+  const exposure = sector
+    ? job.exposure * 0.8 + sector.exposure * 0.2
+    : job.exposure;
+  const volatility = (randomAt(g.seed, i) - 0.5) * 0.07;
+  const aiBenefit = tech * adoption * job.complement * (g.skill / 100) * 0.1;
+  const transitionCost =
+    tech * adoption * exposure * (1 - g.skill / 125) * 0.075;
+  let growth = clamp(
     0.006 +
       volatility +
       aiBenefit -
       transitionCost +
       (choice === "focus" ? 0.023 : 0) +
-      burnout,
+      (g.health < 30 ? -0.035 : 0),
     -0.12,
     0.12,
   );
-  const income = clamp(game.income * (1 + growth), 0, 20000);
-  const disposable = income * 0.76; // a game assumption, not a tax calculation
-  const expenses = p.monthlyCost * 12 + c.cost;
-  const bonus =
-    choice === "explore" ? (randomAt(game.seed, i, 1) - 0.5) * 30 : 0;
-  const savings = game.savings + disposable - expenses + bonus;
+  if (choice === "switch") growth += -0.12 + randomAt(g.seed, i, 7) * 0.3;
+  const salary = retired ? 0 : clamp(g.salary * (1 + growth), 0, 20000);
+  const income = salary + (g.age >= 65 ? p.pension : 0);
+  let cost = c.cost,
+    investmentTransfer = 0,
+    homeTransaction = 0;
+  if (choice === "invest") {
+    investmentTransfer = Math.min(cash * 0.18, Math.max(30, income * 0.15));
+    cash -= investmentTransfer;
+    investments += investmentTransfer;
+  }
+  if (choice === "home") {
+    homeValue = homePrice(region);
+    homeTransaction = homeValue * 0.25;
+    cash -= homeTransaction;
+    mortgage = homeValue * 0.8;
+    mortgageYears = 30;
+    housing = "own";
+    rent = 0;
+  }
+  if (choice === "move") {
+    const order = ["metro", "city", "rural"];
+    const prev = REGIONS[region].cost;
+    region = order[(order.indexOf(region) + 1) % 3];
+    livingCost *= REGIONS[region].cost / prev;
+    rent *= REGIONS[region].cost / prev;
+  }
+  const stockReturn = 0.025 + (randomAt(g.seed, i, 8) - 0.5) * 0.34,
+    propertyReturn = (randomAt(g.seed, i, 9) - 0.5) * 0.06;
+  const investmentGain = investments * stockReturn;
+  investments += investmentGain;
+  const propertyGain = homeValue * propertyReturn;
+  homeValue += propertyGain;
+  const loan = amortizeYear(mortgage, p.mortgageRate, mortgageYears),
+    loanPayment = loan.payment,
+    principal = loan.principal;
+  mortgage = loan.balance;
+  if (mortgageYears > 1) mortgageYears -= 1;
+  const housingCost =
+    housing === "own" ? loanPayment + homeValue * 0.01 : rent * 12;
+  const disposable = income * 0.76,
+    bonus = choice === "explore" ? (randomAt(g.seed, i, 1) - 0.5) * 30 : 0;
+  const expenses =
+    livingCost * 12 + housingCost + cost + (g.age >= 80 ? 12 : 0);
+  cash += disposable - expenses + bonus;
+  let liquidation = 0;
+  if (cash < 0 && investments > 0) {
+    liquidation = Math.min(-cash, investments);
+    cash += liquidation;
+    investments -= liquidation;
+  }
+  if (cash < 0) {
+    debt -= cash;
+    cash = 0;
+  }
+  const debtInterest = debt * 0.02;
+  debt += debtInterest;
   const health = clamp(
-    game.health + c.health - 0.8 + (p.priority === "time" ? 0.8 : 0),
+    g.health +
+      c.health -
+      (g.age >= 80 ? 2 : g.age >= 65 ? 1.4 : 0.8) +
+      (p.priority === "time" ? 0.5 : 0),
   );
   const connection = clamp(
-    game.connection + c.connection - 1 + (p.priority === "people" ? 0.8 : 0),
+    g.connection + c.connection - 1 + (p.priority === "people" ? 0.8 : 0),
   );
   const freedom = clamp(
-    game.freedom + c.freedom - 0.5 + (p.priority === "freedom" ? 0.8 : 0),
+    g.freedom + c.freedom - 0.5 + (p.priority === "freedom" ? 0.8 : 0),
   );
-  const skill = clamp(game.skill + c.skill - 2 * SCENARIOS[game.scenario].pace);
-  const note =
-    choice === "learn"
-      ? "学びへの投資が、次の選択肢を少し広げた。"
-      : choice === "focus"
-        ? "経験を深めた一年。忙しさの分、休む時間にも目を向けたい。"
-        : choice === "connect"
-          ? "誰かと過ごした時間が、暮らしの支えになった。"
-          : choice === "rest"
-            ? "自分をいたわる時間を取った。長く続けるための一年。"
-            : bonus > 0
-              ? "小さな挑戦に手応えがあった。続けるかどうかは、また選べる。"
-              : "挑戦はすぐ収入にはつながらなかった。それでも経験が残った。";
+  const skill = clamp(g.skill + c.skill - 2 * SCENARIOS[g.scenario].pace);
+  const ended = randomAt(g.seed, i, 20) < deathChance(g);
+  const savings = cash + investments + homeValue - mortgage - debt;
+  const effects = {
+    learn: "学びが蓄積し、AIを生かせる仕事の幅が変わった。",
+    focus: retired
+      ? "地域で経験を生かし、自分の居場所を育てた。"
+      : "仕事を深めた一方で、ゆとりにも負担がかかった。",
+    connect: "大切な人と過ごし、つながりが深まった。",
+    rest: "心と体をいたわり、暮らしのペースを整えた。",
+    explore: "小さな挑戦を通じて、経験と新しいつながりが増えた。",
+    switch: "働く環境を変更。移行費用を払い、収入と自由が変化した。",
+    invest: "現金の一部を株式へ配分。以後の価格変動の影響も変わる。",
+    home: "住まいを購入。金融資産・不動産・ローンの構成が変わった。",
+    move: "地域を移り、生活費・住居費・人との距離が変わった。",
+    retire: "給与収入を止めた。65歳以降は設定した退職後収入を受け取る。",
+  };
+  const event = eventFor(g),
+    option = event.options.find((o) => o.id === choice);
   const record = {
-    year: game.year,
-    age: game.age,
+    year: g.year,
+    age: g.age,
     choice,
-    title: eventFor(game).title,
+    choiceLabel: option?.label ?? c.label,
+    title: event.title,
     income,
+    salary,
     savings,
+    cash,
+    investments,
+    homeValue,
+    mortgage,
+    debt,
     health,
     connection,
     freedom,
     skill,
-    note,
+    note: effects[choice],
     aiBenefit,
     transitionCost,
     volatility,
     expenses,
     disposable,
     bonus,
+    investmentGain,
+    propertyGain,
+    principal,
+    debtInterest,
+    investmentTransfer,
+    homeTransaction,
+    liquidation,
+    ended,
   };
   return {
-    ...game,
-    year: game.year + 1,
-    age: game.age + 1,
+    ...g,
+    careerMoves: g.careerMoves + (choice === "switch" ? 1 : 0),
+    year: g.year + 1,
+    age: g.age + 1,
     income,
+    salary,
+    cash,
+    investments,
+    debt,
+    homeValue,
+    mortgage,
+    mortgageYears,
+    housing,
+    region,
+    livingCost,
+    rent,
     savings,
     health,
     connection,
     freedom,
     skill,
-    decisions: [...game.decisions, choice],
-    history: [...game.history, record],
+    retired,
+    ended,
+    decisions: [...g.decisions, choice],
+    history: [...g.history, record],
   };
 }
-export function replay(profile, scenario, seed, decisions) {
-  if (!Array.isArray(decisions) || decisions.length > YEARS) fail();
-  return decisions.reduce(
-    (game, choice) => advance(game, choice),
-    createGame(profile, scenario, seed),
+export function replay(
+  profile,
+  scenario,
+  seed,
+  decisions,
+  scenes = {},
+  stopAtEnd = false,
+) {
+  if (
+    !Array.isArray(decisions) ||
+    decisions.length > MAX_AGE ||
+    !scenes ||
+    typeof scenes !== "object" ||
+    Array.isArray(scenes) ||
+    Object.keys(scenes).length > MAX_AGE
+  )
+    fail();
+  let g = createGame(profile, scenario, seed);
+  for (let i = 0; i < decisions.length; i++) {
+    if (g.ended) {
+      if (stopAtEnd) break;
+      fail();
+    }
+    if (stopAtEnd && !availableChoices(g).includes(decisions[i])) {
+      g = { ...g, comparisonBlocked: true };
+      break;
+    }
+    if (scenes[String(i)]) g = applyScene(g, scenes[String(i)]);
+    g = advance(g, decisions[i]);
+  }
+  if (!g.ended && scenes[String(decisions.length)])
+    g = applyScene(g, scenes[String(decisions.length)]);
+  return g;
+}
+export function compareWorlds(g) {
+  return Object.keys(SCENARIOS).map((s) =>
+    replay(g.profile, s, g.seed, g.decisions, {}, true),
   );
 }
-export function compareWorlds(game) {
-  return Object.keys(SCENARIOS).map((scenario) =>
-    replay(game.profile, scenario, game.seed, game.decisions),
-  );
-}
-export function encodeSave(game) {
+export function encodeSave(g) {
   return JSON.stringify({
     version: VERSION,
-    profile: game.profile,
-    scenario: game.scenario,
-    seed: game.seed,
-    decisions: game.decisions,
+    profile: g.profile,
+    scenario: g.scenario,
+    seed: g.seed,
+    decisions: g.decisions,
+    scenes: g.scenes,
   });
 }
 export function decodeSave(value) {
-  if (typeof value !== "string" || value.length > 12000) fail();
-  const data = JSON.parse(value);
-  if (!data || data.version !== VERSION) fail();
-  return replay(data.profile, data.scenario, data.seed, data.decisions);
+  if (typeof value !== "string" || value.length > 250000) fail();
+  const d = JSON.parse(value);
+  if (!d || d.version !== VERSION)
+    throw new Error(
+      "旧版または未対応の保存形式です。元データを保持したまま新しい物語を開始してください。",
+    );
+  return replay(d.profile, d.scenario, d.seed, d.decisions, d.scenes ?? {});
 }
