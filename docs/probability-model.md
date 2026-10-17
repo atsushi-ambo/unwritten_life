@@ -14,12 +14,15 @@ LLMを毎回「成功かどうかの審判」にすると、同じ条件でも�
 
 ## 技術の進歩と普及
 
-`public/world.js` に出典付きの過去の観測を内蔵する。2026年以降の出来事へ書き換えず、UIとAIの参考に渡す。
+`public/world.js` の版管理された知識カタログを、端末内のIndexedDBへ保存する。出典・期間・確認日を持つ過去の観測、確認日時点の企業概要、ゲームの仮定を分け、2026年以降の出来事へ書き換えない。仕事の形・家族・住まい・直前の行動に応じて最大2件の歴史、1件の企業、4件のゲーム前提を検索する。検索・参照にはAIも外部通信も使わない。データ構成と更新方法は [local-knowledge.md](local-knowledge.md) を参照。
 
 - 携帯電話契約：世界で2000年の約7.38億から2015年の70億超へ。契約数と利用者数は異なる。[ITU ICT Facts & Figures 2015](https://www.itu.int/en/ITU-D/statistics/documents/facts/ICTfactsfigures2015.pdf)
 - インターネット利用：世界人口の60%（2020）から74%（2025）へ。ITU推計。[ITU ICT Statistics](https://www.itu.int/en/ITU-D/Statistics/Pages/stat/default.aspx)
 - 企業のAI利用：データのあるOECD加盟国で8.7%（2023）、14.2%（2024）、20.2%（2025）。2025年のICT企業は57.3%。日本限定・生成AI限定の率ではない。[OECD Artificial intelligence](https://www.oecd.org/en/topics/artificial-intelligence.html)
 - 日本の確定済み景気基準日付：第16循環の山2018年10月、谷2020年5月。未来の周期・不況の確率を意味しない。[内閣府・2022年7月資料](https://www.esri.cao.go.jp/jp/stat/di/220719shiryou1.pdf)
+- Webの考案（1989年）と、CERNによるソフトウェアの公開（1993年4月30日）を別の出来事として収録。[CERN](https://home.cern/science/computing/the-birth-of-the-web/)
+- Transformerの提案（2017年6月）。論文の公表と職場への導入は別の段階。[Vaswaniらの原論文](https://arxiv.org/abs/1706.03762)
+- WHOによるCOVID-19のパンデミックとの位置づけ（2020年3月11日）。個人の健康や次の感染拡大の確率を推定する資料にはしない。[WHO](https://www.who.int/europe/emergencies/situations/covid-19)
 
 確認日は2026-10-17。これらから「普及には基盤や実装の時間が必要」「業種差がある」という設計上の着想を得る。AIは複製コスト・影響する仕事・能力の伸びが従来技術と違うため、過去の普及率をAIの未来に外挿・回帰していない。
 

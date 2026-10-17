@@ -670,11 +670,23 @@
               aria-label="世界と家族の状況"
             ></section>
             <details class="model-notes">
-              <summary>この世界の仕組みと、過去の参考資料</summary>
+              <summary>この世界の仕組みと、端末内の知識</summary>
               <p>
                 2026年から先の世界・勤務先の業況・成功率はゲーム上の仮定です。過去のデータは普及の遅れや業種差を考える参考で、AIの未来にそのまま当てはめていません。景気と国際情勢は原則3年の局面。学習・家族の結果は別に抽選し、同じ選択でも別の人生になります。「戻る」は同じ乱数を保つため、同じ選択は同じ結果です。
               </p>
-              <div id="historical-facts"></div>
+              <p id="knowledge-status" role="status"></p>
+              <p>
+                固定知識の参照にはAIも通信も使いません。仕事の形・家族・住まい・直前の選択から、関係する資料を取り出します。知識DBにはプロフィールや選択履歴を入れず、セーブとは別に保管します。
+              </p>
+              <h4 id="knowledge-selected-title">あなたに関連する資料</h4>
+              <div id="knowledge-selected"></div>
+              <details>
+                <summary>内蔵の資料をすべて見る</summary>
+                <p>
+                  歴史の全件を網羅する資料集ではありません。企業情報は確認日時点の記録で、未来の決算・求人・給与を示しません。
+                </p>
+                <div id="knowledge-catalog"></div>
+              </details>
             </details>
             <div class="game-toolbar">
               <button id="career-compare-button" class="button secondary small">

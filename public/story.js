@@ -1,8 +1,10 @@
 import {
   worldAt,
   worldEnabled,
-  HISTORICAL_FACTS,
   opportunityAt,
+  KNOWLEDGE,
+  knowledgeFor,
+  referencePacket,
 } from "./world.js";
 import {
   JOBS,
@@ -42,9 +44,10 @@ function incomeDirection(game) {
 }
 export function storyRequest(
   game,
-  { personalized = true, mode = "life" } = {},
+  { personalized = true, mode = "life", catalog = KNOWLEDGE } = {},
 ) {
   const p = game.profile;
+  const references = knowledgeFor(game, { catalog, mode });
   const context = {
     year: game.year,
     age: game.age,
@@ -58,7 +61,14 @@ export function storyRequest(
     monetaryUnit: "万円。2026年の購買力でのゲーム内の仮定。",
     scenePremise: `${game.age}歳。${game.housing === "own" ? `持ち家の評価額${Math.round(game.homeValue)}万円、住宅ローン${Math.round(game.mortgage)}万円` : `賃貸等で住居費は月${game.rent}万円`}。手元現金${Math.round(game.cash)}万円、株式${Math.round(game.investments)}万円。${game.history.length ? `直前の行動は「${game.history.at(-1).choiceLabel}」。その結果を受けた次の場面。` : "これから最初の選択をする。"}この住まいとお金の条件を、場面の迷いや選択の理由につなげる。`,
     simulationWorld: worldEnabled(game) ? describeWorld(worldAt(game)) : null,
-    historicalReference: worldEnabled(game) ? HISTORICAL_FACTS : [],
+    historicalReference: worldEnabled(game)
+      ? references.historical.map(referencePacket)
+      : [],
+    localKnowledge: {
+      revision: references.revision,
+      companySnapshots: references.companies.map(referencePacket),
+      gameAssumptions: references.rules.map(referencePacket),
+    },
     storyTone: p.tone,
     family: worldEnabled(game)
       ? {
@@ -222,6 +232,7 @@ export function storyRequest(
         role: "system",
         content:
           system +
+          " localKnowledgeはローカルで選んだ参考資料。歴史は過去の事実、companySnapshotsはasOf時点の事業概要、gameAssumptionsはゲーム独自の仮定で統計ではない。資料にない事実を補わず、未来の企業発表や雇用・給与として書かない。historicalReferenceを今年の事件として再発させない。関連資料は場面の背景に使い、毎回歴史の解説を繰り返さず、本人の入力と選択の結果から具体的な選択肢を考える。" +
           (personalized
             ? ""
             : " careerRoutesは転職の比較画面に出る候補と残留案。企業名・業界・役割は確認済みの事業情報を参考にしたゲームの提案で、実際の求人ではない。switchのラベルは候補を比べる意味を保ち、特定企業への移動や内定を選択前に確定させない。マーケティングと技術職の役割を取り違えない。"),

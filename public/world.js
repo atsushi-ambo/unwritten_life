@@ -1,38 +1,390 @@
-// Observations are reference material, never calibration of personal outcomes.
-export const HISTORICAL_FACTS = Object.freeze([
+import { EMPLOYERS, employerKey, workContext } from "./careers.js";
+
+// Reviewed source material, shipped with the app. No player or AI output is
+// admitted to this catalog. Increment the revision when a record changes.
+export const KNOWLEDGE_REVISION = "2026-10-17.1";
+function freeze(value) {
+  if (value && typeof value === "object") {
+    Object.values(value).forEach(freeze);
+    Object.freeze(value);
+  }
+  return value;
+}
+const checkedAt = "2026-10-17";
+const history = [
   {
+    id: "history-mobile-2000-2015",
     year: "2000 → 2015",
+    endYear: 2015,
     title: "携帯電話も、基盤と市場とともに広がった",
     detail:
       "ITUの2015年資料では、世界の携帯電話契約は約7.38億から70億超へ。契約数は人数ではなく、インターネット利用者数やAIの導入率とは比較できない。",
     source: "ITU / ICT Facts & Figures 2015",
     url: "https://www.itu.int/en/ITU-D/statistics/documents/facts/ICTfactsfigures2015.pdf",
+    tags: ["technology", "adoption", "rural"],
   },
   {
+    id: "history-internet-2020-2025",
     year: "2020 → 2025",
+    endYear: 2025,
     title: "インターネットは、時間をかけて広がった",
     detail:
       "世界のインターネット利用者の割合は60%から74%へ（ITU推計）。人口の利用率であり、企業のAI導入率とは別の指標。",
     source: "ITU / ICT Statistics",
     url: "https://www.itu.int/en/ITU-D/Statistics/Pages/stat/default.aspx",
+    tags: ["technology", "adoption", "work:product", "rural"],
   },
   {
+    id: "history-ai-enterprises-2023-2025",
     year: "2023 → 2025",
+    endYear: 2025,
     title: "AIの導入は、業種によって違う",
     detail:
       "データのあるOECD加盟国の企業のAI利用は8.7%から20.2%へ。2025年のICT企業では57.3%。日本だけの値でも、生成AIだけの値でもない。",
     source: "OECD / Artificial intelligence",
     url: "https://www.oecd.org/en/topics/artificial-intelligence.html",
+    tags: [
+      "technology",
+      "adoption",
+      "job:tech",
+      "job:office",
+      "work:services",
+      "work:inhouse",
+    ],
   },
   {
+    id: "history-japan-cycle-16",
     year: "2018.10 → 2020.05",
+    endYear: 2020,
     title: "日本の景気にも、山と谷がある",
     detail:
       "内閣府が確定した第16循環の景気の山と谷。未来にも同じ時期・長さの不況が来るという意味ではない。",
     source: "内閣府 / 景気基準日付（2022年7月確定）",
     url: "https://www.esri.cao.go.jp/jp/stat/di/220719shiryou1.pdf",
+    tags: ["economy", "business", "shock"],
   },
-]);
+  {
+    id: "history-web-1989",
+    year: "1989",
+    endYear: 1989,
+    title: "Webは、情報共有の課題から生まれた",
+    detail:
+      "Tim Berners-LeeがCERNでWorld Wide Webを考案。研究者の情報共有という課題が出発点だった。発明の年と社会全体への普及の年は同じではない。",
+    source: "CERN / The birth of the Web",
+    url: "https://home.cern/science/computing/the-birth-of-the-web/",
+    tags: ["technology", "job:tech", "work:product"],
+  },
+  {
+    id: "history-web-open-1993",
+    year: "1993.04.30",
+    endYear: 1993,
+    title: "Webのソフトウェアが公開された",
+    detail:
+      "CERNがWebのソフトウェアをパブリックドメインに置いた。公開の事実は確定した過去。将来のAIも同じ条件で広がると保証する資料ではない。",
+    source: "CERN / The birth of the Web",
+    url: "https://home.cern/science/computing/the-birth-of-the-web/",
+    tags: ["technology", "business", "work:product"],
+  },
+  {
+    id: "history-transformer-2017",
+    year: "2017.06",
+    endYear: 2017,
+    title: "Transformerが論文で提案された",
+    detail:
+      "VaswaniらのAttention Is All You Needが、注意機構に基づくTransformerを提案した。研究成果の公表と、各職場の導入は別の出来事。",
+    source: "Vaswani et al. / Attention Is All You Need",
+    url: "https://arxiv.org/abs/1706.03762",
+    tags: ["technology", "job:tech", "study"],
+  },
+  {
+    id: "history-pandemic-2020",
+    year: "2020.03.11",
+    endYear: 2020,
+    title: "世界的な感染拡大も、過去の出来事",
+    detail:
+      "WHOはCOVID-19の流行をパンデミックと位置づけた。この歴史を未来の同じ年に再発させたり、本人の感染・健康の予測に使ったりはしない。",
+    source: "WHO / Coronavirus disease (COVID-19) pandemic",
+    url: "https://www.who.int/europe/emergencies/situations/covid-19",
+    tags: ["shock", "job:care", "family"],
+  },
+].map((entry) => ({ ...entry, kind: "history", checkedAt, asOf: checkedAt }));
+
+// Descriptions of existing mechanics, not estimated real-world probabilities.
+const rules = [
+  [
+    "rule-technology",
+    "進歩と普及は別に進む",
+    "技術能力と現場への浸透は別のゲーム指標。業種・地域・選んだ世界で浸透が変わる。過去の普及率を将来のAIの確率にしない。",
+    ["technology"],
+  ],
+  [
+    "rule-product",
+    "自社サービスの経験を次につなぐ",
+    "仕事の形が自社サービスなら、利用者の声、開発・運営の改善、継続した検証との接点を提案に使う。本人が未入力の経験は仮定とし、給与や確率を上乗せしない。",
+    ["work:product"],
+  ],
+  [
+    "rule-services",
+    "受託・SIの経験を次につなぐ",
+    "仕事の形が受託・SIなら、顧客の課題や案件の進め方との接点を提案に使う。経験済みの業界や技術は勝手に補わず、同業・別業界・残留にも具体的な迷いを作る。",
+    ["work:services"],
+  ],
+  [
+    "rule-inhouse",
+    "事業と現場の経験を次につなぐ",
+    "社内IT・業務部門なら、事業や現場の課題との接点を提案に使う。会社名だけで仕事内容や採用要件を確定しない。",
+    ["work:inhouse"],
+  ],
+  [
+    "rule-learning",
+    "努力の蓄積と、評価の結果を分ける",
+    "毎日1時間の学習はゲーム内で年間365時間を累積する。学びは後の確率に影響するが、景気や需要によって評価・収入につながらない年もある。結果の判定はゲーム側。",
+    ["study"],
+  ],
+  [
+    "rule-business",
+    "起業には負担と分岐がある",
+    "初期費用と運営費をゲーム側で計算する。顧客の手応え、事業の成長、不調、方向転換、撤退を区別し、前職を超える収入を約束しない。",
+    ["business"],
+  ],
+  [
+    "rule-family",
+    "家族の希望と、実際の暮らしを分ける",
+    "記録された家族・子の年代・希望・直前の結果を使う。希望人数は保証ではなく、準備や希望の見直しも別の選択。家族のいない人物に配偶者や子を作らない。",
+    ["family"],
+  ],
+  [
+    "rule-housing",
+    "住まいと資産は同じ財布にしない",
+    "現金、株式、不動産評価、住宅ローン、生活費を分けて計算する。賃貸か持ち家かと手元の余裕を次の選択に反映し、不動産の評価を使える現金として扱わない。",
+    ["housing"],
+  ],
+  [
+    "rule-world",
+    "世界の局面は選択だけでは消えない",
+    "景気・勤務先の業況・国際情勢は架空のゲーム状態。努力しても逆風の年がある。同じ人生の乱数を保ち、戻って選び直すだけで世界の混乱を抽選し直さない。",
+    ["economy", "shock"],
+  ],
+].map(([id, title, detail, tags]) => ({
+  id,
+  title,
+  detail,
+  tags,
+  kind: "game-rule",
+  year: "ゲーム内の設計",
+  source: "Unwritten Life / ゲームの仮定",
+  checkedAt,
+  asOf: checkedAt,
+}));
+const companies = Object.entries(EMPLOYERS)
+  .filter(([, entry]) => entry.kind === "real")
+  .map(([id, entry]) => ({
+    id: `company-${id}`,
+    companyId: id,
+    kind: "company",
+    year: entry.checkedAt,
+    title: `${entry.name}の公開事業情報`,
+    detail: entry.summary,
+    source: `${entry.name} / 公式資料`,
+    url: entry.url,
+    checkedAt: entry.checkedAt,
+    asOf: entry.checkedAt,
+    tags: [],
+  }));
+export const KNOWLEDGE = freeze([...history, ...companies, ...rules]);
+export const HISTORICAL_FACTS = freeze(
+  KNOWLEDGE.filter((r) => r.kind === "history"),
+);
+
+// This index is built from the current validated game state, not free text or
+// user-supplied tags. Selection changes after actions, without an LLM call.
+export function knowledgeFor(
+  game,
+  { catalog = KNOWLEDGE, mode = "life" } = {},
+) {
+  const work = workContext(game).model;
+  const tags = new Map([
+    ["technology", 1],
+    [`job:${game.employer.role}`, 3],
+  ]);
+  const add = (tag, weight) => tags.set(tag, weight);
+  add(`work:${work}`, 6);
+  if (game.region === "rural") add("rural", 3);
+  if (game.housing === "own") add("housing", 3);
+  if (game.family?.childAges.length || game.family?.partner) add("family", 4);
+  if (game.family?.desired > 0) add("family", 4);
+  if (game.employer.kind === "venture") add("business", 5);
+  const last = game.decisions.at(-1);
+  const action = typeof last === "string" ? last : last?.id;
+  if (["learn", "studyDaily", "pilot"].includes(action)) add("study", 10);
+  if (
+    ["startup", "expand", "pivot", "closeBusiness", "opportunity"].includes(
+      action,
+    )
+  )
+    add("business", 10);
+  if (["familyPlan", "reconsiderFamily", "careLeave", "meet"].includes(action))
+    add("family", 10);
+  if (["home", "move", "invest", "cash"].includes(action)) add("housing", 10);
+  const lastWorld = game.history.at(-1)?.world;
+  if (lastWorld?.economy.id === "downturn") add("economy", 5);
+  if (lastWorld && lastWorld.shock.id !== "calm") add("shock", 7);
+  const score = (r) => r.tags.reduce((n, tag) => n + (tags.get(tag) ?? 0), 0);
+  const ranked = catalog
+    // Knowledge known at the 2026 starting point stays a dated snapshot even
+    // in 2050. It never claims to be an up-to-date corporate announcement.
+    .filter(
+      (r) =>
+        r.asOf <= `${Math.min(game.year, 2026)}-12-31` &&
+        (!r.endYear || r.endYear <= game.year),
+    )
+    .map((record, index) => ({ record, index, score: score(record) }))
+    .sort((a, b) => b.score - a.score || a.index - b.index);
+  const pick = (kind, limit) =>
+    ranked
+      .filter((r) => r.record.kind === kind && r.score > 0)
+      .slice(0, limit)
+      .map((r) => r.record);
+  const companyId = !["venture", "fictional", "seeking"].includes(
+    game.employer.kind,
+  )
+    ? Object.entries(EMPLOYERS).find(
+        ([, r]) =>
+          r.kind === "real" &&
+          employerKey(r.name) === employerKey(game.employer.name),
+      )?.[0]
+    : null;
+  const company = catalog.find(
+    (r) => r.kind === "company" && r.companyId === companyId,
+  );
+  return {
+    revision: KNOWLEDGE_REVISION,
+    historical: pick("history", 2),
+    companies: company ? [company] : [],
+    rules: pick("game-rule", mode === "career" ? 3 : 4),
+  };
+}
+
+// Prompt packets omit internal search tags and duplicate source metadata.
+export function referencePacket(record) {
+  return {
+    id: record.id,
+    kind: record.kind,
+    period: record.year,
+    title: record.title,
+    detail: record.detail,
+    source: record.source,
+    ...(record.url ? { url: record.url } : {}),
+    asOf: record.asOf,
+  };
+}
+
+// A cache of the reviewed bundled catalog only. There is deliberately no API
+// for saving a profile, a prompt, a player outcome or generated "facts" here.
+export const KNOWLEDGE_DB = "unwritten-life-knowledge";
+export async function loadKnowledge({ indexedDB, timeoutMs = 2500 } = {}) {
+  const fallback = {
+    catalog: KNOWLEDGE,
+    revision: KNOWLEDGE_REVISION,
+    storage: "bundled",
+  };
+  try {
+    if (indexedDB === undefined) indexedDB = globalThis.indexedDB;
+  } catch {
+    return fallback;
+  }
+  if (!indexedDB) return fallback;
+  return new Promise((resolve) => {
+    let db,
+      transaction,
+      finished = false;
+    const finish = (value) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      db?.close();
+      resolve(value);
+    };
+    const timer = setTimeout(() => {
+      try {
+        transaction?.abort();
+      } catch {}
+      finish(fallback);
+    }, timeoutMs);
+    try {
+      const open = indexedDB.open(KNOWLEDGE_DB, 1);
+      open.onupgradeneeded = () => {
+        if (finished) {
+          open.transaction.abort();
+          return;
+        }
+        const connection = open.result;
+        connection.createObjectStore("records", { keyPath: "id" });
+        connection.createObjectStore("meta", { keyPath: "id" });
+      };
+      open.onerror = open.onblocked = () => finish(fallback);
+      open.onsuccess = () => {
+        db = open.result;
+        if (finished) {
+          db.close();
+          return;
+        }
+        db.onversionchange = () => db.close();
+        try {
+          transaction = db.transaction(["records", "meta"], "readwrite");
+          const records = transaction.objectStore("records");
+          const meta = transaction.objectStore("meta");
+          const read = records.getAll(undefined, KNOWLEDGE.length + 1);
+          let catalog;
+          read.onsuccess = () => {
+            const saved = read.result;
+            const canonical = new Map(
+              KNOWLEDGE.map((r) => [r.id, JSON.stringify(r)]),
+            );
+            // Do not trust a version string or values edited by another tab.
+            const valid =
+              saved.length === KNOWLEDGE.length &&
+              saved.every((r) => {
+                try {
+                  return !!r && canonical.get(r.id) === JSON.stringify(r);
+                } catch {
+                  return false;
+                }
+              });
+            if (valid)
+              catalog = saved.sort(
+                (a, b) =>
+                  KNOWLEDGE.findIndex((r) => r.id === a.id) -
+                  KNOWLEDGE.findIndex((r) => r.id === b.id),
+              );
+            else {
+              records.clear();
+              KNOWLEDGE.forEach((r) => records.put(r));
+              catalog = KNOWLEDGE;
+            }
+            meta.put({
+              id: "catalog",
+              revision: KNOWLEDGE_REVISION,
+              count: KNOWLEDGE.length,
+            });
+          };
+          transaction.oncomplete = () =>
+            finish({
+              catalog,
+              revision: KNOWLEDGE_REVISION,
+              storage: "indexeddb",
+            });
+          transaction.onerror = transaction.onabort = () => finish(fallback);
+        } catch {
+          finish(fallback);
+        }
+      };
+    } catch {
+      finish(fallback);
+    }
+  });
+}
+
 export const TONES = Object.freeze({
   realistic: "現実寄り",
   speculative: "少しSFもある未来",

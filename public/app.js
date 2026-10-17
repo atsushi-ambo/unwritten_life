@@ -29,11 +29,15 @@ import {
 import {
   worldAt,
   worldEnabled,
-  HISTORICAL_FACTS,
   TONES,
   opportunityAt,
+  KNOWLEDGE,
+  KNOWLEDGE_REVISION,
+  knowledgeFor,
+  loadKnowledge,
 } from "./world.js";
 import { storyRequest } from "./story.js";
+let knowledgeCatalog = KNOWLEDGE;
 const $ = (id) => document.getElementById(id),
   saveKey = "unwritten-life:v2",
   nf = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 0 });
@@ -615,10 +619,11 @@ function renderGame() {
     history.append(row);
   }
   $("context-preview").textContent = JSON.stringify(
-    storyRequest(game).context,
+    storyRequest(game, { catalog: knowledgeCatalog }).context,
     null,
     2,
   );
+  renderKnowledge();
   renderAI();
   persist();
 }
@@ -991,20 +996,62 @@ $("quick-preset").addEventListener("change", () => {
   customCost = true;
   updateBudget();
 });
-for (const fact of HISTORICAL_FACTS) {
+function knowledgeItem(fact) {
   const item = node("p"),
-    link = node("a", fact.source);
-  link.href = fact.url;
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
+    link = node(
+      fact.url ? "a" : "span",
+      `${fact.source} / 確認 ${fact.checkedAt}`,
+    );
+  if (fact.url) {
+    link.href = fact.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+  }
   item.append(
-    node("b", `${fact.year} / ${fact.title}`),
+    node(
+      "b",
+      `${fact.kind === "game-rule" ? "ゲームの仮定" : fact.year} / ${fact.title}`,
+    ),
     node("br"),
     node("span", fact.detail + " "),
     link,
   );
-  $("historical-facts").append(item);
+  return item;
 }
+function renderKnowledge() {
+  const catalog = $("knowledge-catalog");
+  catalog.replaceChildren();
+  for (const [kind, title] of [
+    ["history", "過去の観測・出来事"],
+    ["company", "企業の公開情報のスナップショット"],
+    ["game-rule", "ゲーム独自の仮定"],
+  ]) {
+    catalog.append(node("h4", title));
+    knowledgeCatalog
+      .filter((r) => r.kind === kind)
+      .forEach((r) => catalog.append(knowledgeItem(r)));
+  }
+  const selected = $("knowledge-selected");
+  selected.replaceChildren();
+  if (game) {
+    const refs = knowledgeFor(game, { catalog: knowledgeCatalog });
+    const entries = [...refs.historical, ...refs.companies, ...refs.rules];
+    $("knowledge-selected-title").textContent =
+      `${game.year}年のあなたに関連する資料 · ${entries.length}件`;
+    entries.forEach((r) => selected.append(knowledgeItem(r)));
+  }
+}
+renderKnowledge();
+$("knowledge-status").textContent =
+  `内蔵の知識 ${knowledgeCatalog.length}件を利用中。端末内のDBを準備しています。`;
+loadKnowledge().then((loaded) => {
+  knowledgeCatalog = loaded.catalog;
+  const counts = (kind) =>
+    knowledgeCatalog.filter((r) => r.kind === kind).length;
+  $("knowledge-status").textContent =
+    `${loaded.storage === "indexeddb" ? "端末内の知識DBに保存済み" : "端末でDB保存を利用できないため、内蔵資料を使用中"} · 歴史${counts("history")}件 / 企業${counts("company")}件 / ゲームの仮定${counts("game-rule")}件 · ${KNOWLEDGE_REVISION}`;
+  renderKnowledge();
+});
 $("monthly-cost").addEventListener("input", () => {
   customCost = true;
 });
@@ -1670,7 +1717,11 @@ function openExchange(mode = "life") {
   if (!game || game.ended) return;
   exchangeMode = mode;
   exchangeRevision = revision;
-  const request = storyRequest(game, { personalized: true, mode });
+  const request = storyRequest(game, {
+    personalized: true,
+    mode,
+    catalog: knowledgeCatalog,
+  });
   $("exchange-prompt").value = request.messages
     .map((m) => m.content)
     .join("\n\n");

@@ -20,5 +20,8 @@
   "dependencies": {
     "ipaddr.js": "2.5.0",
     "parse5": "8.0.1"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "6.2.6"
   }
 }
