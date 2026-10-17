@@ -46,6 +46,11 @@ let game = null,
   careerResearchRevision = 0,
   companyResearchRevision = 0,
   modelListRevision = 0;
+let generationStarted = 0,
+  generationTimer;
+const generationTimes = new Map();
+const connectionKey = (state) =>
+  JSON.stringify([state?.provider, state?.baseURL, state?.model]);
 function node(tag, text, className) {
   const el = document.createElement(tag);
   if (text !== undefined) el.textContent = text;
@@ -550,6 +555,18 @@ function renderAI() {
   $("back-setup").disabled = generating;
   $("ai-accounting").textContent =
     `この起動中：${aiState.calls}/${aiState.requestCap}回、見積り予約 $${aiState.reservedUSD.toFixed(4)} / $${aiState.usdCap}。失敗した呼び出しも数えます。`;
+  renderAITiming();
+}
+function renderAITiming() {
+  const el = $("ai-timing");
+  const times = generationTimes.get(connectionKey(aiState)) ?? [];
+  const last = times.length
+    ? ` この画面で同じ接続先を使った前回の生成は約${Math.ceil(times.at(-1) / 1000)}秒でした（キャッシュを除く）。`
+    : "";
+  el.hidden = !generating && times.length === 0;
+  el.textContent = generating
+    ? `生成中 · 経過${Math.floor((performance.now() - generationStarted) / 1000)}秒。${aiState?.cloud ? "接続先のモデルや混雑で待ち時間が変わります。" : "初回のモデル読み込みや、PCのメモリ・他のアプリで待ち時間が変わります。"}${last}`
+    : `文章と実行できる行動の形式を検証して取り込んでいます。内容の正確さや予測精度を保証する検査ではありません。${last}`;
 }
 function autoLocal() {
   return (
@@ -587,7 +604,10 @@ $("auto-scene").addEventListener("change", () => {
 async function generateScene() {
   if (!game || game.ended || generating) return;
   const current = revision;
+  const timingKey = connectionKey(aiState);
+  generationStarted = performance.now();
   generating = true;
+  generationTimer = setInterval(renderAITiming, 1000);
   renderAI();
   for (const b of document.querySelectorAll(
     "#choices button, #career-actions button",
@@ -602,6 +622,13 @@ async function generateScene() {
     aiState = result.accounting;
     if (current === revision) {
       game = applyScene(game, result.scene);
+      if (!result.cached) {
+        const times = generationTimes.get(timingKey) ?? [];
+        times.push(performance.now() - generationStarted);
+        generationTimes.set(timingKey, times.slice(-5));
+        if (generationTimes.size > 20)
+          generationTimes.delete(generationTimes.keys().next().value);
+      }
       renderGame();
       toast(
         `場面を生成しました（${result.model}${result.cached ? "・キャッシュ" : ""}）。`,
@@ -615,6 +642,7 @@ async function generateScene() {
       await status();
     } catch {}
   } finally {
+    clearInterval(generationTimer);
     generating = false;
     if (game) renderGame();
   }
@@ -1249,6 +1277,45 @@ function setupNameSearch(career = false) {
 }
 setupNameSearch();
 setupNameSearch(true);
+function renderLocalGuide() {
+  const computer = $("guide-computer").value;
+  const memory = Number($("guide-memory").value);
+  let advice;
+  if (computer === "other")
+    advice =
+      "このPCでは未検証です。搭載メモリに加えて、GPUの種類・VRAM・CPUで速度が大きく変わるため、Macの実測からは推奨を決められません。ダウンロード前にモデルの要件を確認してください。";
+  else if (computer !== "apple" || !Number.isFinite(memory))
+    advice =
+      "PCの種類とメモリを選ぶと、候補を絞る目安を表示します。確認できている実測はApple M5・32GBです。";
+  else if (memory <= 8)
+    advice =
+      "このメモリ容量では今回比較したモデルをおすすめできません。OSや他のアプリの余裕が少なくなります。より小さいモデルは、このゲームの日本語と選択肢の質をまだ検証していません。APIや手動交換も選べます。";
+  else if (memory < 32)
+    advice =
+      "まずは軽めのQwen3 8Bを検討する目安です。この容量では未検証なので、動作や文章の質を保証しません。Gemma 4 12Bは32GBのMacで確認済みですが、16・24GBでの最低要件は確認できていません。";
+  else
+    advice =
+      "候補はGemma 4 12B Q4_K_M（文章とのバランス）とQwen3 8B（速さ）です。実測済みはM5・32GBで、他のチップ・容量では未検証です。メモリが多くても、大きいモデルほど速く良い選択肢を作れるとは限りません。";
+  $("guide-recommendation").textContent = advice;
+  const id = $("ai-local-model").value;
+  let selected = "";
+  if (/^qwen3\.8:27b(?:-mtp)?-q4_K_M$/.test(id))
+    selected =
+      "選択中の27BモデルはM5・32GBでswapが約2〜3GiB増えたため、普段のゲーム用にはおすすめしていません。モデルは自動で変更しません。";
+  else if (id === "gemma4:12b-it-q4_K_M")
+    selected =
+      "選択中：今回比較した中でおすすめのGemma 4 12Bです。M5・32GBで中央値31秒。OS・GPUなどもメモリを使うため、約8GBのファイルが収まるだけでは動作判断できません。";
+  else if (id === "qwen3:8b")
+    selected =
+      "選択中：軽めのQwen3 8Bです。M5・32GBで中央値19秒でしたが、場面の具体性や条件の反映には改善の余地がありました。";
+  else if (id)
+    selected =
+      "選択中のモデルは今回のゲーム用比較の対象外です。モデル名やファイル容量だけでは、日本語の質・速さ・必要メモリは判断できません。";
+  $("guide-selected-model").textContent = selected;
+}
+for (const id of ["guide-computer", "guide-memory", "ai-local-model"])
+  $(id).addEventListener("change", renderLocalGuide);
+renderLocalGuide();
 async function refreshModels() {
   const rev = ++modelListRevision,
     provider = $("ai-provider").value;
@@ -1261,6 +1328,7 @@ async function refreshModels() {
   if (!local) return;
   const previous = $("ai-local-model").value || aiState?.model;
   $("ai-local-model").replaceChildren();
+  renderLocalGuide();
   $("model-list-status").textContent =
     "ダウンロード済みモデルを読み込んでいます…";
   $("refresh-models").disabled = true;
@@ -1277,6 +1345,7 @@ async function refreshModels() {
     }
     if (models.some((m) => m.id === previous))
       $("ai-local-model").value = previous;
+    renderLocalGuide();
     $("model-list-status").textContent = models.length
       ? `${models.length}個のモデルから選べます。ダウンロードや課金は行いません。`
       : "ダウンロード済みモデルがありません。Ollama等でモデルを取得した後、この一覧を更新してください。";

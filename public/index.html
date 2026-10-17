@@ -672,6 +672,7 @@
               >
             </div>
             <p id="ai-status" class="field-note" role="status"></p>
+            <p id="ai-timing" class="field-note" aria-live="off" hidden></p>
             <label id="cloud-consent-label" class="save-toggle" hidden
               ><input id="cloud-consent" type="checkbox" />
               選択したクラウドAIへ、年齢・家計・勤務先・選択履歴を送信する</label
@@ -885,7 +886,61 @@
             モデル一覧を更新 ↻
           </button>
           <p id="model-list-status" class="field-note" role="status"></p>
+          <details class="model-notes" id="local-model-guide">
+            <summary>このPCで使うモデルの選び方</summary>
+            <p class="field-note">
+              PC・メモリ・モデルで速さと文章の質が変わります。ファイル容量だけでは、動作に必要なメモリは判断できません。
+            </p>
+            <div class="form-grid">
+              <label
+                ><span class="field-label">PCの種類</span
+                ><select id="guide-computer">
+                  <option value="unknown">未選択・不明</option>
+                  <option value="apple">Apple SiliconのMac</option>
+                  <option value="other">Windows・Linux・Intel Mac</option>
+                </select></label
+              >
+              <label
+                ><span class="field-label">搭載メモリ</span
+                ><select id="guide-memory">
+                  <option value="unknown">未選択・不明</option>
+                  <option value="8">8GB以下</option>
+                  <option value="16">16GB</option>
+                  <option value="24">24GB</option>
+                  <option value="32">32GB</option>
+                  <option value="48">48GB以上</option>
+                </select></label
+              >
+            </div>
+            <p id="guide-recommendation" class="field-note" role="status"></p>
+            <p id="guide-selected-model" class="field-note" role="status"></p>
+            <ul class="field-note">
+              <li>
+                <strong>速さを優先：</strong>Qwen3
+                8B。M5・32GBで1場面の中央値19.3秒。小さな比較では、文章の補正や会社名の抜けが多めでした。
+              </li>
+              <li>
+                <strong>文章とのバランス：</strong>Gemma 4 12B
+                Q4_K_M。同じPCで中央値31.0秒、範囲27〜45秒。今回試した中でおすすめです。
+              </li>
+              <li>
+                <strong>大きいモデル：</strong>Qwen3.8 27B
+                Q4_K_Mは同じPCで完了した2回が約72秒・92秒。メモリ負担が大きく、途中で比較を止めました。
+              </li>
+            </ul>
+            <p class="field-note">
+              2026-10-17のゲーム用合成データによる比較です。Qwen3
+              8B・Gemmaは各5場面、大きいQwenは2場面のみ完了。別のPCでの最低要件や速度保証ではありません。初回ロード・他のアプリ・GPU・量子化・設定でも変わります。この項目はモデル選びの案内だけに使い、保存・AIへの送信・自動ダウンロードは行いません。
+            </p>
+          </details>
         </div>
+        <details class="model-notes">
+          <summary>サブスクのAI・CLIは使える？</summary>
+          <p class="field-note">
+            このゲームのサブスク・CLI自動連携は準備中です。現在はOllama・LM
+            Studio・各種APIと、文章をコピーして返答を取り込む手動交換を使えます。サブスク連携も提供者の利用枠に従い、上限時に有料APIへ自動で切り替える設計にはしません。CLI経由でも、クラウドのAIを使う場合は情報がその提供者へ送られます。
+          </p>
+        </details>
         <p id="ai-accounting" class="field-note"></p>
         <p id="ai-error" class="error" role="alert"></p>
         <button class="button primary" type="submit">この接続先を使う ↗</button>
