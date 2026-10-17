@@ -200,3 +200,62 @@ test("AI receives the chosen company and business context, and different employe
   assert.equal(contexts[2].currentEmployer, "合成事業");
   assert.equal(contexts[2].companyEvidence, null);
 });
+
+test("local model discovery uses fixed endpoints, filters cloud models, and rejects mistyped selections", async () => {
+  const urls = [];
+  const ai = makeAI({
+    validateDestination: async () => {},
+    transport: async (url) => {
+      urls.push(url);
+      return {
+        status: 200,
+        text: JSON.stringify({
+          models: [
+            { name: "qwen3:8b", size: 5200000000 },
+            { name: "qwen3:8b" },
+            { name: "remote:cloud", remote_host: "https://example.com" },
+            { name: "bad name" },
+          ],
+        }),
+      };
+    },
+  });
+  assert.deepEqual(await ai.models("ollama"), [
+    { id: "qwen3:8b", size: 5200000000 },
+  ]);
+  assert.equal(urls[0], "http://127.0.0.1:11434/api/tags");
+  await assert.rejects(() => ai.models("custom"));
+  await assert.rejects(
+    () => ai.configure({ provider: "ollama", model: "qwne3:8b" }),
+    /一覧/,
+  );
+  assert.equal(
+    (await ai.configure({ provider: "ollama", model: "qwen3:8b" })).model,
+    "qwen3:8b",
+  );
+});
+
+test("misread financial balances in generated prose never replace the authoritative result card", async () => {
+  const ai = makeAI({
+    transport: async () => ({
+      status: 200,
+      text: JSON.stringify({
+        message: {
+          content: JSON.stringify({
+            ...scene,
+            body: "新しい仕事を試した。現金は789万円から211万円に減った。顧客の声を聞きながら、これまでの経験を次の取り組みにつなげる方法を考える一年だ。",
+            options: scene.options.map((o, i) =>
+              i ? o : { ...o, hint: "受講料は999万円" },
+            ),
+          }),
+        },
+      }),
+    }),
+  });
+  const g = createGame(p),
+    result = await ai.generate(encodeSave(g));
+  assert.ok(!result.scene.body.includes("211万円"));
+  assert.ok(!result.scene.options[0].hint.includes("999万円"));
+  assert.match(result.scene.body, /顧客の声/);
+  assert.equal(g.cash, 300);
+});

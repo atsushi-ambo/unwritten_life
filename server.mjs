@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { makeAI } from "./lib/ai.mjs";
+import { makeCompanySearch } from "./lib/company.mjs";
 import { companyPage } from "./lib/network.mjs";
 
 const assets = new Map([
@@ -30,7 +31,11 @@ async function bodyJSON(req) {
   }
   return JSON.parse(Buffer.concat(parts).toString("utf8"));
 }
-export function makeServer({ ai = makeAI(), research = companyPage } = {}) {
+export function makeServer({
+  ai = makeAI(),
+  research = companyPage,
+  searchCompanies = makeCompanySearch(),
+} = {}) {
   const token = randomBytes(32).toString("hex");
   let windowStart = Date.now(),
     requests = 0;
@@ -89,6 +94,12 @@ export function makeServer({ ai = makeAI(), research = companyPage } = {}) {
         const body = await bodyJSON(req);
         if (!body || typeof body !== "object" || Array.isArray(body))
           throw new Error("JSONオブジェクトを指定してください。");
+        if (req.url === "/api/ai/models")
+          return json(res, 200, { models: await ai.models(body.provider) });
+        if (req.url === "/api/company/search")
+          return json(res, 200, {
+            candidates: await searchCompanies(body.name),
+          });
         if (req.url === "/api/ai/config")
           return json(res, 200, { ai: await ai.configure(body) });
         if (req.url === "/api/scene")

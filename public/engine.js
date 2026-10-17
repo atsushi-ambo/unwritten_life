@@ -124,6 +124,76 @@ export const CHOICES = Object.freeze({
     freedom: 8,
     icon: "✧",
   },
+  pilot: {
+    label: "学びを実際の仕事で試す",
+    hint: "小さな実証に投資。成果が出れば収入につながるが、失敗もある",
+    cost: 20,
+    skill: 6,
+    health: -2,
+    connection: 2,
+    freedom: 2,
+    icon: "↗",
+  },
+  negotiate: {
+    label: "成果をもとに役割と待遇を相談",
+    hint: "これまでの成果を交渉へ。合意できるとは限らない",
+    cost: 0,
+    skill: 1,
+    health: -1,
+    connection: 1,
+    freedom: 1,
+    icon: "⇧",
+  },
+  mentor: {
+    label: "経験を人に伝える",
+    hint: "育成や協働を通じ、つながりと次の役割を育てる",
+    cost: 5,
+    skill: 2,
+    health: 0,
+    connection: 6,
+    freedom: 1,
+    icon: "♧",
+  },
+  expand: {
+    label: "事業を広げる",
+    hint: "追加投資100万円。顧客を広げる機会と、資金を失うリスク",
+    cost: 100,
+    skill: 4,
+    health: -4,
+    connection: 5,
+    freedom: -2,
+    icon: "✧",
+  },
+  pivot: {
+    label: "事業の方向を変える",
+    hint: "見直しに30万円。顧客や提供方法を変えて立て直す",
+    cost: 30,
+    skill: 5,
+    health: -2,
+    connection: 2,
+    freedom: 2,
+    icon: "↝",
+  },
+  closeBusiness: {
+    label: "事業をたたんで次を探す",
+    hint: "整理費15万円。事業収入と運営費を止め、転職や生活の再建へ",
+    cost: 15,
+    skill: 1,
+    health: 3,
+    connection: -1,
+    freedom: 4,
+    icon: "⇄",
+  },
+  recover: {
+    label: "暮らしと次の仕事を立て直す",
+    hint: "支出や働き方を見直し、ゆとりを取り戻す",
+    cost: 0,
+    skill: 2,
+    health: 5,
+    connection: 2,
+    freedom: 2,
+    icon: "◡",
+  },
   invest: {
     label: "金融資産の配分を変える",
     hint: "現金の一部を株式へ。価格変動あり",
@@ -377,13 +447,21 @@ export function randomAt(seed, year, channel = 0) {
   n = Math.imul(n ^ (n >>> 15), 0x846ca68b);
   return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
 }
-export function createGame(profile, scenario = "steady", seed = 2026) {
+export function createGame(
+  profile,
+  scenario = "steady",
+  seed = 2026,
+  dynamicFrom = 0,
+) {
   const p = validateProfile(profile);
   if (
     !Object.hasOwn(SCENARIOS, scenario) ||
     !Number.isInteger(seed) ||
     seed < 0 ||
-    seed > 0xffffffff
+    seed > 0xffffffff ||
+    !Number.isInteger(dynamicFrom) ||
+    dynamicFrom < 0 ||
+    dynamicFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -394,6 +472,9 @@ export function createGame(profile, scenario = "steady", seed = 2026) {
     scenario,
     seed,
     decisions: [],
+    dynamicFrom,
+    businessStage: null,
+    businessSetbacks: 0,
     year: START_YEAR,
     age: p.age,
     income: p.income,
@@ -450,8 +531,182 @@ export function availableChoices(g) {
   )
     ids.push("home");
   if (g.housing === "rent") ids.push("move");
+  if (g.decisions.length >= g.dynamicFrom) {
+    if (!g.retired && g.employer.kind === "venture") {
+      ids.push("closeBusiness");
+      if (g.businessStage === "growing" && g.cash >= 100) ids.push("expand");
+      if (g.businessStage === "setback") ids.push("pivot");
+    } else if (!g.retired && g.employer.kind !== "seeking") {
+      if (g.skill >= 35 || decisionId(g.decisions.at(-1)) === "learn")
+        ids.push("pilot");
+      if (g.history.at(-1)?.outcome?.kind === "success") ids.push("negotiate");
+      if (g.age >= 40 && g.skill >= 45) ids.push("mentor");
+    }
+    if (
+      g.cash < g.livingCost * 6 ||
+      g.health < 40 ||
+      g.employer.kind === "seeking"
+    )
+      ids.push("recover");
+  }
   if (!g.retired && g.age >= 45) ids.push("retire");
   return ids;
+}
+export function suggestedChoices(g) {
+  const allowed = availableChoices(g);
+  const contextual = [
+    "pivot",
+    "expand",
+    "negotiate",
+    "recover",
+    "pilot",
+    "mentor",
+  ].filter((id) => allowed.includes(id));
+  if (g.employer.kind === "seeking") contextual.unshift("switch");
+  if (g.employer.kind === "venture" && g.businessStage === "setback")
+    contextual.push("closeBusiness");
+  const lifeActions = ["home", "invest", "move", "retire"];
+  const lifeAction = lifeActions[g.decisions.length % lifeActions.length];
+  if (allowed.includes(lifeAction)) contextual.push(lifeAction);
+  const rotations = [
+    ["focus", "connect", "rest", "explore", "learn"],
+    ["learn", "rest", "explore", "focus", "connect"],
+    ["explore", "connect", "focus", "learn", "rest"],
+  ];
+  return [
+    ...new Set([...contextual, ...rotations[g.decisions.length % 3]]),
+  ].slice(0, 5);
+}
+function yearlyOutcome(g, choice, employer) {
+  const i = g.decisions.length;
+  if (
+    i < g.dynamicFrom ||
+    g.retired ||
+    g.age >= g.profile.retirementAge ||
+    choice === "retire"
+  )
+    return null;
+  const roll = randomAt(g.seed, i, 31),
+    ability = clamp(0.35 + g.skill * 0.004 + g.health * 0.002, 0.2, 0.85);
+  if (choice === "closeBusiness")
+    return {
+      kind: "closure",
+      title: "事業を整理し、次の働き方へ。",
+      body: "事業の収入と継続費用を止めた。経験は残り、転職や生活の立て直しを選べる。",
+      salaryFactor: 0,
+      extraCost: 0,
+    };
+  if (employer.kind === "venture") {
+    const risk = clamp(
+      0.18 +
+        (g.cash < g.livingCost * 12 ? 0.12 : 0) +
+        technologyAt(g) * (1 - g.skill / 100) * 0.12 +
+        (choice === "expand" ? 0.12 : 0) -
+        (choice === "pivot" ? 0.08 : 0),
+      0.1,
+      0.55,
+    );
+    if (roll < risk) {
+      const failed = g.businessSetbacks >= 1;
+      return {
+        kind: failed ? "failure" : "setback",
+        title: failed
+          ? "事業が続かず、いったん撤退。"
+          : "顧客が伸びず、事業の収支が悪化。",
+        body: failed
+          ? "不調が続き、事業を閉じることになった。事業収入と運営費を止め、次の仕事と暮らしを立て直す。"
+          : "見込んだ受注が得られず、事業収入が減った。次は事業の方向転換や撤退も選べる。",
+        salaryFactor: failed ? 0 : 0.55,
+        extraCost: failed ? 15 : 20,
+      };
+    }
+    if (roll > 1 - ability * 0.5 || (choice === "pivot" && roll > 0.55))
+      return {
+        kind: "success",
+        title:
+          choice === "pivot"
+            ? "方向転換が、次の顧客につながった。"
+            : "仕事が紹介され、事業に手応え。",
+        body: "顧客との仕事が増え、事業収入が伸びた。次は追加投資して広げるか、暮らしとのバランスを選べる。",
+        salaryFactor: choice === "expand" ? 1.3 : 1.15,
+        extraCost: 0,
+      };
+    return {
+      kind: "steady",
+      title: "小さな受注を積み重ねた一年。",
+      body: "事業を続け、運営費を払いながら顧客との関係を育てた。大きく広げる前に、次の一歩を考える。",
+      salaryFactor: 1,
+      extraCost: 0,
+    };
+  }
+  if (
+    [
+      "pilot",
+      "negotiate",
+      "focus",
+      "learn",
+      "switch",
+      "explore",
+      "mentor",
+    ].includes(choice)
+  ) {
+    const success = roll < ability;
+    const titles = {
+      pilot: [
+        "試した仕組みが、仕事で役立った。",
+        "実証は思い通りに進まなかった。",
+      ],
+      negotiate: [
+        "成果が認められ、役割と収入が変化。",
+        "今回の待遇の相談は見送りに。",
+      ],
+      learn: [
+        "新しい力を、使える手応えが生まれた。",
+        "学びは続けたが、実践にはまだ距離がある。",
+      ],
+      focus: [
+        "積み重ねた仕事が評価された。",
+        "仕事を続けたが、成果につながりにくい一年。",
+      ],
+      switch: [
+        "新しい役割で、経験を生かせた。",
+        "新しい職場への適応に時間がかかった。",
+      ],
+      explore: [
+        "小さな挑戦から、新しい依頼が来た。",
+        "試したことは、まだ仕事にはつながらず。",
+      ],
+      mentor: [
+        "伝えた経験が、協働の機会を育てた。",
+        "教え方を探りながら、人と向き合った。",
+      ],
+    };
+    return {
+      kind: success ? "success" : "setback",
+      title: titles[choice][success ? 0 : 1],
+      body: success
+        ? "取り組みが次の仕事につながった。得た成果を試す、相談するなど、次の選び方も広がる。"
+        : "時間や費用をかけても、すぐに成果が出るとは限らない。経験を残して、次の方法を選び直せる。",
+      salaryFactor: success
+        ? ["negotiate", "pilot"].includes(choice)
+          ? 1.1
+          : 1.025
+        : choice === "pilot"
+          ? 0.97
+          : 1,
+      extraCost: 0,
+    };
+  }
+  return {
+    kind: "steady",
+    title:
+      choice === "rest" || choice === "recover"
+        ? "暮らしのペースを、整える一年に。"
+        : "大切にしたい時間を、選んだ一年。",
+    body: "選んだ行動が家計やゆとり、人との関係に反映された。この変化を受けて次の一年を考える。",
+    salaryFactor: 1,
+    extraCost: 0,
+  };
 }
 const homePrice = (region) =>
   ({ metro: 4500, city: 3000, rural: 2000 })[region];
@@ -525,7 +780,7 @@ export function applyScene(g, scene) {
 export function eventFor(g) {
   const cached = g.scenes[sceneKey(g)];
   if (cached) return { ...cached, generated: true };
-  const options = availableChoices(g).map((id) => ({
+  const options = suggestedChoices(g).map((id) => ({
     id,
     label: CHOICES[id].label,
     hint: CHOICES[id].hint,
@@ -545,6 +800,9 @@ export function eventFor(g) {
         ? "自分のペースで、暮らしをつなぐ。"
         : "仕事の先にある、毎日。";
     body = `${g.age}歳。${REGIONS[g.region].label}で、${g.housing === "own" ? "持ち家を手入れしながら" : "住まいの費用を払いながら"}暮らしている。給与に代わる収入と、これまでの資産をどう使うか。人との時間や新しい楽しみにも、目を向けたい。`;
+  } else if (g.employer.kind === "seeking") {
+    title = "経験を持って、次の一歩を探す。";
+    body = `事業を終え、暮らしと仕事を組み直している。手元現金は約${Math.round(g.cash)}万円。これまでの経験を別の企業で生かすか、まず生活のペースを整えるか。収入と支出の変化を確かめながら、次の選択を考える。`;
   } else if (g.employer.kind === "venture") {
     title = `${company}を、自分の手で育てる。`;
     body = `${company}では、${g.employer.summary}という架空の事業で、${g.year - g.employer.started}年目に入った。顧客を探し、運営費を払いながら、自分の仕事をつくる。${technologyAt(g) > 0.5 ? "AIが広く使われる世界では、効率化だけでなく選ばれる理由も必要になっている。" : "AIを試しながら、任せる部分と自分で担う部分を見極めたい。"}手元の現金は約${Math.round(g.cash)}万円。収入の変動と暮らしを両立するには、どこへ時間を使おう。`;
@@ -574,7 +832,18 @@ export function advance(g, rawDecision) {
     throw new Error("この人生の物語は完結しました。");
   const decision = validateDecision(rawDecision, g),
     choice = decisionId(decision);
-  const employer = nextEmployer(g, decision);
+  let employer = nextEmployer(g, decision);
+  const outcome = yearlyOutcome(g, choice, employer);
+  if (outcome?.kind === "failure" || outcome?.kind === "closure")
+    employer = {
+      kind: "seeking",
+      id: "seeking",
+      name: "次の仕事を探している",
+      role: "other",
+      companyType: "unknown",
+      facts: null,
+      summary: "事業を終え、働き方を組み直している",
+    };
   const c = CHOICES[choice],
     p = g.profile,
     tech = technologyAt(g),
@@ -642,14 +911,17 @@ export function advance(g, rawDecision) {
             ? g.salary || 180
             : g.salary) *
           (1 + growth) *
-          transitionIncome,
+          transitionIncome *
+          (outcome?.salaryFactor ?? 1),
         0,
         20000,
       );
   const income = salary + (g.age >= 65 ? p.pension : 0);
-  const businessSetup = choice === "startup" ? venture.setup : 0;
+  const businessSetup =
+    choice === "startup" ? VENTURES[decision.venture].setup : 0;
   const businessOverhead = venture && !retired ? venture.overhead : 0;
-  let cost = c.cost + businessSetup + businessOverhead,
+  let cost =
+      c.cost + businessSetup + businessOverhead + (outcome?.extraCost ?? 0),
     investmentTransfer = 0,
     homeTransaction = 0;
   if (choice === "invest") {
@@ -762,7 +1034,10 @@ export function advance(g, rawDecision) {
     connection,
     freedom,
     skill,
-    note: effects[choice],
+    outcome,
+    note: outcome
+      ? `${outcome.title} ${effects[choice] ?? c.label}`
+      : effects[choice],
     aiBenefit,
     transitionCost,
     volatility,
@@ -783,6 +1058,22 @@ export function advance(g, rawDecision) {
   return {
     ...g,
     employer,
+    businessStage:
+      employer.kind === "venture"
+        ? outcome?.kind === "success"
+          ? "growing"
+          : outcome?.kind === "setback"
+            ? "setback"
+            : (g.businessStage ?? "stable")
+        : null,
+    businessSetbacks:
+      employer.kind === "venture"
+        ? outcome?.kind === "setback"
+          ? g.businessSetbacks + 1
+          : outcome?.kind === "success"
+            ? 0
+            : g.businessSetbacks
+        : 0,
     careerMoves:
       g.careerMoves + (["switch", "startup"].includes(choice) ? 1 : 0),
     year: g.year + 1,
@@ -817,6 +1108,7 @@ export function replay(
   decisions,
   scenes = {},
   stopAtEnd = false,
+  dynamicFrom = 0,
 ) {
   if (
     !Array.isArray(decisions) ||
@@ -827,7 +1119,7 @@ export function replay(
     Object.keys(scenes).length > MAX_AGE
   )
     fail();
-  let g = createGame(profile, scenario, seed);
+  let g = createGame(profile, scenario, seed, dynamicFrom);
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
       if (stopAtEnd) break;
@@ -854,12 +1146,13 @@ export function replay(
 }
 export function compareWorlds(g) {
   return Object.keys(SCENARIOS).map((s) =>
-    replay(g.profile, s, g.seed, g.decisions, {}, true),
+    replay(g.profile, s, g.seed, g.decisions, {}, true, g.dynamicFrom),
   );
 }
 export function encodeSave(g) {
   const value = JSON.stringify({
     version: VERSION,
+    dynamicFrom: g.dynamicFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
@@ -877,5 +1170,13 @@ export function decodeSave(value) {
     throw new Error(
       "旧版または未対応の保存形式です。元データを保持したまま新しい物語を開始してください。",
     );
-  return replay(d.profile, d.scenario, d.seed, d.decisions, d.scenes ?? {});
+  return replay(
+    d.profile,
+    d.scenario,
+    d.seed,
+    d.decisions,
+    d.scenes ?? {},
+    false,
+    d.dynamicFrom ?? d.decisions?.length,
+  );
 }

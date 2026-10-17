@@ -453,3 +453,65 @@ test("career inputs reject impossible choices and unconfirmed facts; saved deriv
   assert.equal(legacy.employer.kind, "legacy");
   assert.deepEqual(decodeSave(encodeSave(legacy)), legacy);
 });
+
+test("learning and successful work unlock new actions, and risky business outcomes create recovery branches", () => {
+  const base = createGame({ ...profile, ai: "beginner" }, "steady", 49);
+  assert.ok(!availableChoices(base).includes("pilot"));
+  const learned = advance(base, "learn");
+  assert.ok(availableChoices(learned).includes("pilot"));
+  const started = advance(
+    createGame({ ...profile, savings: 1000 }, "steady", 49),
+    { id: "startup", venture: "ai", name: "合成事業" },
+  );
+  assert.equal(started.history[0].outcome.kind, "setback");
+  assert.ok(availableChoices(started).includes("pivot"));
+  assert.ok(availableChoices(started).includes("closeBusiness"));
+  assert.throws(() => advance(base, "expand"));
+  const failed = advance(started, "focus");
+  assert.equal(failed.history[1].outcome.kind, "failure");
+  assert.equal(failed.employer.kind, "seeking");
+  assert.equal(failed.salary, 0);
+  assert.equal(failed.history[1].businessOverhead, 0);
+  assert.ok(availableChoices(failed).includes("recover"));
+  assert.ok(!availableChoices(failed).includes("pivot"));
+  assert.deepEqual(decodeSave(encodeSave(failed)), failed);
+  const back = replay(
+    failed.profile,
+    failed.scenario,
+    failed.seed,
+    failed.decisions.slice(0, 1),
+  );
+  assert.deepEqual(advance(back, "focus"), failed);
+  const closed = advance(started, "closeBusiness");
+  assert.equal(closed.history[1].outcome.kind, "closure");
+  assert.equal(closed.salary, 0);
+  const hired = advance(failed, {
+    id: "switch",
+    target: "microsoft",
+    role: "tech",
+  });
+  assert.equal(hired.employer.kind, "real");
+  assert.ok(hired.salary > 0);
+  let success;
+  for (let seed = 1; seed <= 10; seed++) {
+    const g = advance(createGame(profile, "steady", seed), "focus");
+    if (g.history[0].outcome.kind === "success") {
+      success = g;
+      break;
+    }
+  }
+  assert.ok(availableChoices(success).includes("negotiate"));
+});
+test("older v2 saves preserve past balances and begin dynamic outcomes only at the resumed year", () => {
+  const old = replay(profile, "steady", 49, ["learn", "focus"], {}, false, 80);
+  const raw = JSON.parse(encodeSave(old));
+  delete raw.dynamicFrom;
+  const resumed = decodeSave(JSON.stringify(raw));
+  assert.equal(resumed.dynamicFrom, 2);
+  assert.equal(resumed.income, old.income);
+  assert.equal(resumed.cash, old.cash);
+  assert.equal(resumed.history[0].outcome, null);
+  const next = advance(resumed, "learn");
+  assert.ok(next.history[2].outcome);
+  assert.deepEqual(decodeSave(encodeSave(next)), next);
+});

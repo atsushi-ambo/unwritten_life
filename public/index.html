@@ -390,29 +390,35 @@
               <section class="company-research">
                 <h3>会社の公開情報を、物語の前提に。</h3>
                 <p class="field-note">
-                  公式の会社概要や事業・AI戦略のページを指定して取得します。情報は現在の事実で、未来の業績・解雇・年収を保証しません。
+                  勤務先の名前を入力し、ボタンを押すと公式情報を探して取り込みます。取得元と内容を確認して使えます。
                 </p>
-                <a
-                  id="company-search"
-                  class="text-button"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  href="https://www.google.com/"
-                  >会社名だけをGoogleで検索 ↗</a
-                >
-                <label
-                  ><span class="field-label">公式ページのURL（HTTPS）</span
-                  ><input
-                    type="url"
-                    id="company-url"
-                    placeholder="https://公式サイト/会社概要" /></label
-                ><button
+                <button
                   type="button"
-                  id="research-button"
+                  id="company-search"
                   class="button secondary small"
                 >
-                  公開情報を取得する
+                  企業名から公式情報を調べる
                 </button>
+                <p class="field-note">
+                  入力した企業名だけをWikidataで検索し、見つけた公式サイトの本文を取得します。同名の企業がある場合は候補を選びます。
+                </p>
+                <div id="company-candidates" class="company-candidates"></div>
+                <details id="company-manual">
+                  <summary>URLを指定して取得する</summary>
+                  <label
+                    ><span class="field-label">公式ページのURL（HTTPS）</span
+                    ><input
+                      type="url"
+                      id="company-url"
+                      placeholder="https://公式サイト/会社概要" /></label
+                  ><button
+                    type="button"
+                    id="research-button"
+                    class="button secondary small"
+                  >
+                    指定したページを取得
+                  </button>
+                </details>
                 <label
                   ><span class="field-label"
                     >確認した会社の事業・特徴
@@ -556,12 +562,26 @@
               <summary>AIに渡す情報を確認</summary>
               <pre id="context-preview"></pre>
             </details>
+            <label id="auto-scene-label" class="save-toggle"
+              ><input
+                id="auto-scene"
+                type="checkbox"
+                checked
+              />ローカルAIで、毎年の場面と選択肢を自動生成する</label
+            >
+            <div
+              id="year-result"
+              class="year-result"
+              hidden
+              aria-live="polite"
+            ></div>
             <div id="event-card" class="event-card"></div>
             <div class="choice-heading">
               <h2 id="choice-title">この一年、何を大切にする？</h2>
               <span>ひとつ、選んでみよう。</span>
             </div>
             <div id="choices" class="choices"></div>
+            <div id="career-actions" class="career-actions"></div>
             <div class="game-controls">
               <button id="undo-button" class="text-button">
                 ↶ ひとつ前の年に戻る</button
@@ -663,10 +683,14 @@
               <option value="disabled">接続しない・手動交換</option>
             </select></label
           >
-          <label
+          <label id="manual-model-field"
             ><span class="field-label">モデルID</span
             ><input id="ai-model" value="qwen3:8b" maxlength="150" required
           /></label>
+          <label id="local-model-field"
+            ><span class="field-label">ダウンロード済みモデル</span
+            ><select id="ai-local-model" required></select
+          ></label>
           <label
             ><span class="field-label">接続先のベースURL</span
             ><input
@@ -738,6 +762,12 @@
         <p class="field-note">
           単価は利用モデルの公式料金に合わせてください。費用上限は設定単価からの保守的な見積りで、提供者の請求額を保証する上限ではありません。出力は1回1500トークンまで。プロバイダ側の予算制限も併用できます。
         </p>
+        <div id="model-list-controls">
+          <button id="refresh-models" type="button" class="text-button">
+            モデル一覧を更新 ↻
+          </button>
+          <p id="model-list-status" class="field-note" role="status"></p>
+        </div>
         <p id="ai-accounting" class="field-note"></p>
         <p id="ai-error" class="error" role="alert"></p>
         <button class="button primary" type="submit">
@@ -799,8 +829,19 @@
                 <option value="public">公共の組織</option>
               </select></label
             >
-            <details>
-              <summary>公開情報を加える（任意）</summary>
+            <button
+              type="button"
+              id="career-search"
+              class="button secondary small"
+            >
+              企業名から公式情報を調べる
+            </button>
+            <p class="field-note">
+              企業名だけを検索先へ送り、公式サイトの本文を取り込みます。
+            </p>
+            <div id="career-candidates" class="company-candidates"></div>
+            <details id="career-research-details">
+              <summary>取得した情報を確認・修正（URLの直接指定も可）</summary>
               <label
                 >会社の公式ページURL<input
                   id="career-url"

@@ -36,7 +36,9 @@ let game = null,
   customCost = false,
   careerMode = "switch",
   careerSources = [],
-  careerResearchRevision = 0;
+  careerResearchRevision = 0,
+  companyResearchRevision = 0,
+  modelListRevision = 0;
 function node(tag, text, className) {
   const el = document.createElement(tag);
   if (text !== undefined) el.textContent = text;
@@ -161,6 +163,7 @@ function showGame(focus = false) {
   $("setup").hidden = true;
   $("game").hidden = false;
   renderGame();
+  void maybeGenerateScene();
   if (focus) {
     window.scrollTo({ top: 0, behavior: "instant" });
     $("chapter-title").focus({ preventScroll: true });
@@ -216,7 +219,11 @@ function renderGame() {
           ? "（転職は仮想）"
           : ""),
     game.housing === "own" ? "持ち家" : "賃貸等",
-    game.retired ? "退職後" : "就業中",
+    game.retired
+      ? "退職後"
+      : game.employer.kind === "seeking"
+        ? "仕事を探している"
+        : "就業中",
   ]
     .filter(Boolean)
     .join(" / ");
@@ -272,16 +279,49 @@ function renderGame() {
   $("ai-progress").value = level;
   const card = $("event-card");
   card.replaceChildren();
-  if (game.history.length)
-    card.append(
-      node(
-        "p",
-        `${game.history.at(-1).year}年の選択：${game.history.at(-1).note}`,
-        "reflection",
-      ),
+  const resultCard = $("year-result");
+  resultCard.replaceChildren();
+  resultCard.hidden = !game.history.length;
+  if (game.history.length) {
+    const h = game.history.at(-1),
+      before = game.history.at(-2) ?? initial;
+    resultCard.append(
+      node("p", `${h.year}年の選択 → この一年の結果`, "eyebrow"),
+      node("p", `選んだこと：${h.choiceLabel}`, "result-choice"),
+      node("h2", h.outcome?.title ?? h.choiceLabel),
+      node("p", h.outcome?.body ?? h.note),
     );
+    const changes = node("div", undefined, "result-changes");
+    for (const [label, key, unit] of [
+      ["年収", "income", "万円"],
+      ["純資産", "savings", "万円"],
+      ["ゆとり", "health", ""],
+      ["つながり", "connection", ""],
+      ["AIスキル", "skill", ""],
+    ]) {
+      const from = Math.round(before[key]),
+        to = Math.round(game[key]),
+        delta = to - from;
+      changes.append(
+        node(
+          "span",
+          `${label} ${nf.format(from)} → ${nf.format(to)}${unit}（${delta >= 0 ? "+" : ""}${nf.format(delta)}）`,
+        ),
+      );
+    }
+    resultCard.append(changes);
+    if (h.businessSetup || h.businessOverhead || h.outcome?.extraCost)
+      resultCard.append(
+        node(
+          "p",
+          `開業費 ${h.businessSetup}万円 / 年間運営費 ${h.businessOverhead}万円 / 結果による追加費用 ${h.outcome?.extraCost ?? 0}万円`,
+          "field-note",
+        ),
+      );
+  }
   const choices = $("choices");
   choices.replaceChildren();
+  $("career-actions").replaceChildren();
   if (complete) {
     card.append(
       node("p", "THE PAGES OF YOUR LIFE.", "eyebrow"),
@@ -305,7 +345,12 @@ function renderGame() {
       again = node("button", "同じ条件で、選びなおす ↗", "button primary"),
       compare = node("button", "別のAIの未来と比べる", "button secondary");
     again.addEventListener("click", () => {
-      game = createGame(game.profile, game.scenario, game.seed);
+      game = createGame(
+        game.profile,
+        game.scenario,
+        game.seed,
+        game.dynamicFrom,
+      );
       showGame(true);
     });
     compare.addEventListener("click", openComparison);
@@ -324,16 +369,51 @@ function renderGame() {
       node("p", event.insight, "insight"),
     );
     const options = [...event.options];
-    for (const id of ["switch", "startup"]) {
+    const extra = node("details"),
+      extraButtons = node("div", undefined, "career-actions");
+    extra.append(
+      node("summary", "ほかの働き方・お金・暮らしの選択"),
+      extraButtons,
+    );
+    for (const id of [
+      "switch",
+      "startup",
+      "invest",
+      "home",
+      "move",
+      "retire",
+    ]) {
       if (
         availableChoices(game).includes(id) &&
         !options.some((o) => o.id === id)
-      )
-        options.push({ id, label: CHOICES[id].label, hint: CHOICES[id].hint });
+      ) {
+        const extraButton = node(
+          "button",
+          CHOICES[id].label + " ↗",
+          "text-button",
+        );
+        extraButton.disabled = generating;
+        extraButton.title = CHOICES[id].hint;
+        extraButton.addEventListener("click", () => {
+          if (generating) return;
+          if (["switch", "startup"].includes(id)) {
+            openCareer(id);
+            return;
+          }
+          game = advance(game, id);
+          revision++;
+          renderGame();
+          moveToStory();
+          void maybeGenerateScene();
+        });
+        extraButtons.append(extraButton);
+      }
     }
+    if (extraButtons.children.length) $("career-actions").append(extra);
     for (const option of options) {
       const button = node("button", undefined, "choice");
       button.type = "button";
+      button.disabled = generating;
       button.dataset.choice = option.id;
       const c = CHOICES[option.id],
         copy = node("span");
@@ -355,7 +435,7 @@ function renderGame() {
           openCareer(option.id);
           return;
         }
-        const step = Number($("year-step").value);
+        const step = autoLocal() ? 1 : Number($("year-step").value);
         for (let i = 0; i < step && !game.ended; i++) {
           try {
             game = advance(game, option.id);
@@ -366,6 +446,7 @@ function renderGame() {
         revision++;
         renderGame();
         moveToStory();
+        void maybeGenerateScene();
       });
       choices.append(button);
     }
@@ -396,8 +477,13 @@ function renderGame() {
 function renderAI() {
   if (!aiState) return;
   const local = !aiState.cloud;
+  $("auto-scene-label").hidden = !local || aiState.provider === "disabled";
+  $("year-step").disabled = autoLocal();
+  if (autoLocal()) $("year-step").value = "1";
+  $("ai-status").classList.toggle("is-generating", generating);
+  $("event-card").setAttribute("aria-busy", String(generating));
   $("ai-status").textContent = generating
-    ? "PCで場面を生成中です。初回はモデルの読み込みに時間がかかります。"
+    ? `${local ? "PC内のAI" : "接続したAI"}が、この結果から次の場面と選択肢を考えています…`
     : `${local ? "PC内" : "クラウド"}：${aiState.provider} / ${aiState.model} · ${aiState.calls}回 · 見積り予約 $${aiState.reservedUSD.toFixed(4)}`;
   $("cloud-consent-label").hidden = local;
   $("generate-button").disabled =
@@ -406,12 +492,48 @@ function renderAI() {
   $("ai-accounting").textContent =
     `この起動中：${aiState.calls}/${aiState.requestCap}回、見積り予約 $${aiState.reservedUSD.toFixed(4)} / $${aiState.usdCap}。失敗した呼び出しも数えます。`;
 }
+function autoLocal() {
+  return (
+    $("auto-scene").checked &&
+    aiState &&
+    !aiState.cloud &&
+    aiState.provider !== "disabled"
+  );
+}
+async function maybeGenerateScene() {
+  const current = revision;
+  if (!aiState) {
+    try {
+      await status();
+    } catch {
+      return;
+    }
+  }
+  if (
+    current !== revision ||
+    $("game").hidden ||
+    !game ||
+    game.ended ||
+    generating ||
+    !autoLocal() ||
+    eventFor(game).generated
+  )
+    return;
+  await generateScene();
+}
+$("auto-scene").addEventListener("change", () => {
+  renderAI();
+  void maybeGenerateScene();
+});
 async function generateScene() {
   if (!game || game.ended || generating) return;
   const current = revision;
   generating = true;
   renderAI();
-  for (const b of $("choices").querySelectorAll("button")) b.disabled = true;
+  for (const b of document.querySelectorAll(
+    "#choices button, #career-actions button",
+  ))
+    b.disabled = true;
   $("undo-button").disabled = true;
   try {
     const result = await api("/api/scene", {
@@ -427,7 +549,9 @@ async function generateScene() {
       );
     }
   } catch (error) {
-    toast(error.message);
+    toast(
+      `AI生成を完了できませんでした。今回は条件に応じた選択肢で続けられます。${error.message}`,
+    );
     try {
       await status();
     } catch {}
@@ -575,6 +699,8 @@ $("undo-button").addEventListener("click", () => {
     game.seed,
     game.decisions.slice(0, -1),
     scenes,
+    false,
+    game.dynamicFrom,
   );
   revision++;
   renderGame();
@@ -589,9 +715,6 @@ function updateBudget() {
   $("rent-field").hidden = own;
   $("budget-summary").textContent =
     `仮の初期設定：金融資産 ${f.elements.savings.value}万円（うち株式 ${f.elements.stocks.value}万円）、生活費 ${f.elements.monthlyCost.value}万円/月 ＋ ${own ? "持ち家の維持・返済費" : "家賃 " + f.elements.rent.value + "万円/月"}。退職 ${f.elements.retirementAge.value}歳、65歳以降の収入 ${f.elements.pension.value}万円/年。任意項目で調整できます。`;
-  const company = f.elements.company.value;
-  $("company-search").href =
-    `https://www.google.com/search?q=${encodeURIComponent(company + " 公式 会社概要 AI 戦略")}`;
 }
 $("monthly-cost").addEventListener("input", () => {
   customCost = true;
@@ -621,19 +744,23 @@ for (const id of [
     $("company-confirmed").checked = false;
   });
 $("company-name").addEventListener("input", () => {
+  companyResearchRevision++;
+  $("company-candidates").replaceChildren();
   companySources = [];
   $("company-summary").value = "";
   $("company-sources").replaceChildren();
   $("company-confirmed").checked = false;
 });
 $("research-button").addEventListener("click", async () => {
-  const button = $("research-button");
+  const button = $("research-button"),
+    current = ++companyResearchRevision;
   button.disabled = true;
   $("research-status").textContent = "指定した公開ページを取得しています。";
   try {
     const { facts } = await api("/api/company", {
       url: $("company-url").value,
     });
+    if (current !== companyResearchRevision) return;
     $("company-summary").value = facts.summary;
     companySources = facts.sources;
     $("company-sources").replaceChildren();
@@ -659,6 +786,7 @@ $("research-button").addEventListener("click", async () => {
 function resetCareerResearch() {
   careerResearchRevision++;
   careerSources = [];
+  $("career-candidates").replaceChildren();
   $("career-summary").value = "";
   $("career-confirmed").checked = false;
   $("career-research-status").textContent = "";
@@ -863,6 +991,7 @@ $("career-form").addEventListener("submit", (e) => {
     $("career-dialog").close();
     renderGame();
     moveToStory();
+    void maybeGenerateScene();
     toast(
       "この分岐で1年進みました。会社と役割は、以後の人生にも引き継がれます。",
     );
@@ -870,6 +999,141 @@ $("career-form").addEventListener("submit", (e) => {
     $("career-error").textContent = error.message;
   }
 });
+function sourceLinks(container, sources) {
+  container.replaceChildren();
+  for (const source of sources) {
+    const a = node(
+      "a",
+      `${source.title || source.url} / 取得 ${source.checkedAt}`,
+    );
+    a.href = source.url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    container.append(a);
+  }
+}
+function setupNameSearch(career = false) {
+  const button = $(career ? "career-search" : "company-search"),
+    name = $(career ? "career-name" : "company-name"),
+    list = $(career ? "career-candidates" : "company-candidates"),
+    message = $(career ? "career-research-status" : "research-status");
+  button.addEventListener("click", async () => {
+    const rev = career ? ++careerResearchRevision : ++companyResearchRevision;
+    const current = () =>
+      rev === (career ? careerResearchRevision : companyResearchRevision);
+    button.disabled = true;
+    list.replaceChildren();
+    message.textContent = "企業名から公式サイトを探しています…";
+    async function load(candidate) {
+      if (!current()) return;
+      message.textContent = `${candidate.name}の公開ページを取得しています…`;
+      try {
+        const { facts } = await api("/api/company", { url: candidate.url });
+        if (!current()) return;
+        const prefix = career ? "career" : "company";
+        $(prefix + "-url").value = facts.sources[0]?.url ?? candidate.url;
+        $(prefix + "-summary").value = facts.summary;
+        $(prefix + "-sector").value = candidate.sector ?? "unknown";
+        $(prefix + "-confirmed").checked = false;
+        if (career) {
+          careerSources = facts.sources;
+          $("career-research-details").open = true;
+          renderCareer();
+        } else {
+          companySources = facts.sources;
+          sourceLinks($("company-sources"), facts.sources);
+        }
+        list.replaceChildren(
+          node(
+            "p",
+            `${candidate.name} / ${candidate.description}`,
+            "field-note",
+          ),
+        );
+        message.textContent =
+          "公式サイトの本文を取得しました。取得元と企業の一致を確認してチェックしてください。";
+      } catch (error) {
+        if (current())
+          message.textContent = `${error.message} URLを指定する方法も使えます。`;
+      }
+    }
+    try {
+      const { candidates } = await api("/api/company/search", {
+        name: name.value,
+      });
+      if (!current()) return;
+      if (!candidates.length) {
+        message.textContent =
+          "公式サイトの候補が見つかりませんでした。企業の正式名称か、URL指定をお試しください。";
+        return;
+      }
+      if (candidates.length === 1) await load(candidates[0]);
+      else {
+        message.textContent =
+          "同名・関連する候補があります。調べたい企業を選んでください。";
+        for (const c of candidates) {
+          const b = node(
+            "button",
+            `${c.name} — ${c.description} / ${new URL(c.url).hostname}`,
+            "button secondary small",
+          );
+          b.type = "button";
+          b.addEventListener("click", async () => {
+            for (const el of list.querySelectorAll("button"))
+              el.disabled = true;
+            await load(c);
+          });
+          list.append(b);
+        }
+      }
+    } catch (error) {
+      if (current()) message.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+setupNameSearch();
+setupNameSearch(true);
+async function refreshModels() {
+  const rev = ++modelListRevision,
+    provider = $("ai-provider").value;
+  const local = ["ollama", "lmstudio"].includes(provider);
+  $("local-model-field").hidden = !local;
+  $("manual-model-field").hidden = local;
+  $("model-list-controls").hidden = !local;
+  $("ai-model").disabled = local;
+  $("ai-local-model").disabled = !local;
+  if (!local) return;
+  const previous = $("ai-local-model").value || aiState?.model;
+  $("ai-local-model").replaceChildren();
+  $("model-list-status").textContent =
+    "ダウンロード済みモデルを読み込んでいます…";
+  $("refresh-models").disabled = true;
+  try {
+    const { models } = await api("/api/ai/models", { provider });
+    if (rev !== modelListRevision) return;
+    for (const m of models) {
+      const o = node(
+        "option",
+        `${m.id}${m.size ? `（${(m.size / 1e9).toFixed(1)} GB）` : ""}`,
+      );
+      o.value = m.id;
+      $("ai-local-model").append(o);
+    }
+    if (models.some((m) => m.id === previous))
+      $("ai-local-model").value = previous;
+    $("model-list-status").textContent = models.length
+      ? `${models.length}個のモデルから選べます。ダウンロードや課金は行いません。`
+      : "ダウンロード済みモデルがありません。Ollama等でモデルを取得した後、この一覧を更新してください。";
+  } catch (error) {
+    if (rev === modelListRevision)
+      $("model-list-status").textContent = error.message;
+  } finally {
+    if (rev === modelListRevision) $("refresh-models").disabled = false;
+  }
+}
+$("refresh-models").addEventListener("click", refreshModels);
 const presets = {
   ollama: ["http://127.0.0.1:11434", "qwen3:8b", 0, 0],
   lmstudio: ["http://127.0.0.1:1234/v1", "local-model", 0, 0],
@@ -893,6 +1157,7 @@ $("ai-settings-button").addEventListener("click", async () => {
     $("ai-error").textContent = "";
     $("ai-key").value = "";
     $("ai-dialog").showModal();
+    void refreshModels();
   } catch (error) {
     toast(error.message);
   }
@@ -907,6 +1172,7 @@ $("ai-provider").addEventListener("change", () => {
   }
   $("ai-base-url").readOnly = $("ai-provider").value !== "custom";
   $("ai-key").value = "";
+  void refreshModels();
 });
 $("ai-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -914,7 +1180,9 @@ $("ai-form").addEventListener("submit", async (e) => {
   try {
     const data = await api("/api/ai/config", {
       provider: $("ai-provider").value,
-      model: $("ai-model").value,
+      model: ["ollama", "lmstudio"].includes($("ai-provider").value)
+        ? $("ai-local-model").value
+        : $("ai-model").value,
       baseURL: $("ai-base-url").value,
       apiKey: $("ai-key").value,
       inputRate: Number($("ai-input-rate").value),

@@ -5,12 +5,16 @@ import { makeServer } from "../server.mjs";
 test("HTTP boundary: allowed assets, CSRF, local origin, body validation and secret rejection", async (t) => {
   let researched = false;
   const ai = {
+    models: async () => [{ id: "synthetic:8b", size: 1000 }],
     status: () => ({ provider: "disabled" }),
     configure: async () => ({ provider: "disabled" }),
     generate: async () => ({ scene: { title: "test" } }),
   };
   const server = makeServer({
     ai,
+    searchCompanies: async () => [
+      { name: "合成企業", url: "https://example.com" },
+    ],
     research: async () => {
       researched = true;
       return { summary: "public" };
@@ -72,6 +76,28 @@ test("HTTP boundary: allowed assets, CSRF, local origin, body validation and sec
     200,
   );
   assert.equal(researched, true);
+  for (const [path, body, key] of [
+    ["/api/ai/models", { provider: "ollama" }, "models"],
+    ["/api/company/search", { name: "合成企業" }, "candidates"],
+  ]) {
+    const good = await fetch(base + path, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+    assert.equal(good.status, 200);
+    assert.ok(Array.isArray((await good.json())[key]));
+    assert.equal(
+      (
+        await fetch(base + path, {
+          method: "POST",
+          headers: { ...headers, "X-Unwritten-Token": "bad" },
+          body: JSON.stringify(body),
+        })
+      ).status,
+      403,
+    );
+  }
   for (const patch of [
     { "X-Unwritten-Token": "nope" },
     { "X-Unwritten-Token": "é".repeat(64) },
