@@ -6,6 +6,8 @@
 
 最初の体験はPC内のOllama + qwen3:8b。約5.2GBのモデルを取得した後、APIの従量課金なしで生成できます。通信・電力・機器の費用がなくなる意味ではありません。ローカルモデルの日本語やJSONの品質、速度は機種とモデルに依存します。
 
+M5・メモリ32GBでこのゲームを遊ぶ場合は、今回の比較では `gemma4:12b-it-q4_K_M`（約8GB）を推奨します。取得後は同じモデル一覧から選べます。[測定条件・結果・プロンプトの比較](local-models.md) を参照してください。既存のOpenAI等の設定は、この比較スクリプトからは変更しません。
+
 - [Ollamaのモデル情報](https://ollama.com/library/qwen3:8b)
 - [OllamaのChat API](https://docs.ollama.com/api/chat)
 - [ローカル専用モードとGPUの確認](https://docs.ollama.com/faq)
