@@ -558,6 +558,22 @@ function renderGame() {
       node("p", event.body),
       node("p", event.insight, "insight"),
     );
+    if (event.profileBasis?.length) {
+      const basis = node("details", undefined, "profile-basis");
+      basis.append(node("summary", "この場面に反映したプロフィール"));
+      const list = node("ul");
+      for (const item of event.profileBasis)
+        list.append(node("li", `${item.label}：${item.detail}`));
+      basis.append(
+        list,
+        node(
+          "p",
+          "端末内ではメモのキーワードから話題を拾います。経験や能力は推定せず、文章全体の解釈には接続したAIを使います。",
+          "field-note",
+        ),
+      );
+      card.append(basis);
+    }
     const options = [...event.options];
     const extra = node("details"),
       extraButtons = node("div", undefined, "career-actions");

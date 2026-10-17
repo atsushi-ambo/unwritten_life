@@ -1239,10 +1239,413 @@ export function applyScene(g, scene) {
     scenes: { ...g.scenes, [sceneKey(g)]: validateScene(scene, g) },
   };
 }
+
+// Local personalization is deliberately bounded: a keyword is a topic in the
+// player's memo, never evidence of proficiency, employment or a completed act.
+const NOTE_TOPICS = [
+  [
+    "cloud",
+    /\b(?:aws|azure|gcp|iac|terraform)\b|クラウド/iu,
+    "クラウド・基盤",
+    "小さな検証環境で構成を比べる",
+  ],
+  [
+    "reliability",
+    /\b(?:sre|devops|observability|kubernetes|k8s)\b|監視|可観測性|運用/iu,
+    "運用・信頼性",
+    "日々の運用で手間のかかる作業を見直す",
+  ],
+  [
+    "security",
+    /\bsecurity\b|セキュリティ|情報保護/iu,
+    "セキュリティ",
+    "守りたい情報と道具に任せる範囲を整理する",
+  ],
+  [
+    "data",
+    /\b(?:sql|python|analytics)\b|データ分析|データ基盤|機械学習/iu,
+    "データの活用",
+    "身近なデータから問いを一つ確かめる",
+  ],
+  [
+    "marketing",
+    /\b(?:marketing|seo|crm)\b|マーケティング|広報|広告|集客/iu,
+    "顧客理解・発信",
+    "伝え方を変えた小さな案を比較する",
+  ],
+  [
+    "design",
+    /\b(?:ux|ui|design)\b|デザイン|プロダクト|自社サービス/iu,
+    "サービス・体験づくり",
+    "使う人の困りごとを小さな試作にする",
+  ],
+  [
+    "language",
+    /英語|英会話|海外|グローバル|\benglish\b/iu,
+    "英語・海外との接点",
+    "異なる言葉で仕事の説明を組み立てる",
+  ],
+  [
+    "management",
+    /マネジメント|育成|リーダー|管理職|組織づくり/iu,
+    "チーム・育成",
+    "仕事の分け方と伝え方を考える",
+  ],
+  [
+    "agriculture",
+    /農業|農園|農作物|就農/iu,
+    "農業・地域の食",
+    "地域の食に関わる小さな困りごとを調べる",
+  ],
+  [
+    "creative",
+    /ゲーム制作|ゲーム開発|イラスト|執筆|映像|創作/iu,
+    "創作・作品づくり",
+    "作りたい作品を小さな形にしてみる",
+  ],
+  [
+    "ai",
+    /\b(?:ai|llm|fde)\b|生成ＡＩ|生成AI|人工知能/iu,
+    "AIを使う仕事",
+    "AIに任せる作業と自分で確かめる部分を分ける",
+  ],
+];
+const excerpt = (text, limit = 72) => {
+  const value = String(text ?? "")
+    .replace(/\s+/gu, " ")
+    .trim();
+  return value.length > limit ? value.slice(0, limit - 1) + "…" : value;
+};
+export function profileStoryContext(g, { action = null, intention = "" } = {}) {
+  const p = g.profile,
+    turn = g.decisions.length,
+    threads = [];
+  const add = (id, source, label, detail, lines, actions, category = "life") =>
+    threads.push({ id, source, label, detail, lines, actions, category });
+  const clauses = p.careerNotes.split(/[。！？;；\n]/u).filter(Boolean);
+  const topics = NOTE_TOPICS.filter(([, pattern]) =>
+    clauses.some(
+      (clause) =>
+        pattern.test(clause) &&
+        !/(?:使いたくない|興味(?:が|は)?ない|希望しない|避けたい|やりたくない|不要)/u.test(
+          clause,
+        ),
+    ),
+  );
+  for (const [id, pattern, topic, practice] of topics) {
+    const evidence = clauses.find(
+      (clause) =>
+        pattern.test(clause) &&
+        !/(?:使いたくない|興味(?:が|は)?ない|希望しない|避けたい|やりたくない|不要)/u.test(
+          clause,
+        ),
+    );
+    add(
+      `note-${id}`,
+      "careerNotes",
+      `メモのテーマ：${topic}`,
+      excerpt(evidence, 110),
+      [
+        `メモに書いた「${topic}」を、次の一歩にどうつなげよう。${practice}ところからなら、始められるだろうか。`,
+        `「${topic}」というテーマを見返す。${practice}時間を取るか、今ある課題を先に片づけるか。`,
+        `気になっていた「${topic}」。${practice}案と、暮らしに余裕を残す案を比べてみたい。`,
+      ],
+      {
+        studyDaily: `${topic}を毎日1時間学ぶ`,
+        learn: `${topic}の小さな課題を学ぶ`,
+        pilot: `${topic}を仕事で小さく試す`,
+        focus: `${topic}に関わる課題を一つ進める`,
+        explore: `${topic}で小さな挑戦をする`,
+        connect: `${topic}に関わる人と話す`,
+        switch: `${topic}と接点のある働き先を比べる`,
+        mentor: `${topic}を人に伝える機会を作る`,
+      },
+      "work",
+    );
+    threads.at(-1).practice = practice;
+  }
+  if (p.careerNotes && !topics.length)
+    add(
+      "note-free",
+      "careerNotes",
+      "職歴・希望のメモ",
+      excerpt(p.careerNotes, 120),
+      [
+        `書き留めた「${excerpt(p.careerNotes, 58)}」というメモ。今の仕事や暮らしの中で、小さく確かめるなら何から始めよう。`,
+        `「${excerpt(p.careerNotes, 58)}」というメモを、もう一度開いた。すぐに結論を出すか、誰かと話してみるか。`,
+        `メモの「${excerpt(p.careerNotes, 58)}」を今の暮らしと照らす。学ぶ時間と、試す時間を分けて考えてみたい。`,
+      ],
+      {
+        explore: "メモの希望を、小さな挑戦で確かめる",
+        learn: "メモをもとに、次に学ぶ課題を探す",
+        connect: "職歴や希望のメモをもとに人と話す",
+      },
+      "work",
+    );
+  const facts = g.employer.facts;
+  if (
+    facts?.confirmed &&
+    facts.summary &&
+    !g.retired &&
+    g.employer.kind !== "seeking"
+  )
+    add(
+      "company",
+      "employer.facts",
+      "確認した勤務先の事業",
+      `${g.employer.name}：${excerpt(facts.summary, 110)}`,
+      [
+        `確認した${g.employer.name}の事業は「${excerpt(facts.summary, 90)}」。この背景と、自分の関心が重なる仕事を考えてみたい。`,
+        `${g.employer.name}の事業「${excerpt(facts.summary, 90)}」を見返す。同じ場所で役割を深める道と、経験を別の場所で使う道がある。`,
+        `勤務先について確認した「${excerpt(facts.summary, 90)}」という事業の背景。自分が関わるなら、何を大切にしたいだろう。`,
+      ],
+      {
+        focus: "勤務先の事業と自分の役割をつなぐ",
+        pilot: "事業の背景に合う小さな改善を試す",
+      },
+      "work",
+    );
+  if (g.family.childAges.length) {
+    const ages = g.family.childAges,
+      young = ages.some((age) => age < 6),
+      minor = ages.some((age) => age < 18);
+    add(
+      "children",
+      "family.childAges",
+      "現在の子どもと暮らし",
+      `${ages.length}人（${ages.join("・")}歳）`,
+      [
+        `子ども${ages.length}人は${ages.join("・")}歳。${young ? "日々の世話と、自分が学ぶ時間をどう分けよう。" : minor ? "学校生活や成長に向き合う時間と、仕事の予定をどう両立しよう。" : "それぞれの暮らしを尊重しながら、会う時間や自分の仕事を考えたい。"}`,
+        `子どもは${ages.join("・")}歳になった。${minor ? "以前と同じ予定の組み方でよいか、仕事と家族の時間を並べてみる。" : "子育ての頃と違う距離で、家族との関わり方を考える。"}`,
+        `子ども${ages.length}人との時間も、この一年にある。${young ? "短い学びの時間を毎日に入れるか、まず暮らしを整えるか。" : "自分の挑戦と家族の予定に、どのくらいの余裕を残そう。"}`,
+      ],
+      {
+        connect: minor
+          ? "子どもとの時間を予定に入れる"
+          : "成人した子どもと話す時間を作る",
+        careLeave: "子どもの今の年代に合わせ仕事を抑える",
+        rest: "家族の予定の間に休む時間を確保する",
+      },
+    );
+  } else if (p.household === "care")
+    add(
+      "care",
+      "profile.household",
+      "ケアのある暮らし",
+      "育児やケアとの両立を入力",
+      [
+        "ケアのある暮らしでは、自分だけで予定を決められない日もある。学びや仕事に使う時間を、無理なく確保できるだろうか。",
+        "仕事以外に担うことも、同じ予定表にある。誰かと分担を相談する時間も必要そうだ。",
+        "ケアと自分の挑戦を、どちらも続けられる形にしたい。今のペースを見つめ直してみる。",
+      ],
+      {
+        connect: "ケアとの両立や分担を相談する",
+        rest: "ケアと仕事の間に休む時間を作る",
+      },
+    );
+  else if (g.family.partner)
+    add(
+      "partner",
+      "family.partner",
+      "パートナーとの暮らし",
+      "現在のゲーム内の関係",
+      [
+        "パートナーとの暮らしにも、互いの予定がある。働き方を変える前に、どんな一年にしたいか話してみたい。",
+        "自分の挑戦に使う時間と、共に過ごす時間。今の分け方が合っているか、相談してみようか。",
+        "次の働き方を考えると、ふたりの暮らしの予定も浮かぶ。仕事以外の希望にも耳を傾けたい。",
+      ],
+      { connect: "パートナーと来年の時間の使い方を話す" },
+    );
+  if (
+    g.family.desired !== null &&
+    g.family.desired > g.family.childAges.length &&
+    g.age <= 65
+  )
+    add(
+      "family-wish",
+      "family.desired",
+      "これからの家族の希望",
+      `希望は合計${g.family.desired}人、現在${g.family.childAges.length}人`,
+      [
+        `家族は合計${g.family.desired}人の子どもを迎えたいという希望がある。叶う時期は決まらないが、今の働き方や支えを考えることはできる。`,
+        `子どもの希望は合計${g.family.desired}人。仕事だけでなく、暮らしの支えをどう整えるかも考えてみたい。`,
+        "これから迎えたい家族の希望を見返した。急いで決めず、暮らしの準備と自分の仕事を並べて考える。",
+      ],
+      {
+        familyPlan: "希望する家族を迎える準備を進める",
+        connect: "これからの家族と支援について相談する",
+      },
+    );
+  if (g.housing === "own")
+    add(
+      "housing",
+      "housing,mortgage",
+      "持ち家と住居費",
+      g.mortgage > 0
+        ? `住宅ローン残高 約${Math.round(g.mortgage)}万円`
+        : "住宅ローン残高なし",
+      [
+        `持ち家の${g.mortgage > 0 ? "ローン返済と維持費" : "維持や手入れ"}は、働き方を変えた後も続く。新しい挑戦に使う時間と、暮らしの余裕を両方残したい。`,
+        `帰る家を持つ安心と、${g.mortgage > 0 ? "返済を続ける負担" : "維持する責任"}。収入が揺れる選択の前に、手元資金を確かめておきたい。`,
+        `${g.mortgage > 0 ? "住宅ローンを返済し、" : ""}住まいを維持しながら、どんな仕事を続けたいだろう。大きく変える前に、小さく試す道もありそうだ。`,
+      ],
+      {
+        explore: "住居費を確かめながら小さく挑戦する",
+        rest: "住まいの手入れと休む時間を作る",
+      },
+    );
+  else
+    add(
+      "housing",
+      "housing,rent,region",
+      "賃貸等の住まいと地域",
+      `${REGIONS[g.region].label}・住居費 月${g.rent}万円`,
+      [
+        `住居費は月${g.rent}万円。${REGIONS[g.region].label}で暮らし続ける道と、別の地域で仕事と生活を組み直す道を考えてみる。`,
+        `今の住まいの費用を払いながら、新しいことに使える時間を考える。住む場所を変えたら、暮らしのペースも変わるだろうか。`,
+        `${REGIONS[g.region].label}の暮らしにも慣れた。働く場所と住む場所を、一緒に考え直すこともできそうだ。`,
+      ],
+      { move: "住居費と仕事から、暮らす地域を変える" },
+    );
+  const tight = g.cash < g.livingCost * 6;
+  add(
+    "finances",
+    "cash,investments,debt",
+    tight ? "手元資金の余裕" : "資産の持ち方",
+    `現金 約${Math.round(g.cash)}万円・株式等 約${Math.round(g.investments)}万円${g.debt > 0 ? `・借入 約${Math.round(g.debt)}万円` : ""}`,
+    [
+      tight
+        ? "手元現金は生活費の半年分を下回る。学びや挑戦をするにしても、まず日々を続けられる形を考えたい。"
+        : g.investments > 0
+          ? "資産の一部は株式等で持っている。価格が動くお金と、すぐに使える現金を分けて、仕事を変える余地を考える。"
+          : "大きく働き方を変える前に、手元の現金で暮らしをどれだけ支えられるか見ておきたい。",
+      g.debt > 0
+        ? "借入の返済も続いている。次の選択の費用だけでなく、毎日の支出も含めて考えたい。"
+        : "収入だけでなく、手元に残る余裕も選択を左右する。今すぐ広げるか、小さく始めるか。",
+      "挑戦に使うお金と、暮らしのために残すお金。次の一歩の前に、その配分を見直してみる。",
+    ],
+    tight
+      ? { recover: "手元資金と生活のペースを立て直す" }
+      : {
+          invest: "現金の余裕を見て、株式等へ一部を移す",
+          explore: "生活の余裕を残し、小さな挑戦をする",
+        },
+  );
+  if (g.retired || g.age >= p.retirementAge - 5)
+    add(
+      "retirement",
+      "profile.retirementAge,pension",
+      "仕事の区切りと、その後",
+      g.retired
+        ? `仕事を離れた現在・65歳以降の年間収入の設定${p.pension}万円`
+        : `入力した退職の目安${p.retirementAge}歳`,
+      [
+        g.retired
+          ? "仕事を離れた今、給与に代わる収入と資産を使う日々になった。新しい楽しみや人との関わりを、どこに作ろう。"
+          : `${p.retirementAge}歳を仕事の区切りの目安にしている。収入だけでなく、その先に続けたいことも少しずつ考えておきたい。`,
+        "仕事の時間が変わると、会う人や一日の過ごし方も変わる。次の暮らしで続けたいことを考える。",
+        "これまでの経験を誰かに伝える道と、自分のために新しいことを学ぶ道。時間の使い方を選び直せる。",
+      ],
+      {
+        connect: "仕事の外にも人とのつながりを作る",
+        learn: "これからの暮らしで楽しむことを学ぶ",
+        rest: "自分のペースで休む時間を確保する",
+      },
+    );
+  const work = threads.filter(
+    (t) =>
+      t.category === "work" && (!action || Object.hasOwn(t.actions, action)),
+  );
+  const life = threads.filter(
+    (t) =>
+      t.category === "life" && (!action || Object.hasOwn(t.actions, action)),
+  );
+  let primary = work[turn % Math.max(1, work.length)];
+  if (g.retired) primary = threads.find((t) => t.id === "retirement");
+  else if (tight) primary = threads.find((t) => t.id === "finances");
+  if (action && intention) {
+    const exact = threads.find((t) => t.actions[action] === intention);
+    const subject = NOTE_TOPICS.find(([, pattern]) => pattern.test(intention));
+    const topic =
+      subject &&
+      threads.find(
+        (t) =>
+          t.id === `note-${subject[0]}` && Object.hasOwn(t.actions, action),
+      );
+    // Multi-year progress keeps the subject of the player's actual policy.
+    primary = exact ?? topic ?? primary;
+  }
+  // Cycle the whole list: alternating even/odd subsets can permanently skip a
+  // housing or family thread when the list happens to have an even length.
+  const secondary = life[turn % Math.max(1, life.length)];
+  const focus = [...new Set([primary, secondary].filter(Boolean))];
+  if (!focus.length) focus.push(threads.find((t) => t.id === "housing"));
+  return {
+    method: "local-rules-v1",
+    noteInterpretation:
+      "キーワードで話題を拾う処理。自由文全体の意味・経験・能力は推定しない。",
+    threads,
+    focus,
+  };
+}
+function profileOptions(g, options, context) {
+  const allowed = availableChoices(g),
+    assigned = new Map(),
+    protectedIDs = new Set([
+      "pivot",
+      "expand",
+      "recover",
+      "closeBusiness",
+      "negotiate",
+      ...(g.employer.kind === "seeking" ? ["switch"] : []),
+      g.history.at(-1)?.episode?.sideAction,
+    ]);
+  for (const thread of context.focus) {
+    const present = options.find(
+      (o) =>
+        Object.hasOwn(thread.actions, o.id) &&
+        !assigned.has(o.id) &&
+        o.id !== g.history.at(-1)?.episode?.sideAction,
+    );
+    if (present) {
+      assigned.set(present.id, thread);
+      protectedIDs.add(present.id);
+      continue;
+    }
+    const id = Object.keys(thread.actions).find(
+      (key) => allowed.includes(key) && !options.some((o) => o.id === key),
+    );
+    const index = options.findLastIndex((o) => !protectedIDs.has(o.id));
+    if (id && index >= 0) {
+      options[index] = { id, label: CHOICES[id].label, hint: CHOICES[id].hint };
+      assigned.set(id, thread);
+      protectedIDs.add(id);
+    }
+  }
+  return options.map((option) => {
+    if (option.id === g.history.at(-1)?.episode?.sideAction) return option;
+    const thread =
+      assigned.get(option.id) ??
+      [...context.focus, ...context.threads].find((t) =>
+        Object.hasOwn(t.actions, option.id),
+      );
+    if (!thread) return option;
+    const label = thread.actions[option.id];
+    return {
+      ...option,
+      label,
+      reason: excerpt(`${thread.label}：${thread.detail}`, 96),
+      profileThread: thread.id,
+      ...(!["switch", "startup", "opportunity"].includes(option.id)
+        ? { decision: { id: option.id, intent: label } }
+        : {}),
+    };
+  });
+}
 export function eventFor(g) {
   const cached = g.scenes[sceneKey(g)];
   if (cached) return { ...cached, generated: true };
-  const options = suggestedChoices(g).map((id) => ({
+  let options = suggestedChoices(g).map((id) => ({
     id,
     label:
       id === "opportunity"
@@ -1332,6 +1735,15 @@ export function eventFor(g) {
       : `${company}で迎えた新しい年。${{ product: "利用者から届く声を、サービスの改善につなげたい。", services: "顧客の課題と、任される仕事の範囲を見つめ直す。", inhouse: "社内の現場と、仕事を支える仕組みを見渡す。" }[workplace] ?? `${JOBS[g.employer.role].label}の経験を、次にどう生かそう。`}`;
     body = `${continuation.title} ${REGIONS[g.region].label}の${g.housing === "own" ? "持ち家" : "賃貸等の住まい"}で迎えた${g.year}年。${setting} ${continuation.next}${g.family?.childAges.length ? `子ども${g.family.childAges.length}人との時間も、同じ一年の中にある。` : ""}`;
   }
+  const personalization = profileStoryContext(g);
+  if (worldEnabled(g)) {
+    body +=
+      " " +
+      personalization.focus
+        .map((t) => t.lines[g.decisions.length % t.lines.length])
+        .join(" ");
+    options = profileOptions(g, options, personalization);
+  }
   return {
     title,
     body: worldEnabled(g)
@@ -1339,6 +1751,23 @@ export function eventFor(g) {
       : body,
     insight: `仕事・資産・住まい・過去の選択を反映したローカルの物語。AI普及指標はゲーム上の仮定。`,
     options,
+    profileBasis: worldEnabled(g)
+      ? [
+          ...new Set([
+            ...personalization.focus,
+            ...options
+              .map((o) =>
+                personalization.threads.find((t) => t.id === o.profileThread),
+              )
+              .filter(Boolean),
+          ]),
+        ].map(({ id, source, label, detail }) => ({
+          id,
+          source,
+          label,
+          detail,
+        }))
+      : [],
     generated: false,
   };
 }
@@ -1499,9 +1928,30 @@ export function annualEpisode(before, record) {
     ];
   const showDetour =
     detour &&
+    !record.ended &&
     !record.familyOutcome &&
     !["failure", "closure"].includes(record.outcome?.kind);
   if (showDetour) body += ` ${detour.body}`;
+  const personalization = profileStoryContext(before, {
+    action: id,
+    intention: record.intention,
+  });
+  const thread = personalization.focus.find((t) =>
+    Object.hasOwn(t.actions, id),
+  );
+  if (
+    thread &&
+    !record.ended &&
+    !["failure", "closure"].includes(record.outcome?.kind)
+  ) {
+    // A reflection/question adds no unrecorded hire, relative, success or pay.
+    body +=
+      thread.practice &&
+      ["learn", "studyDaily", "pilot", "focus", "explore"].includes(id)
+        ? ` メモのテーマ「${thread.label.replace("メモのテーマ：", "")}」を手掛かりに、${thread.practice}ことを${["learn", "studyDaily"].includes(id) ? "今年の学びの課題にした" : "今年の取り組みとして選んだ"}。${ok ? "評価されたことを、次にどこで生かそう。" : "取り組んだことと、望む成果が出ることには距離があった。"}`
+        : ` ${thread.lines[(before.decisions.length + 1) % thread.lines.length]}`;
+    next += ` ${thread.actions[id]}という方針を、次も続けるか考えられる。`;
+  }
   if (record.intention) body += `選んだ方針は「${record.intention}」。`;
   return {
     title,
