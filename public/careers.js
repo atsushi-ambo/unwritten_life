@@ -554,7 +554,7 @@ function lookupDistance(a, b) {
     }
   return rows[a.length][b.length];
 }
-export function makeDirectorySearch({ transport } = {}) {
+export function makeDirectorySearch({ transport, localOnly = false } = {}) {
   async function wikidata(params) {
     const url = new URL("https://www.wikidata.org/w/api.php");
     url.search = new URLSearchParams({
@@ -622,6 +622,7 @@ export function makeDirectorySearch({ transport } = {}) {
     }
     if (local.length)
       return local.sort((a, b) => a.score - b.score).slice(0, 5);
+    if (localOnly) return [];
     const params = {
       action: "wbsearchentities",
       search: name.trim(),

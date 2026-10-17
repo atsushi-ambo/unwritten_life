@@ -1663,8 +1663,14 @@ function setupNameSearch(career = false) {
       }
     }
     try {
-      const candidates =
-        standalone || hosted
+      // Also use the browser's current built-in catalog on PC. An already
+      // running local server may hold an older imported search catalog.
+      const local = await makeDirectorySearch({ localOnly: true })(
+        requestedName,
+      );
+      const candidates = local.length
+        ? local
+        : standalone || hosted
           ? await makeDirectorySearch({ transport: browserDirectoryText })(
               requestedName,
             )

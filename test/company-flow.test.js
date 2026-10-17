@@ -153,6 +153,20 @@ test("official body acquisition only follows explicit acceptance and still requi
   assert.match($("research-status").textContent, /チェック/);
 });
 
+test("PC uses current built-in candidates without depending on an older running server catalog", async () => {
+  const { $ } = await harness({
+    api: async () => {
+      throw Error("old server must not be called");
+    },
+  });
+  $("company-name").value = "キンドリルジャパン株式会社";
+  await $("company-search").listeners.click();
+  assert.match($("research-status").textContent, /この会社で合っていますか/);
+  await $("company-candidates").querySelectorAll("button")[0].listeners.click();
+  assert.equal($("company-confirmed").checked, true);
+  assert.match($("company-summary").value, /ITインフラ/);
+});
+
 test("changing a company invalidates old candidates and delayed page responses", async () => {
   let release,
     pageCalls = 0;
