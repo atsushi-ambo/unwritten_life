@@ -55,6 +55,23 @@ export const JOBS = Object.freeze({
   },
   other: { label: "学生・休職中・その他", exposure: 0.3, complement: 0.5 },
 });
+// Prose stays separate from category labels used by forms and AI context.
+const JOB_PROSE = Object.freeze({
+  tech: "ITの仕事",
+  marketing: "マーケティングの仕事",
+  office: "事務や管理の仕事",
+  creative: "制作の仕事",
+  people: "人と向き合う仕事",
+  care: "ケアの仕事",
+  physical: "現場の仕事",
+  independent: "自分の仕事",
+  other: "今の仕事",
+});
+const workplaceName = (employer) =>
+  employer.name === "いまの職場" ? "職場" : employer.name;
+const narrativeSentences = (text) =>
+  text.match(/[^。！？!?]+[。！？!?]*/gu)?.map((s) => s.trim()).filter(Boolean) ?? [];
+
 export const REGIONS = Object.freeze({
   metro: { label: "首都圏・大都市", cost: 22 },
   city: { label: "地方都市", cost: 17 },
@@ -601,6 +618,12 @@ export function profileInputForLevel(
     delete p.mortgageRate;
   }
   return p;
+}
+const REGION_PROSE = { metro: "都市部", city: "地方都市", rural: "郊外の町" };
+// Narrative wording; residenceName keeps the selectable region label for UI.
+function residenceProse(g) {
+  const name = residenceName(g);
+  return name === REGIONS[g.region].label ? REGION_PROSE[g.region] : name;
 }
 export function residenceName(g) {
   const moved = g.decisions.some((d) => decisionId(d) === "move");
@@ -1244,7 +1267,14 @@ function yearlyOutcome(g, choice, employer) {
     title:
       choice === "rest" || choice === "recover"
         ? "暮らしのペースを、整える一年に。"
-        : "大切にしたい時間を、選んだ一年。",
+        : ({
+            invest: "お金の置き場所を、見直した。",
+            home: "住まいを買い、暮らしの土台を整えた。",
+            move: "暮らす場所を、変える一年に。",
+            connect: "人との時間を、大切にした一年。",
+            retire: "仕事に区切りをつけ、次の暮らしへ。",
+            careLeave: "家族のために、働く時間を調整した。",
+          }[choice] ?? "選んだ行動を、暮らしの中で試した。"),
     body: "選んだ行動が家計やゆとり、人との関係に反映された。この変化を受けて次の一年を考える。",
     salaryFactor: 1,
     extraCost: 0,
@@ -1740,9 +1770,9 @@ export function profileStoryContext(g, { action = null, intention = "" } = {}) {
       "賃貸等の住まいと地域",
       `${residenceName(g)}・住居費 月${g.rent}万円`,
       [
-        `住居費は月${g.rent}万円。${residenceName(g)}で暮らし続ける道と、別の地域で仕事と生活を組み直す道を考えてみる。`,
+        `住居費は月${g.rent}万円。${residenceProse(g)}で暮らし続ける道と、別の地域で仕事と生活を組み直す道を考えてみる。`,
         `今の住まいの費用を払いながら、新しいことに使える時間を考える。住む場所を変えたら、暮らしのペースも変わるだろうか。`,
-        `${residenceName(g)}の暮らしにも慣れた。働く場所と住む場所を、一緒に考え直すこともできそうだ。`,
+        `${residenceProse(g)}の暮らしにも慣れた。働く場所と住む場所を、一緒に考え直すこともできそうだ。`,
       ],
       { move: "住居費と仕事から、暮らす地域を変える" },
     );
@@ -1907,7 +1937,7 @@ export function eventFor(g) {
     else options[options.length - 1] = option;
   }
   const last = decisionId(g.decisions.at(-1)),
-    company = g.employer.name;
+    company = workplaceName(g.employer);
   const business =
     g.employer.id === "custom"
       ? g.employer.facts?.sector && g.employer.facts.sector !== "unknown"
@@ -1920,7 +1950,7 @@ export function eventFor(g) {
       g.age >= 80
         ? "自分のペースで、暮らしをつなぐ。"
         : "仕事の先にある、毎日。";
-    body = `${g.age}歳。${residenceName(g)}で、${g.housing === "own" ? "持ち家を手入れしながら" : "住まいの費用を払いながら"}暮らしている。給与に代わる収入と、これまでの資産をどう使うか。人との時間や新しい楽しみにも、目を向けたい。`;
+    body = `${g.age}歳。${residenceProse(g)}で、${g.housing === "own" ? "持ち家を手入れしながら" : "住まいの費用を払いながら"}暮らしている。給与に代わる収入と、これまでの資産をどう使うか。人との時間や新しい楽しみにも、目を向けたい。`;
   } else if (g.employer.kind === "seeking") {
     title = "経験を持って、次の一歩を探す。";
     body = `事業を終え、暮らしと仕事を組み直している。手元現金は約${Math.round(g.cash)}万円。これまでの経験を別の企業で生かすか、まず生活のペースを整えるか。収入と支出の変化を確かめながら、次の選択を考える。`;
@@ -1929,16 +1959,20 @@ export function eventFor(g) {
     body = `${company}では、${g.employer.summary}という架空の事業で、${g.year - g.employer.started}年目に入った。顧客を探し、運営費を払いながら、自分の仕事をつくる。${technologyAt(g) > 0.5 ? "AIが広く使われる世界では、効率化だけでなく選ばれる理由も必要になっている。" : "AIを試しながら、任せる部分と自分で担う部分を見極めたい。"}手元の現金は約${Math.round(g.cash)}万円。収入の変動と暮らしを両立するには、どこへ時間を使おう。`;
   } else if (last === "switch") {
     title = "新しい環境の、一年目。";
-    body = `${company}へ移る架空の転職を経験し、${JOBS[g.employer.role].label}の役割で慣れないことにも向き合う日々。${business ? `事業の背景：${business} ` : ""}これまでの経験を、新しい役割にどう生かすか。${g.skill > 50 ? "学んだAIの使い方を試せる機会も見えてきた。" : "新しい道具と仕事の進め方に、学ぶ余地がありそうだ。"}`;
+    body = `${company}へ移る架空の転職を経験し、${JOB_PROSE[g.employer.role]}に取り組みながら、慣れないことにも向き合う日々。${business ? `事業の背景：${business} ` : ""}これまでの経験を、新しい役割にどう生かすか。${g.skill > 50 ? "学んだAIの使い方を試せる機会も見えてきた。" : "新しい道具と仕事の進め方に、学ぶ余地がありそうだ。"}`;
   } else if (g.cash < g.livingCost * 6) {
     title = "暮らしの収支を、見つめなおす。";
-    body = `手元の現金が、生活費の半年分を下回っている。${g.investments > 0 ? "株式を持っていても、必要な時に同じ価格で売れるとは限らない。" : ""}${g.housing === "own" ? "住まいの維持とローンにも費用がかかる。" : "家賃も毎月の支出のひとつ。"}仕事や暮らしの組み合わせを考える一年になりそうだ。`;
+    body = [
+      `手元の現金が、生活費の半年分を下回っている。${g.investments > 0 ? "株式を持っていても、必要な時に同じ価格で売れるとは限らない。" : ""}${g.housing === "own" ? "住まいの維持とローンにも費用がかかる。" : "家賃も毎月の支出のひとつ。"}仕事や暮らしの組み合わせを考える一年になりそうだ。`,
+      `日々の支払いに備える現金を、もう少し残しておきたい。${g.housing === "own" ? "家を保つ費用も含め、" : "毎月の住居費も含め、"}支出と働き方を一緒に見直そう。`,
+      `今の生活費に対して、現金の備えは心もとない。${g.year}年は、無理なく続けられる暮らし方から考えたい。`,
+    ][g.decisions.length % 3];
   } else {
     title =
       technologyAt(g) > 0.5
         ? "仕事のかたちを、作りなおす。"
         : `${company}で、次の役割を考える。`;
-    body = `${g.age}歳、${company}で${JOBS[g.employer.role].label}を担うあなた。${SCENARIOS[g.scenario].label}の世界では、AIを使う仕事の比重が${technologyAt(g) > 0.5 ? "大きく変わってきた" : "少しずつ増えている"}。${g.profile.household === "care" ? "育児やケアとの両立も、時間の使い方を左右する。" : ""}${["learn", "studyDaily"].includes(last) ? "去年の学びを、実際の仕事で試す場面が見えてきた。" : last === "connect" ? "大切な人と過ごした時間が、選びたい働き方を考えるきっかけになった。" : "収入だけでなく、暮らしに残る時間も大切にしたい。"}`;
+    body = `${g.age}歳、${company}で${JOB_PROSE[g.employer.role]}を続けるあなた。${SCENARIOS[g.scenario].label}の世界では、AIを使う仕事の比重が${technologyAt(g) > 0.5 ? "大きく変わってきた" : "少しずつ増えている"}。${g.profile.household === "care" ? "育児やケアとの両立も、時間の使い方を左右する。" : ""}${["learn", "studyDaily"].includes(last) ? "去年の学びを、実際の仕事で試す場面が見えてきた。" : last === "connect" ? "大切な人と過ごした時間が、選びたい働き方を考えるきっかけになった。" : "収入だけでなく、暮らしに残る時間も大切にしたい。"}`;
   }
   const continuation =
     worldEnabled(g) &&
@@ -1964,19 +1998,55 @@ export function eventFor(g) {
       balance:
         "予定表には仕事が並んでいる。その隙間に、自分や大切な人との時間をどれくらい残したいだろう。",
     }[g.profile.careerGoal];
-    body = `${g.age}歳、${residenceName(g)}で暮らすあなた。${g.employer.role === "other" ? "次の仕事と暮らしを考える日々。" : `${company}で${JOBS[g.employer.role].label}を担っている。`}${hook} 今年は、何を大切にしてみよう。`;
+    body = `${g.age}歳、${residenceProse(g)}で暮らすあなた。${g.employer.role === "other" ? "次の仕事と暮らしを考える日々。" : `${company}で${JOB_PROSE[g.employer.role]}に取り組んでいる。`}${hook} 今年は、何を大切にしてみよう。`;
   }
   if (continuation) {
     title = continuation.nextTitle;
-    const workplace = workContext(g).model;
-    const setting = g.retired
-      ? "仕事の区切りを越えた今、これまでの経験と暮らしの時間をどう使うか。"
-      : `${company}で迎えた新しい年。${{ product: "利用者から届く声を、サービスの改善につなげたい。", services: "顧客の課題と、任される仕事の範囲を見つめ直す。", inhouse: "社内の現場と、仕事を支える仕組みを見渡す。" }[workplace] ?? `${JOBS[g.employer.role].label}の経験を、次にどう生かそう。`}`;
-    body = `${continuation.title} ${residenceName(g)}の${g.housing === "own" ? "持ち家" : "賃貸等の住まい"}で迎えた${g.year}年。${setting} ${continuation.next}${g.family?.childAges.length ? `子ども${g.family.childAges.length}人との時間も、同じ一年の中にある。` : ""}`;
+    const turn = g.decisions.length,
+      rotation = (turn + g.seed % 3) % 3,
+      workplace = workContext(g).model;
+    const subjects = {
+      product: ["利用者の声", "サービスの改善", "使う人に届く価値"],
+      services: ["顧客の課題", "案件の進め方", "任される仕事の範囲"],
+      inhouse: ["社内の業務", "仕事を支える仕組み", "現場との連携"],
+    }[workplace];
+    const subject = subjects?.[rotation] ?? JOB_PROSE[g.employer.role];
+    const experience = ["learn", "studyDaily"].includes(last) ? "経験と学び" : "経験";
+    const setting = [
+      `${company}で、${subject}に目を向ける。これまでの${experience}から、何を試せるだろう。`,
+      `${subject}をめぐって、${["learn", "studyDaily"].includes(last) ? "学びをどう使うか" : "次に深めたいことを"}考えている。${company}での時間を、どう使おう。`,
+      `${company}で積んだ${experience}を、${subject}につなげたい。続けてきたことにも、見直す余地がありそうだ。`,
+    ][rotation];
+    const changedHome = ["move", "home"].includes(last);
+    const home = turn === 1 || changedHome || rotation === 0
+      ? last === "move"
+        ? `${residenceProse(g)}へ移り、日々の暮らしを整えている。`
+        : last === "home"
+          ? `${residenceProse(g)}に買った家で、これからの生活を考える。`
+          : `${g.year}年、${residenceProse(g)}の${g.housing === "own" ? "自宅" : "借りている住まい"}で暮らしている。`
+      : "";
+    // Repeated actions may yield the same episode. Carry only sentences that
+    // were not already offered at the start of the preceding continuation year.
+    const previous = g.history.at(-2)?.episode;
+    const used = new Set(narrativeSentences(
+      previous ? `${previous.title} ${previous.next}` : "",
+    ));
+    const carry = (text) => narrativeSentences(text)
+      .filter((sentence) => !used.has(sentence)).join("");
+    const stage = (age) => age < 6 ? "young" : age < 18 ? "school" : "adult";
+    const ages = g.family.childAges;
+    const oldAges = g.history.at(-2)?.family.childAges ??
+      Array(g.profile.children).fill({ young: 3, school: 10, adult: 22 }[g.profile.childStage]);
+    const family = ages.length > oldAges.length
+      ? "家族が増え、仕事と暮らしの時間配分も変わり始めた。"
+      : ages.some((age, i) => stage(age) !== stage(oldAges[i] ?? age))
+        ? `子どもは${ages.join("・")}歳。成長の節目に、家族の予定も見直したい。`
+        : "";
+    body = [carry(continuation.title), `${home}${setting}`, carry(continuation.next), family].filter(Boolean).join(" ");
   }
   const currentMunicipality =
     residenceName(g) === g.profile.municipality ? g.profile.municipality : "";
-  if (currentMunicipality && !body.includes(currentMunicipality))
+  if (currentMunicipality && !body.includes(currentMunicipality) && !continuation)
     body = `${currentMunicipality}で暮らす。${body}`;
   const personalization = profileStoryContext(g);
   if (worldEnabled(g)) {
@@ -2035,7 +2105,7 @@ export function annualEpisode(before, record) {
       product: "利用者の声とサービスの改善",
       services: "顧客の現場と案件の進め方",
       inhouse: "社内の業務と仕組み",
-    }[model] ?? JOBS[record.employer.role].label;
+    }[model] ?? JOB_PROSE[record.employer.role];
   const variation = Math.floor(
     randomAt(before.seed, before.decisions.length, 91) * 3,
   );
@@ -2068,7 +2138,7 @@ export function annualEpisode(before, record) {
           : studiedYears === 2
             ? "続けてみて、次に学びたい課題も見えてきた。"
             : "積み重ねた時間を、どこで使うか考えるようになった。";
-    body = `${progress}${learning}${id === "studyDaily" ? "1日1時間、年間365時間。" : "学びに使った時間が積み重なる。"}${ok ? `${setting}で、取り組みが評価につながった。` : `${setting}へ生かしたいが、今年は目に見える評価につながらなかった。学んだ力は残る。`}`;
+    body = `${progress}${learning}${id === "studyDaily" ? "1日1時間、年間365時間。" : "学びに使った時間が積み重なる。"}${ok ? `${setting}で、取り組みが評価につながった。` : `${setting}に生かしたいが、今年は目に見える評価につながらなかった。学んだ力は残る。`}`;
     nextTitle = ok
       ? "この手応えを、次はどこで試す？"
       : "続ける？ やり方を変えてみる？";
@@ -2076,7 +2146,7 @@ export function annualEpisode(before, record) {
       ? "小さく仕事で試す、成果をもとに相談する、学びを続ける。手応えの先にも選び方がある。"
       : "もう一年続けるか、小さな実践へ移るか。それとも、いったん息をつくか。";
   } else if (id === "focus" || id === "pilot" || id === "negotiate") {
-    body = `${record.employer.name}で、${setting}に向き合った。${record.outcome?.body ?? record.note}`;
+    body = `${workplaceName(record.employer)}で、${setting}に向き合った。${record.outcome?.body ?? record.note}`;
     nextTitle = ok
       ? "任されることが増えた、その先。"
       : "この場所で、もう一度試す？";
@@ -2101,7 +2171,7 @@ export function annualEpisode(before, record) {
     nextTitle = "会話から浮かんだ、次の選択。";
   } else if (id === "switch") {
     title = "いつもの朝が、新しい職場の朝に変わった。";
-    body = `${record.employer.name}へ、${JOBS[record.employer.role].label}の役割で移った。仕事の進め方と人との距離を、一つずつ覚えていく。これは架空の転職の結果。`;
+    body = `${workplaceName(record.employer)}へ移り、${JOB_PROSE[record.employer.role]}に取り組んだ。仕事の進め方と人との距離を、一つずつ覚えていく。これは架空の転職の結果。`;
     nextTitle = "新しい職場で、何から始める？";
   } else if (
     id === "startup" ||
@@ -2123,7 +2193,7 @@ export function annualEpisode(before, record) {
         : id === "home"
           ? "帰る場所に、新しい責任が増えた。"
           : "お金の置き場所を、見直した。";
-    body = `${record.note}働くための時間、手元の余裕、これから守りたい暮らしを、改めて考える。`;
+    body = `${record.note.replace(`${record.outcome?.title} `, "")}働くための時間、手元の余裕、これから守りたい暮らしを、改めて考える。`;
     nextTitle = "この暮らしに合う、働き方は？";
   }
   if (record.familyOutcome && record.familyOutcome !== record.outcome)
@@ -2472,7 +2542,7 @@ export function advance(g, rawDecision) {
     explore: "小さな挑戦を通じて、経験と新しいつながりが増えた。",
     switch:
       typeof decision === "object"
-        ? `${employer.name}へ、${JOBS[employer.role].label}として移る架空の転職。移行費用30万円と役割の変化を反映した。`
+        ? `${workplaceName(employer)}へ移り、${JOB_PROSE[employer.role]}に取り組む架空の転職。移行費用30万円と役割の変化を反映した。`
         : "働く環境を変更。移行費用を払い、収入と自由が変化した。",
     startup: `${employer.name}を開業（架空）。${venture?.label ?? ""}。初期費用${businessSetup}万円、年間運営費${businessOverhead}万円を支払い、収入が変化した。`,
     invest: "現金の一部を株式へ配分。以後の価格変動の影響も変わる。",
