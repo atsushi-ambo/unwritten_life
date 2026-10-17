@@ -30,6 +30,11 @@ export const SCENARIOS = Object.freeze({
 });
 export const JOBS = Object.freeze({
   tech: { label: "IT・技術・研究", exposure: 0.85, complement: 0.88 },
+  marketing: {
+    label: "マーケティング・広報",
+    exposure: 0.82,
+    complement: 0.78,
+  },
   office: { label: "事務・管理・金融", exposure: 0.9, complement: 0.57 },
   creative: { label: "企画・デザイン・制作", exposure: 0.82, complement: 0.78 },
   people: { label: "営業・接客・教育", exposure: 0.55, complement: 0.7 },

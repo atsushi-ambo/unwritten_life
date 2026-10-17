@@ -4,6 +4,7 @@ export const EMPLOYERS = Object.freeze({
   microsoft: {
     name: "Microsoft",
     kind: "real",
+    industry: "software",
     sector: "tech",
     companyType: "large",
     summary:
@@ -14,6 +15,7 @@ export const EMPLOYERS = Object.freeze({
   toyota: {
     name: "トヨタ自動車",
     kind: "real",
+    industry: "manufacturing",
     sector: "physical",
     companyType: "large",
     summary: "自動車の生産・販売を主な事業とする。",
@@ -23,6 +25,7 @@ export const EMPLOYERS = Object.freeze({
   nintendo: {
     name: "任天堂",
     kind: "real",
+    industry: "entertainment",
     sector: "creative",
     companyType: "large",
     summary: "家庭用レジャー機器の製造・販売を事業とする。",
@@ -32,6 +35,7 @@ export const EMPLOYERS = Object.freeze({
   layerx: {
     name: "LayerX",
     kind: "real",
+    industry: "software",
     sector: "tech",
     companyType: "small",
     summary:
@@ -39,9 +43,43 @@ export const EMPLOYERS = Object.freeze({
     url: "https://jobs.layerx.co.jp/business/bakuraku/",
     checkedAt: "2026-10-17",
   },
+  nttdata: {
+    name: "NTTデータ",
+    aliases: ["株式会社NTTデータ", "NTT DATA"],
+    kind: "real",
+    industry: "it-services",
+    sector: "tech",
+    companyType: "large",
+    summary: "国内で公共・社会基盤、金融、法人向けなどのITサービスを展開する。",
+    url: "https://www.nttdata.com/jp/ja/about-us/profile/",
+    checkedAt: "2026-10-17",
+  },
+  mizuho: {
+    name: "みずほ銀行",
+    aliases: ["株式会社みずほ銀行", "Mizuho Bank"],
+    kind: "real",
+    industry: "finance",
+    sector: "office",
+    companyType: "large",
+    summary: "預金、貸出、為替などの銀行業務を提供する。",
+    url: "https://www.mizuhobank.co.jp/company/info/profile/index.html",
+    checkedAt: "2026-10-17",
+  },
+  chugai: {
+    name: "中外製薬",
+    aliases: ["中外製薬株式会社", "Chugai", "Chugai Pharmaceutical"],
+    kind: "real",
+    industry: "health",
+    sector: "care",
+    companyType: "large",
+    summary: "医療用医薬品の研究・開発などを行う製薬企業。",
+    url: "https://www.chugai-pharm.co.jp/profile/index.html",
+    checkedAt: "2026-10-17",
+  },
   machi: {
     name: "まちケア・ロボティクス",
     kind: "fictional",
+    industry: "care",
     sector: "care",
     companyType: "small",
     availableFrom: 2036,
@@ -51,6 +89,7 @@ export const EMPLOYERS = Object.freeze({
   orbit: {
     name: "オービット循環工房",
     kind: "fictional",
+    industry: "circular",
     sector: "physical",
     companyType: "small",
     availableFrom: 2036,
@@ -60,6 +99,7 @@ export const EMPLOYERS = Object.freeze({
   memory: {
     name: "灯りメモリー・スタジオ",
     kind: "fictional",
+    industry: "entertainment",
     sector: "creative",
     companyType: "small",
     availableFrom: 2041,
@@ -102,7 +142,203 @@ export function careerCandidates(game) {
   return Object.entries(EMPLOYERS)
     .filter(
       ([id, c]) =>
-        game.year >= (c.availableFrom ?? 2026) && game.employer?.id !== id,
+        game.year >= (c.availableFrom ?? 2026) &&
+        game.employer?.id !== id &&
+        ![c.name, ...(c.aliases ?? [])].some(
+          (name) =>
+            companyName(name) === companyName(game.employer?.name ?? ""),
+        ),
     )
     .map(([id, c]) => ({ id, ...c }));
+}
+
+function companyName(name) {
+  return name
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/株式会社|[\s・.,（）()]/g, "");
+}
+export const INDUSTRIES = Object.freeze({
+  software: "ソフトウェア・クラウド",
+  "it-services": "ITサービス",
+  manufacturing: "製造・モビリティ",
+  entertainment: "エンターテインメント",
+  finance: "金融",
+  health: "医薬・研究",
+  care: "生活支援・ケア",
+  circular: "地域・資源循環",
+});
+const ROUTES = Object.freeze({
+  tech: {
+    core: ["it-services", "software"],
+    bridge: ["finance", "manufacturing"],
+    surprise: ["health", "entertainment", "care", "circular"],
+    skill: "技術・開発の経験",
+    work: "システムやデータ基盤を支える",
+  },
+  marketing: {
+    core: ["entertainment", "software"],
+    bridge: ["manufacturing", "finance"],
+    surprise: ["health", "care", "circular", "it-services"],
+    skill: "顧客理解や発信の経験",
+    work: "顧客との接点や価値の伝え方を考える",
+  },
+  office: {
+    core: ["finance", "it-services"],
+    bridge: ["software", "manufacturing"],
+    surprise: ["entertainment", "health", "care", "circular"],
+    skill: "業務整理や管理の経験",
+    work: "業務の仕組みと運営を整える",
+  },
+  creative: {
+    core: ["entertainment", "software"],
+    bridge: ["manufacturing", "it-services"],
+    surprise: ["health", "finance", "care", "circular"],
+    skill: "企画や制作の経験",
+    work: "利用者に伝わる企画や体験をつくる",
+  },
+  people: {
+    core: ["it-services", "software"],
+    bridge: ["finance", "manufacturing"],
+    surprise: ["entertainment", "health", "care", "circular"],
+    skill: "対話や提案の経験",
+    work: "利用者や取引先の課題を整理する",
+  },
+  care: {
+    core: ["health", "care"],
+    bridge: ["it-services", "finance"],
+    surprise: ["software", "manufacturing", "entertainment", "circular"],
+    skill: "人を支える現場の経験",
+    work: "現場の声を運営やサービス改善へつなぐ",
+  },
+  physical: {
+    core: ["manufacturing", "circular"],
+    bridge: ["it-services", "software"],
+    surprise: ["health", "entertainment", "finance", "care"],
+    skill: "現場や工程改善の経験",
+    work: "現場と仕組みをつなぎ、工程を改善する",
+  },
+});
+// Role connections and rankings are game-writing rules, not evidence of jobs,
+// suitability, hiring odds, pay or a company's actual internal assignments.
+export function careerOffers(game) {
+  if (game.retired || game.ended) return [];
+  const role = Object.hasOwn(ROUTES, game.employer.role)
+    ? game.employer.role
+    : Object.hasOwn(ROUTES, game.profile.job)
+      ? game.profile.job
+      : "people";
+  const route = ROUTES[role];
+  const current =
+    EMPLOYERS[game.employer.id] ?? careerIdentity(game.employer.name);
+  const usedIndustries = new Set(current ? [current.industry] : []);
+  const candidates = careerCandidates(game);
+  const recent = game.history.slice(-3).map((h) => h.employer?.id);
+  const offset = ((game.seed >>> 0) + game.year - 2026) >>> 0;
+  const used = new Set();
+  function pick(industries, rotate = true) {
+    const preferred = industries.filter(
+      (i) =>
+        !usedIndustries.has(i) &&
+        candidates.some((c) => c.industry === i && !used.has(c.id)),
+    );
+    const sequence =
+      rotate && preferred.length
+        ? [
+            ...preferred.slice(offset % preferred.length),
+            ...preferred.slice(0, offset % preferred.length),
+          ]
+        : preferred;
+    for (const industry of sequence) {
+      const pool = candidates.filter(
+        (c) => c.industry === industry && !used.has(c.id),
+      );
+      const fresh = pool.filter((c) => !recent.includes(c.id));
+      const choices = fresh.length ? fresh : pool;
+      const c = choices[offset % choices.length];
+      if (c) {
+        used.add(c.id);
+        usedIndustries.add(c.industry);
+        return c;
+      }
+    }
+    return null;
+  }
+  const allIndustries = Object.keys(INDUSTRIES);
+  const near = pick(route.core) ?? pick(allIndustries);
+  const bridge = pick(route.bridge) ?? pick(allIndustries);
+  const surprise = pick(route.surprise) ?? pick(allIndustries);
+  function offer(c, id, label, reason, tradeoff) {
+    if (!c) return null;
+    return {
+      id,
+      label,
+      company: c.name,
+      kind: c.kind,
+      industry: INDUSTRIES[c.industry],
+      role,
+      work: `${INDUSTRIES[c.industry]}で、${route.work}役割（架空）`,
+      reason,
+      tradeoff,
+      source: c.url ? { url: c.url, checkedAt: c.checkedAt } : null,
+      decision: { id: "switch", target: c.id, role },
+    };
+  }
+  const staying =
+    game.employer.kind === "seeking"
+      ? {
+          id: "stay",
+          label: "いまは暮らしを立て直す",
+          company: "次の仕事を考える時間",
+          role,
+          work: "就職を急がず、心身と生活のペースを整える",
+          reason: "次の判断に使う余裕をつくる。",
+          tradeoff: "この選択だけでは新しい給与収入は生まれない。",
+          decision: "rest",
+        }
+      : {
+          id: "stay",
+          label:
+            game.employer.kind === "venture"
+              ? "今の事業を続ける"
+              : "今の会社に残る",
+          company: game.employer.name,
+          role,
+          work: "今の仕事に力を注ぎ、実績を積む",
+          reason: "これまでの経験や関係を生かし、今の場所で次の役割を探る。",
+          tradeoff:
+            "転職費用はかからないが、今の勤務先や世界の逆風の影響は受ける。",
+          decision: "focus",
+        };
+  return [
+    offer(
+      near,
+      "familiar",
+      "経験を深める",
+      `${route.skill}を生かしやすい仕事を、${near ? INDUSTRIES[near.industry] : "別の会社"}で考える。`,
+      "組織や担当範囲は変わる。慣れた経験だけで成果が出るとは限らない。",
+    ),
+    offer(
+      bridge,
+      "bridge",
+      "別の業界で生かす",
+      `${route.skill}を、違う事業の課題へつなげる。`,
+      "業界の知識や仕事の進め方を学び直す必要がある。",
+    ),
+    staying,
+    offer(
+      surprise,
+      "surprise",
+      "意外な接点を探す",
+      `${route.skill}から、${surprise ? INDUSTRIES[surprise.industry] : "新しい分野"}を支える接点を考える。`,
+      "未経験の領域も多い。準備に時間がかかり、期待どおりにならないこともある。",
+    ),
+  ].filter(Boolean);
+}
+function careerIdentity(name) {
+  return Object.values(EMPLOYERS).find((c) =>
+    [c.name, ...(c.aliases ?? [])].some(
+      (n) => companyName(n) === companyName(name),
+    ),
+  );
 }

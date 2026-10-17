@@ -18,7 +18,12 @@ import {
   decodeSave,
   applyScene,
 } from "./engine.js";
-import { EMPLOYERS, VENTURES, careerCandidates } from "./careers.js";
+import {
+  EMPLOYERS,
+  VENTURES,
+  careerCandidates,
+  careerOffers,
+} from "./careers.js";
 import {
   worldAt,
   worldEnabled,
@@ -31,6 +36,7 @@ const $ = (id) => document.getElementById(id),
   saveKey = "unwritten-life:v2",
   nf = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 0 });
 const money = (n) => nf.format(Math.round(n / 10) * 10);
+const standalone = document.documentElement.dataset.edition === "mobile";
 let game = null,
   remember = false,
   savedGame = null,
@@ -48,6 +54,21 @@ let game = null,
   modelListRevision = 0;
 let generationStarted = 0,
   generationTimer;
+let serverCareerOffers = false;
+function needsCareerServerUpdate() {
+  return (
+    !standalone &&
+    !serverCareerOffers &&
+    game &&
+    (game.profile.job === "marketing" ||
+      game.decisions.some(
+        (d) =>
+          typeof d === "object" &&
+          (d.role === "marketing" ||
+            ["nttdata", "mizuho", "chugai"].includes(d.target)),
+      ))
+  );
+}
 const generationTimes = new Map();
 const connectionKey = (state) =>
   JSON.stringify([state?.provider, state?.baseURL, state?.model]);
@@ -65,18 +86,39 @@ function toast(text) {
   }, 5500);
 }
 async function status() {
+  if (standalone) {
+    aiState = {
+      provider: "disabled",
+      model: "AI未接続",
+      cloud: false,
+      calls: 0,
+      reservedUSD: 0,
+      usdCap: 0,
+      requestCap: 0,
+      baseURL: "",
+      inputRate: 0,
+      outputRate: 0,
+    };
+    renderAI();
+    return { ai: aiState };
+  }
   const res = await fetch("/api/status");
   if (!res.ok)
     throw new Error(
       "ローカルサーバーに接続できません。アプリを起動して再読み込みしてください。",
     );
   const data = await res.json();
+  serverCareerOffers = data.engineRevision === "career-offers-v1";
   apiToken = data.token;
   aiState = data.ai;
   renderAI();
   return data;
 }
 async function api(path, body) {
+  if (standalone)
+    throw new Error(
+      "スマホ体験版ではAI自動接続と企業ページの取得は使えません。ゲームはAIなしで進められます。手動交換は利用できます。",
+    );
   if (!apiToken) await status();
   const res = await fetch(path, {
     method: "POST",
@@ -549,9 +591,18 @@ function renderAI() {
   $("ai-status").textContent = generating
     ? `${local ? "PC内のAI" : "接続したAI"}が、この結果から次の場面と選択肢を考えています…`
     : `${local ? "PC内" : "クラウド"}：${aiState.provider} / ${aiState.model} · ${aiState.calls}回 · 見積り予約 $${aiState.reservedUSD.toFixed(4)}`;
+  if (needsCareerServerUpdate())
+    $("ai-status").textContent +=
+      " 新しい企業・職種のAI生成は、PC版のサーバーを次に起動した後に使えます。今はAIなしで続けられます。";
   $("cloud-consent-label").hidden = local;
   $("generate-button").disabled =
-    generating || !game || game.ended || aiState.provider === "disabled";
+    generating ||
+    !game ||
+    game.ended ||
+    aiState.provider === "disabled" ||
+    needsCareerServerUpdate();
+  $("career-compare-button").disabled =
+    generating || !game || game.ended || game.retired;
   $("back-setup").disabled = generating;
   $("ai-accounting").textContent =
     `この起動中：${aiState.calls}/${aiState.requestCap}回、見積り予約 $${aiState.reservedUSD.toFixed(4)} / $${aiState.usdCap}。失敗した呼び出しも数えます。`;
@@ -573,6 +624,7 @@ function autoLocal() {
     $("auto-scene").checked &&
     aiState &&
     !aiState.cloud &&
+    !needsCareerServerUpdate() &&
     aiState.provider !== "disabled"
   );
 }
@@ -603,6 +655,7 @@ $("auto-scene").addEventListener("change", () => {
 });
 async function generateScene() {
   if (!game || game.ended || generating) return;
+  if (needsCareerServerUpdate()) return;
   const current = revision;
   const timingKey = connectionKey(aiState);
   generationStarted = performance.now();
@@ -985,6 +1038,10 @@ function openCareer(mode) {
   $("career-name").value = "";
   $("career-url").value = "";
   $("career-type").value = "unknown";
+  $("career-offer-section").hidden = mode !== "switch";
+  $("career-form").hidden = mode === "switch";
+  $("career-manual-toggle").setAttribute("aria-expanded", "false");
+  renderCareerOffers();
   $("career-target").replaceChildren();
   for (const c of careerCandidates(game)) {
     const o = node(
@@ -1029,6 +1086,75 @@ function openCareer(mode) {
   renderCareer();
   $("career-dialog").showModal();
 }
+function takeCareerDecision(decision) {
+  if (generating || !availableChoices(game).includes(decisionId(decision)))
+    throw new Error("今の状態では選べません。");
+  game = advance(game, decision);
+  revision++;
+  $("career-dialog").close();
+  renderGame();
+  moveToStory();
+  void maybeGenerateScene();
+  toast(
+    "この分岐で1年進みました。選んだ仕事と結果を、次の物語へ引き継ぎます。",
+  );
+}
+function renderCareerOffers() {
+  const container = $("career-offers");
+  container.replaceChildren();
+  const currentRevision = revision;
+  if (careerMode !== "switch") return;
+  for (const offer of careerOffers(game)) {
+    const card = node("article", undefined, "career-offer");
+    const button = node("button", undefined, "career-offer-button");
+    button.type = "button";
+    button.disabled = generating;
+    button.append(
+      node("small", offer.label, "career-offer-label"),
+      node("strong", offer.company),
+      node("span", offer.work),
+    );
+    button.addEventListener("click", () => {
+      if (revision !== currentRevision || generating) return;
+      try {
+        takeCareerDecision(offer.decision);
+      } catch (error) {
+        toast(error.message);
+      }
+    });
+    card.append(button);
+    const details = node("details", undefined, "career-offer-details");
+    details.append(
+      node("summary", "経験との接点・気になる点"),
+      node("p", offer.reason),
+      node("p", offer.tradeoff),
+    );
+    if (offer.source) {
+      const link = node(
+        "a",
+        `公式の事業情報 ↗ / 確認 ${offer.source.checkedAt}`,
+      );
+      link.href = offer.source.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      details.append(link);
+    } else if (offer.kind === "fictional")
+      card.append(node("small", "この世界で生まれた架空の企業"));
+    card.append(details);
+    container.append(card);
+  }
+}
+$("career-manual-toggle").addEventListener("click", () => {
+  $("career-form").hidden = !$("career-form").hidden;
+  $("career-manual-toggle").setAttribute(
+    "aria-expanded",
+    String(!$("career-form").hidden),
+  );
+});
+$("career-compare-button").addEventListener("click", () => {
+  if (!game || game.ended || game.retired || generating) return;
+  openCareer("switch");
+});
 function renderCareer() {
   const preview = $("career-preview");
   preview.replaceChildren();
@@ -1168,15 +1294,7 @@ $("career-form").addEventListener("submit", (e) => {
         });
       }
     }
-    game = advance(game, decision);
-    revision++;
-    $("career-dialog").close();
-    renderGame();
-    moveToStory();
-    void maybeGenerateScene();
-    toast(
-      "この分岐で1年進みました。会社と役割は、以後の人生にも引き継がれます。",
-    );
+    takeCareerDecision(decision);
   } catch (error) {
     $("career-error").textContent = error.message;
   }
@@ -1473,6 +1591,19 @@ $("export-legacy").addEventListener("click", () => {
     toast("書き出せませんでした。");
   }
 });
+if (standalone) {
+  $("ai-form").hidden = true;
+  $("ai-description").textContent =
+    "スマホ体験版はAI接続なしで動きます。PCのOllama・APIキー・セーブとはつながっていません。場面と選択肢はゲーム内のルールで変化します。好きなAIとの手動交換も使えます。";
+  $("auto-scene").checked = false;
+  for (const id of [
+    "company-search",
+    "research-button",
+    "career-search",
+    "career-research",
+  ])
+    if ($(id)) $(id).disabled = true;
+}
 readStoredGame();
 updateBudget();
 status().catch((error) => {

@@ -60,7 +60,10 @@ test("HTTP boundary: allowed assets, CSRF, local origin, body validation and sec
     (await fetch(base, { method: "POST", body: "private=test" })).status,
     405,
   );
-  const { token } = await (await fetch(base + "/api/status")).json();
+  const { token, engineRevision } = await (
+    await fetch(base + "/api/status")
+  ).json();
+  assert.equal(engineRevision, "career-offers-v1");
   const headers = {
     "Content-Type": "application/json",
     Origin: base,

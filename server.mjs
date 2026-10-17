@@ -66,7 +66,11 @@ export function makeServer({
         res.writeHead(403);
         return res.end("Forbidden");
       }
-      return json(res, 200, { token, ai: ai.status() });
+      return json(res, 200, {
+        token,
+        ai: ai.status(),
+        engineRevision: "career-offers-v1",
+      });
     }
     if (req.url?.startsWith("/api/")) {
       if (req.method !== "POST") {

@@ -184,6 +184,7 @@
                   ><span class="field-label"><i>03</i> 主な仕事・活動</span
                   ><select name="job">
                     <option value="tech">IT・技術・研究</option>
+                    <option value="marketing">マーケティング・広報</option>
                     <option value="office">事務・管理・金融</option>
                     <option value="creative">企画・デザイン・制作</option>
                     <option value="people">営業・接客・教育</option>
@@ -658,6 +659,9 @@
               <div id="historical-facts"></div>
             </details>
             <div class="game-toolbar">
+              <button id="career-compare-button" class="button secondary small">
+                転職・残るの4択を見る ↗
+              </button>
               <button id="generate-button" class="button primary small">
                 この場面をAIで生成 ✳</button
               ><button id="exchange-button" class="text-button">
@@ -786,7 +790,7 @@
         <button class="close-button" data-close aria-label="閉じる">×</button>
       </div>
       <h2>好きなAIを、つなぐ。</h2>
-      <p>
+      <p id="ai-description">
         接続設定・APIキーはこの起動中だけ保持します。外部AIは従量課金です。このアプリはクレジットの購入・チャージを行いません。
       </p>
       <form id="ai-form" method="post" action="/">
@@ -981,6 +985,24 @@
       </div>
       <h2 id="career-title">次は、どこで働こう。</h2>
       <p id="career-intro"></p>
+      <section id="career-offer-section" aria-label="働き方の4つの分岐">
+        <p class="field-note">
+          経験を深める・別業界で生かす・残る・意外な接点。いまのあなたから考える、4つの道。
+        </p>
+        <p class="field-note">
+          選ぶと1年進みます。転職は移行費用30万円。仕事や結果はゲーム上の架空の設定です。
+        </p>
+        <div id="career-offers" class="career-offers"></div>
+        <button
+          id="career-manual-toggle"
+          type="button"
+          class="text-button"
+          aria-expanded="false"
+          aria-controls="career-form"
+        >
+          ほかの会社・役割も自分で選ぶ ↗
+        </button>
+      </section>
       <form id="career-form">
         <div id="career-job-fields">
           <label>転職先<select id="career-target"></select></label>

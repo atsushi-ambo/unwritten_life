@@ -67,6 +67,14 @@ test("company lookup resolves known aliases without search and treats directorie
     },
   });
   assert.match((await search("任天堂株式会社"))[0].url, /nintendo.co.jp/);
+  for (const [name, host] of [
+    ["NTT DATA", "www.nttdata.com"],
+    ["Mizuho Bank", "www.mizuhobank.co.jp"],
+    ["中外製薬株式会社", "www.chugai-pharm.co.jp"],
+  ]) {
+    const result = await search(name);
+    assert.equal(new URL(result[0].url).hostname, host);
+  }
   assert.equal(calls.length, 0);
   const candidates = await search("合成企業");
   assert.equal(candidates.length, 2);
