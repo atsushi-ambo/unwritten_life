@@ -113,6 +113,7 @@ test("same engineer role preserves separate product/SI backgrounds and rich life
 test("AI can offer three companies outside the catalog; selecting one persists its actual intent and unverified premise without claiming evidence", () => {
   const g = createGame(profile, "steady", 7612026);
   const scene = validateGeneratedScene(careerScene(), g, { mode: "career" });
+  assert.deepEqual(validateGeneratedScene(scene, g, { mode: "career" }), scene);
   const moved = advance(g, scene.options[1].decision);
   assert.equal(moved.employer.name, "合成銀行候補B");
   assert.equal(moved.employer.workModel, "inhouse");

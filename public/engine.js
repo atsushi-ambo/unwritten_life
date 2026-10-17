@@ -1111,7 +1111,13 @@ export function validateGeneratedScene(
     );
   const options = raw.options.map((o) => {
     if (!o || !str(o.reason, 100)) fail();
-    const decision = o.decision ?? { id: o.id, intent: o.label };
+    let decision = o.decision ?? { id: o.id, intent: o.label };
+    // Normalized API scenes contain facts:null. It asserts no evidence and can
+    // safely round-trip through manual exchange; actual AI evidence is rejected.
+    if (decision && typeof decision === "object" && decision.facts === null) {
+      const { facts, ...withoutFacts } = decision;
+      decision = withoutFacts;
+    }
     const fields = [
       "id",
       "intent",
