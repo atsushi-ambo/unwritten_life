@@ -257,3 +257,20 @@ test("family care never suppresses business failure; family and work events can 
   assert.equal(cared.salary, 0);
   assert.equal(cared.history[1].businessOverhead, 0);
 });
+
+test("a successful outcome cannot turn an actual income fall into a generated pay rise", () => {
+  const g = advance(createGame(p, "steady", 4), "studyDaily");
+  assert.ok(g.income < p.income);
+  assert.match(storyRequest(g).context.incomeFact, /前年より減少/);
+  const scene = groundScene(
+    {
+      title: "給与が上がった",
+      body: "学習を続け、収入も伸びた。いまは新しい職場を探すか、顧客の課題を解く方法を実務で試すか、家族との時間をどう守るかも考えながら、次の一年に向き合う。",
+      insight: "経験は残る",
+      options: [],
+    },
+    g,
+  );
+  assert.ok(!scene.body.includes("収入も伸びた"));
+  assert.ok(!scene.title.includes("給与が上がった"));
+});
