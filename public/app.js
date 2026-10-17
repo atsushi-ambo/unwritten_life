@@ -8,6 +8,7 @@ import {
   CHOICES,
   decisionId,
   availableChoices,
+  isRetiredAt,
   createGame,
   advance,
   advanceYears,
@@ -553,6 +554,7 @@ function renderGame() {
         game.seed,
         game.dynamicFrom,
         game.worldFrom,
+        game.retirementFrom,
       );
       showGame(true);
     });
@@ -724,15 +726,15 @@ function renderAI() {
     : "この場面をAIで生成 ✳";
   $("exchange-button").hidden = manualAI;
   $("career-generate").disabled =
-    generating || !game || game.ended || game.retired;
+    generating || !game || game.ended || isRetiredAt(game);
   $("career-generate").textContent = manualAI
     ? "好きなAIで4択を作る ↗"
     : "AIで4択を生成 ✳";
   $("career-exchange").disabled =
-    generating || !game || game.ended || game.retired;
+    generating || !game || game.ended || isRetiredAt(game);
   $("career-consent-label").hidden = local;
   $("career-compare-button").disabled =
-    generating || !game || game.ended || game.retired;
+    generating || !game || game.ended || isRetiredAt(game);
   $("back-setup").disabled = generating;
   $("ai-accounting").textContent =
     `${hosted ? "この体験版の累計" : "この起動中"}：${aiState.calls}/${aiState.requestCap}回、見積り予約 $${aiState.reservedUSD.toFixed(4)} / $${aiState.usdCap}。失敗した呼び出しも数えます。${hosted ? " 再読み込みでも上限は戻りません。" : ""}`;
@@ -979,6 +981,7 @@ $("undo-button").addEventListener("click", () => {
     false,
     game.dynamicFrom,
     game.worldFrom,
+    game.retirementFrom,
   );
   revision++;
   renderGame();
@@ -1205,6 +1208,7 @@ function resetCareerResearch() {
   $("career-research-status").textContent = "";
 }
 function openCareer(mode) {
+  if (!game || game.ended || generating || isRetiredAt(game)) return;
   careerMode = mode;
   resetCareerResearch();
   $("career-title").textContent =
@@ -1275,7 +1279,7 @@ async function generateCareerChoices() {
   if (
     game &&
     !game.ended &&
-    !game.retired &&
+    !isRetiredAt(game) &&
     !generating &&
     (!aiState || aiState.provider === "disabled" || needsChoiceServerUpdate())
   ) {
@@ -1285,7 +1289,7 @@ async function generateCareerChoices() {
   if (
     !game ||
     game.ended ||
-    game.retired ||
+    isRetiredAt(game) ||
     generating ||
     needsChoiceServerUpdate()
   )
@@ -1404,7 +1408,7 @@ $("career-manual-toggle").addEventListener("click", () => {
   );
 });
 $("career-compare-button").addEventListener("click", () => {
-  if (!game || game.ended || game.retired || generating) return;
+  if (!game || game.ended || isRetiredAt(game) || generating) return;
   openCareer("switch");
 });
 function renderCareer() {
@@ -1794,6 +1798,8 @@ async function refreshModels() {
     }
     if (models.some((m) => m.id === previous))
       $("ai-local-model").value = previous;
+    else if (models.some((m) => m.id === "gemma4:12b-it-q4_K_M"))
+      $("ai-local-model").value = "gemma4:12b-it-q4_K_M";
     renderLocalGuide();
     $("model-list-status").textContent = models.length
       ? `${models.length}個のモデルから選べます。ダウンロードや課金は行いません。`
@@ -1873,7 +1879,7 @@ $("ai-form").addEventListener("submit", async (e) => {
   }
 });
 function openExchange(mode = "life") {
-  if (!game || game.ended) return;
+  if (!game || game.ended || (mode === "career" && isRetiredAt(game))) return;
   exchangeMode = mode;
   exchangeRevision = revision;
   const request = storyRequest(game, {

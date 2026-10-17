@@ -814,6 +814,7 @@ export function createGame(
   seed = 2026,
   dynamicFrom = 0,
   worldFrom = 0,
+  retirementFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -826,7 +827,10 @@ export function createGame(
     dynamicFrom > MAX_AGE ||
     !Number.isInteger(worldFrom) ||
     worldFrom < 0 ||
-    worldFrom > MAX_AGE
+    worldFrom > MAX_AGE ||
+    !Number.isInteger(retirementFrom) ||
+    retirementFrom < 0 ||
+    retirementFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -839,6 +843,7 @@ export function createGame(
     decisions: [],
     dynamicFrom,
     worldFrom,
+    retirementFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -897,26 +902,34 @@ export function technologyAt(g) {
     0.97,
   );
 }
+export function isRetiredAt(g) {
+  return (
+    g.retired ||
+    (g.decisions.length >= (g.retirementFrom ?? 0) &&
+      g.age >= g.profile.retirementAge)
+  );
+}
 export function availableChoices(g) {
+  const retired = isRetiredAt(g);
   const ids = ["learn", "focus", "connect", "rest", "explore"];
-  if (!g.retired) ids.push("switch");
-  if (!g.retired && g.employer?.kind !== "venture" && g.cash >= 60)
+  if (!retired) ids.push("switch");
+  if (!retired && g.employer?.kind !== "venture" && g.cash >= 60)
     ids.push("startup");
   if (g.cash > 30) ids.push("invest");
   if (
     g.housing === "rent" &&
     g.cash > homePrice(g.region) * 0.25 &&
     g.salary > 250 &&
-    !g.retired
+    !retired
   )
     ids.push("home");
   if (g.housing === "rent") ids.push("move");
   if (g.decisions.length >= g.dynamicFrom) {
-    if (!g.retired && g.employer.kind === "venture") {
+    if (!retired && g.employer.kind === "venture") {
       ids.push("closeBusiness");
       if (g.businessStage === "growing" && g.cash >= 100) ids.push("expand");
       if (g.businessStage === "setback") ids.push("pivot");
-    } else if (!g.retired && g.employer.kind !== "seeking") {
+    } else if (!retired && g.employer.kind !== "seeking") {
       if (g.skill >= 35 || decisionId(g.decisions.at(-1)) === "learn")
         ids.push("pilot");
       if (g.history.at(-1)?.outcome?.kind === "success") ids.push("negotiate");
@@ -950,12 +963,16 @@ export function availableChoices(g) {
       randomAt(g.seed, g.decisions.length, 75) < 0.35
     )
       ids.push("reconsiderFamily");
-    if (g.family.childAges.some((age) => age < 18) && !g.retired)
+    if (g.family.childAges.some((age) => age < 18) && !retired)
       ids.push("careLeave");
-    if (opportunityAt(g) && randomAt(g.seed, g.decisions.length, 77) < 0.55)
+    if (
+      !retired &&
+      opportunityAt(g) &&
+      randomAt(g.seed, g.decisions.length, 77) < 0.55
+    )
       ids.push("opportunity");
   }
-  if (!g.retired && g.age >= 45) ids.push("retire");
+  if (!retired && g.age >= 45) ids.push("retire");
   return ids;
 }
 export function suggestedChoices(g) {
@@ -968,8 +985,13 @@ export function suggestedChoices(g) {
     "pilot",
     "mentor",
   ].filter((id) => allowed.includes(id));
-  if (g.employer.kind === "seeking") contextual.unshift("switch");
-  if (g.employer.kind === "venture" && g.businessStage === "setback")
+  if (g.employer.kind === "seeking" && allowed.includes("switch"))
+    contextual.unshift("switch");
+  if (
+    g.employer.kind === "venture" &&
+    g.businessStage === "setback" &&
+    allowed.includes("closeBusiness")
+  )
     contextual.push("closeBusiness");
   const lifeActions = ["home", "invest", "move", "retire"];
   const lifeAction = lifeActions[g.decisions.length % lifeActions.length];
@@ -1405,7 +1427,7 @@ export function validateGeneratedScene(
     );
     const currentName = employerKey(g.employer.name);
     if (
-      g.retired ||
+      isRetiredAt(g) ||
       moves.length !== 3 ||
       stay.length !== 1 ||
       new Set(names).size !== 3 ||
@@ -2574,6 +2596,7 @@ export function replay(
   stopAtEnd = false,
   dynamicFrom = 0,
   worldFrom = 0,
+  retirementFrom = 0,
 ) {
   if (
     !Array.isArray(decisions) ||
@@ -2584,7 +2607,14 @@ export function replay(
     Object.keys(scenes).length > MAX_AGE
   )
     fail();
-  let g = createGame(profile, scenario, seed, dynamicFrom, worldFrom);
+  let g = createGame(
+    profile,
+    scenario,
+    seed,
+    dynamicFrom,
+    worldFrom,
+    retirementFrom,
+  );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
       if (stopAtEnd) break;
@@ -2620,6 +2650,7 @@ export function compareWorlds(g) {
       true,
       g.dynamicFrom,
       g.worldFrom,
+      g.retirementFrom,
     ),
   );
 }
@@ -2628,6 +2659,7 @@ export function encodeSave(g) {
     version: VERSION,
     dynamicFrom: g.dynamicFrom,
     worldFrom: g.worldFrom,
+    retirementFrom: g.retirementFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
@@ -2654,5 +2686,8 @@ export function decodeSave(value) {
     false,
     d.dynamicFrom ?? d.decisions?.length,
     d.worldFrom ?? d.decisions?.length,
+    Object.hasOwn(d, "retirementFrom")
+      ? d.retirementFrom
+      : d.decisions?.length + 1,
   );
 }

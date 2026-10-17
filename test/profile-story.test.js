@@ -224,6 +224,11 @@ test("unknown free text stays a quoted memo, negated interests do not become ski
   );
   assert.equal(request.context.careerNotes, unskilled.profile.careerNotes);
   assert.match(request.messages[0].content, /否定も尊重/);
+  assert.match(
+    request.messages[0].content,
+    /careerNotesや記録された家族の希望に実際にある表現以外は、本人の言葉・願いとして「」で引用しない/,
+  );
+  assert.match(request.messages[0].content, /本人が書いていない願望・動機を創作しない/);
   assert.ok(!("gender" in request.context.profile));
   assert.ok(JSON.stringify(request.context.profileStory).length < 5000);
 });

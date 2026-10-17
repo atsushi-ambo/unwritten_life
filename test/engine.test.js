@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   createGame,
   advance,
@@ -17,6 +18,7 @@ import {
   amortizeYear,
   MAX_AGE,
   decisionId,
+  isRetiredAt,
 } from "../public/engine.js";
 const profile = {
   age: 30,
@@ -144,6 +146,160 @@ test("age and retirement change income and old-age scenes", () => {
   );
   assert.equal(early.income, 0);
   assert.equal(early.retired, true);
+});
+test("work choices stop at the configured retirement age before the retired flag updates, and saves still replay", () => {
+  const switchJob = { id: "switch", target: "toyota", role: "tech" },
+    startup = { id: "startup", venture: "ai", name: "合成事業" };
+  for (const retirementAge of [60, 65, 70]) {
+    const before = createGame(
+      {
+        ...profile,
+        age: retirementAge - 1,
+        retirementAge,
+        savings: 4000,
+        children: 1,
+        childStage: "young",
+      },
+      "steady",
+      4,
+    );
+    for (const id of ["switch", "startup", "home", "careLeave", "retire"])
+      assert.ok(availableChoices(before).includes(id), id);
+    assert.ok(advance(before, switchJob).salary > 0);
+    assert.ok(advance(before, startup).salary > 0);
+    const at = advance(before, "learn");
+    assert.equal(at.age, retirementAge);
+    assert.equal(at.retired, false);
+    assert.deepEqual(decodeSave(encodeSave(at)), at);
+    for (const game of [at, { ...at, age: retirementAge + 1 }]) {
+      for (const id of [
+        "switch",
+        "startup",
+        "home",
+        "pilot",
+        "negotiate",
+        "mentor",
+        "careLeave",
+        "opportunity",
+        "retire",
+      ])
+        assert.ok(!availableChoices(game).includes(id), id);
+      assert.throws(() => advance(game, switchJob));
+      assert.throws(() => advance(game, startup));
+    }
+    const next = advance(at, "rest");
+    assert.equal(next.retired, true);
+    assert.equal(next.salary, 0);
+    assert.deepEqual(decodeSave(encodeSave(next)), next);
+  }
+  const early = advance(
+    createGame({ ...profile, age: 50, retirementAge: 70 }, "steady", 4),
+    "retire",
+  );
+  assert.ok(!availableChoices(early).includes("switch"));
+  assert.ok(!availableChoices(early).includes("startup"));
+  assert.deepEqual(decodeSave(encodeSave(early)), early);
+});
+test("venture expansion, pivot and closure are unavailable at the retirement boundary", () => {
+  const venture = advance(
+    createGame({ ...profile, age: 63, savings: 4000 }, "steady", 4),
+    { id: "startup", venture: "ai", name: "合成事業" },
+  );
+  for (const [businessStage, id] of [
+    ["growing", "expand"],
+    ["setback", "pivot"],
+  ]) {
+    const before = { ...venture, businessStage };
+    assert.ok(availableChoices(before).includes(id));
+    assert.ok(availableChoices(before).includes("closeBusiness"));
+    const at = { ...before, age: 65, retired: false };
+    assert.ok(!availableChoices(at).includes(id));
+    assert.ok(!availableChoices(at).includes("closeBusiness"));
+    assert.throws(() => advance(at, id));
+    assert.throws(() => advance(at, "closeBusiness"));
+  }
+});
+test("pre-change retirement saves preserve boundary work history and the current switch scene exactly", () => {
+  const fixtures = JSON.parse(
+    readFileSync(new URL("./fixtures/retirement-saves.json", import.meta.url)),
+  );
+  for (const { id, save, expected } of fixtures) {
+    assert.ok(!Object.hasOwn(save, "retirementFrom"));
+    const restored = decodeSave(JSON.stringify(save));
+    const { retirementFrom, ...state } = restored;
+    assert.equal(retirementFrom, save.decisions.length + 1);
+    assert.deepEqual(JSON.parse(JSON.stringify(state)), expected, id);
+    assert.deepEqual(decodeSave(encodeSave(restored)), restored, id);
+    assert.deepEqual(
+      replay(
+        restored.profile,
+        restored.scenario,
+        restored.seed,
+        restored.decisions,
+        restored.scenes,
+        false,
+        restored.dynamicFrom,
+        restored.worldFrom,
+        restored.retirementFrom,
+      ),
+      restored,
+    );
+    for (const other of compareWorlds(restored)) {
+      assert.equal(other.retirementFrom, retirementFrom);
+      assert.deepEqual(other.decisions, restored.decisions);
+    }
+    if (id === "current-switch-scene") {
+      assert.equal(restored.retired, false);
+      assert.equal(isRetiredAt(restored), false);
+      assert.ok(availableChoices(restored).includes("switch"));
+      assert.ok(restored.scenes["1"].options.some((o) => o.id === "switch"));
+      const next = advance(restored, "switch");
+      assert.equal(next.retired, true);
+      assert.equal(isRetiredAt(next), true);
+      assert.ok(!availableChoices(next).includes("switch"));
+      assert.deepEqual(decodeSave(encodeSave(next)), next);
+    }
+    assert.throws(() => decodeSave(JSON.stringify({ ...save, retirementFrom: 0 })));
+  }
+});
+test("retirement migration markers are bounded and cannot override the old retired-state validation", () => {
+  const before = createGame({ ...profile, age: 64, retirementAge: 65 }, "steady", 4),
+    boundary = advance(before, "rest"),
+    save = JSON.parse(encodeSave(boundary));
+  assert.equal(before.retirementFrom, 0);
+  assert.equal(isRetiredAt(before), false);
+  assert.equal(isRetiredAt(boundary), true);
+  assert.equal(save.retirementFrom, 0);
+  assert.ok(!availableChoices(boundary).includes("switch"));
+  assert.ok(!availableChoices(boundary).includes("startup"));
+  const oldBefore = JSON.parse(encodeSave(before));
+  delete oldBefore.retirementFrom;
+  const resumed = decodeSave(JSON.stringify(oldBefore));
+  assert.equal(resumed.retirementFrom, 1);
+  const next = advance(resumed, "rest");
+  assert.equal(next.retired, false);
+  assert.equal(isRetiredAt(next), true);
+  assert.ok(!availableChoices(next).includes("switch"));
+  assert.deepEqual(decodeSave(encodeSave(next)), next);
+  for (const retirementFrom of [null, -1, 0.5, "2", MAX_AGE + 1])
+    assert.throws(() => decodeSave(JSON.stringify({ ...save, retirementFrom })));
+  assert.throws(() => decodeSave(JSON.stringify({
+    ...save, decisions: ["rest", "switch"],
+  })));
+  const legacy = decodeSave(JSON.stringify({ ...save, retirementFrom: MAX_AGE }));
+  assert.ok(availableChoices(legacy).includes("switch"));
+  const retired = advance(legacy, "switch");
+  assert.equal(retired.retired, true);
+  assert.throws(() => advance(retired, "switch"));
+  assert.throws(() => advance(retired, {
+    id: "startup", venture: "ai", name: "合成事業",
+  }));
+  assert.throws(() => decodeSave(JSON.stringify({
+    ...save,
+    retirementFrom: MAX_AGE,
+    decisions: ["rest", "switch", "switch"],
+    retired: false,
+  })));
 });
 test("choices change subsequent income, portfolio, region and home ownership", () => {
   const g = createGame({ ...profile, savings: 2000 }, "steady", 12);

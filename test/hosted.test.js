@@ -4,7 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { makeHostedAPI, reserveHosted } from "../lib/hosted-ai.mjs";
-import { createGame, encodeSave } from "../public/engine.js";
+import { createGame, encodeSave, advance } from "../public/engine.js";
 
 // Real SQLite executes the same statements as D1; no real keys or network.
 function database(t) {
@@ -101,6 +101,18 @@ function request(auth, body = {}, headers = {}) {
     }),
   });
 }
+test("hosted status advertises detailed profile and choice capabilities only to an authenticated user", async (t) => {
+  const { db } = database(t);
+  const api = makeHostedAPI({ db, origin, apiKey: "synthetic-key" });
+  const request = new Request(origin + "/api/status");
+  const status = await (await api.status(request, user)).json();
+  assert.equal(status.engineRevision, "career-offers-v1");
+  assert.equal(status.choicesRevision, "personalized-four-v1");
+  assert.equal(status.profileRevision, "profile-details-v1");
+  const denied = await api.status(request, null);
+  assert.equal(denied.status, 401);
+  assert.equal((await denied.json()).profileRevision, undefined);
+});
 test("hosted generation validates identity, CSRF, origin, consent and input before any reservation or network", async (t) => {
   const { db, sql } = database(t);
   let calls = 0;
@@ -155,6 +167,10 @@ test("hosted personalized requests enforce four executable choices before return
         JSON.parse(payload.messages[1].content).generationMode,
         "life",
       );
+      assert.equal(
+        JSON.parse(payload.messages[1].content).life.municipality,
+        "合成市",
+      );
       return Response.json({
         choices: [
           {
@@ -177,7 +193,19 @@ test("hosted personalized requests enforce four executable choices before return
   });
   const auth = await session(api);
   const response = await api.scene(
-    request(auth, { mode: "life", choiceVersion: 1 }),
+    request(auth, {
+      mode: "life",
+      choiceVersion: 1,
+      save: encodeSave(
+        createGame({
+          ...profile,
+          occupation: "infrastructure",
+          municipality: "合成市",
+          industry: "finance",
+          jobDetail: "銀行のクラウド運用",
+        }),
+      ),
+    }),
     user,
   );
   assert.equal(response.status, 200);
@@ -186,6 +214,74 @@ test("hosted personalized requests enforce four executable choices before return
   assert.equal(result.scene.options[0].decision.id, "learn");
   assert.equal(result.accounting.calls, 1);
   assert.equal(calls, 1);
+});
+test("hosted career generation rejects retirement before reserving a call or cost and accepts working and legacy states", async (t) => {
+  const { db, sql } = database(t);
+  const scene = {
+    ...validScene,
+    options: [
+      ...["microsoft", "toyota", "nintendo"].map((target) => ({
+        id: "switch",
+        label: `${target}で経験を生かす`,
+        hint: "新しい仕事に慣れる時間を使う",
+        reason: "これまでの技術の経験を使う",
+        decision: { id: "switch", target, role: "tech" },
+      })),
+      {
+        id: "focus",
+        label: "現職を深める",
+        hint: "新しい機会は見送る",
+        reason: "経験を積み重ねる",
+      },
+    ],
+  };
+  let calls = 0;
+  const api = makeHostedAPI({
+    db,
+    origin,
+    apiKey: "synthetic-key",
+    now: () => 1000,
+    fetchAI: async () => {
+      calls++;
+      return Response.json({
+        choices: [{ message: { content: JSON.stringify(scene) } }],
+      });
+    },
+  });
+  const auth = await session(api),
+    before = createGame({ ...profile, age: 64, retirementAge: 65 }, "steady", 4),
+    boundary = advance(before, "rest");
+  assert.equal(boundary.retired, false);
+  for (const game of [
+    boundary,
+    advance(boundary, "rest"),
+    advance(before, "retire"),
+  ]) {
+    const res = await api.scene(
+      request(auth, { save: encodeSave(game), mode: "career", choiceVersion: 1 }),
+      user,
+    );
+    assert.equal(res.status, 400);
+    assert.equal(calls, 0);
+    assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM ai_attempts").get().n, 0);
+    const status = await (
+      await api.status(new Request(origin + "/api/status"), user)
+    ).json();
+    assert.equal(status.ai.calls, 0);
+    assert.equal(status.ai.reservedUSD, 0);
+    assert.equal(status.ai.busy, false);
+  }
+  const legacy = JSON.parse(encodeSave(boundary));
+  delete legacy.retirementFrom;
+  for (const save of [encodeSave(before), JSON.stringify(legacy)]) {
+    const res = await api.scene(
+      request(auth, { save, mode: "career", choiceVersion: 1 }),
+      user,
+    );
+    assert.equal(res.status, 200, await res.text());
+  }
+  assert.equal(calls, 2);
+  assert.equal(sql.prepare("SELECT calls FROM ai_budget").get().calls, 2);
 });
 test("successful hosted request uses fixed standard endpoint/model, returns a validated scene, and never exposes or stores key/profile", async (t) => {
   const { db, sql } = database(t);

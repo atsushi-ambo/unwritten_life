@@ -285,6 +285,61 @@ test("personalized API uses separate caches for life/career, validates exactly f
   );
   assert.equal(requests.length, 2);
 });
+test("career AI rejects the retirement boundary before transport or accounting, while legacy clients retain their choice rule", async () => {
+  let requests = 0;
+  const ai = makeAI({
+    transport: async (_url, options) => {
+      requests++;
+      const context = JSON.parse(JSON.parse(options.body).messages[1].content);
+      assert.ok(context.allowedActions.some((a) => a.id === "switch"));
+      return {
+        status: 200,
+        text: JSON.stringify({
+          message: { content: JSON.stringify(careerScene()) },
+        }),
+      };
+    },
+  });
+  const before = createGame({ ...profile, age: 64, retirementAge: 65 }, "steady", 4),
+    boundary = advance(before, "rest");
+  assert.equal(boundary.age, 65);
+  assert.equal(boundary.retired, false);
+  for (const game of [
+    boundary,
+    advance(boundary, "rest"),
+    advance(before, "retire"),
+  ]) {
+    await assert.rejects(
+      () => ai.generate(encodeSave(game), false, {
+        personalized: true,
+        mode: "career",
+      }),
+      /退職後は転職の4択を生成できません/,
+    );
+    assert.equal(requests, 0);
+    assert.equal(ai.status().calls, 0);
+    assert.equal(ai.status().reservedUSD, 0);
+    assert.equal(ai.status().busy, false);
+  }
+  assert.equal(
+    (await ai.generate(encodeSave(before), false, {
+      personalized: true,
+      mode: "career",
+    })).scene.options.length,
+    4,
+  );
+  const legacy = JSON.parse(encodeSave(boundary));
+  delete legacy.retirementFrom;
+  assert.equal(
+    (await ai.generate(JSON.stringify(legacy), false, {
+      personalized: true,
+      mode: "career",
+    })).scene.options.length,
+    4,
+  );
+  assert.equal(requests, 2);
+  assert.equal(ai.status().calls, 2);
+});
 test("actual local HTTP route forwards the personalized career contract and rejects unsupported versions/modes before generation", async (t) => {
   let calls = 0;
   const ai = makeAI({
