@@ -37,6 +37,7 @@ const $ = (id) => document.getElementById(id),
   nf = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 0 });
 const money = (n) => nf.format(Math.round(n / 10) * 10);
 const standalone = document.documentElement.dataset.edition === "mobile";
+const hosted = document.documentElement.dataset.edition === "mobile-cloud";
 let game = null,
   remember = false,
   savedGame = null,
@@ -105,7 +106,9 @@ async function status() {
   const res = await fetch("/api/status");
   if (!res.ok)
     throw new Error(
-      "ローカルサーバーに接続できません。アプリを起動して再読み込みしてください。",
+      hosted
+        ? "AIサーバーに接続できません。少し待って再読み込みしてください。AIなしでは続けられます。"
+        : "ローカルサーバーに接続できません。アプリを起動して再読み込みしてください。",
     );
   const data = await res.json();
   serverCareerOffers = data.engineRevision === "career-offers-v1";
@@ -120,13 +123,17 @@ async function api(path, body) {
       "スマホ体験版ではAI自動接続と企業ページの取得は使えません。ゲームはAIなしで進められます。手動交換は利用できます。",
     );
   if (!apiToken) await status();
+  if (hosted && path !== "/api/scene")
+    throw new Error("このスマホ版では接続設定と企業ページの取得は使えません。");
   const res = await fetch(path, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Unwritten-Token": apiToken,
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(
+      hosted ? { ...body, requestId: crypto.randomUUID() } : body,
+    ),
   });
   let data;
   try {
@@ -590,7 +597,7 @@ function renderAI() {
   $("event-card").setAttribute("aria-busy", String(generating));
   $("ai-status").textContent = generating
     ? `${local ? "PC内のAI" : "接続したAI"}が、この結果から次の場面と選択肢を考えています…`
-    : `${local ? "PC内" : "クラウド"}：${aiState.provider} / ${aiState.model} · ${aiState.calls}回 · 見積り予約 $${aiState.reservedUSD.toFixed(4)}`;
+    : `${local ? "PC内" : "クラウド"}：${aiState.provider} / ${aiState.model} · ${aiState.calls}${hosted ? "/" + aiState.requestCap : ""}回 · 見積り予約 $${aiState.reservedUSD.toFixed(4)}${hosted ? " / $" + aiState.usdCap + "（累計）" : ""}`;
   if (needsCareerServerUpdate())
     $("ai-status").textContent +=
       " 新しい企業・職種のAI生成は、PC版のサーバーを次に起動した後に使えます。今はAIなしで続けられます。";
@@ -605,7 +612,7 @@ function renderAI() {
     generating || !game || game.ended || game.retired;
   $("back-setup").disabled = generating;
   $("ai-accounting").textContent =
-    `この起動中：${aiState.calls}/${aiState.requestCap}回、見積り予約 $${aiState.reservedUSD.toFixed(4)} / $${aiState.usdCap}。失敗した呼び出しも数えます。`;
+    `${hosted ? "この体験版の累計" : "この起動中"}：${aiState.calls}/${aiState.requestCap}回、見積り予約 $${aiState.reservedUSD.toFixed(4)} / $${aiState.usdCap}。失敗した呼び出しも数えます。${hosted ? " 再読み込みでも上限は戻りません。" : ""}`;
   renderAITiming();
 }
 function renderAITiming() {
@@ -1591,10 +1598,11 @@ $("export-legacy").addEventListener("click", () => {
     toast("書き出せませんでした。");
   }
 });
-if (standalone) {
+if (standalone || hosted) {
   $("ai-form").hidden = true;
-  $("ai-description").textContent =
-    "スマホ体験版はAI接続なしで動きます。PCのOllama・APIキー・セーブとはつながっていません。場面と選択肢はゲーム内のルールで変化します。好きなAIとの手動交換も使えます。";
+  $("ai-description").textContent = hosted
+    ? "OpenAIで場面と選択肢を生成できます。送信内容を確認し、同意を入れて生成ボタンを押してください。累計の見積り上限$0.10・100回まで。自動生成と自動再試行はしません。セーブはこの端末内です。"
+    : "スマホ体験版はAI接続なしで動きます。PCのOllama・APIキー・セーブとはつながっていません。場面と選択肢はゲーム内のルールで変化します。好きなAIとの手動交換も使えます。";
   $("auto-scene").checked = false;
   for (const id of [
     "company-search",

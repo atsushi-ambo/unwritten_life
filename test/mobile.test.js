@@ -103,3 +103,51 @@ test("mobile build contains only public assets, opts out of network calls, and k
     /ソース/,
   );
 });
+test("hosted mobile uses only same-origin scene requests and does not claim that AI is free", async (t) => {
+  const dir = await mkdtemp(resolve(tmpdir(), "unwritten-cloud-test-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  await buildMobile(dir, { cloud: true });
+  const html = await readFile(resolve(dir, "index.html"), "utf8");
+  assert.match(html, /data-edition="mobile-cloud"/);
+  assert.match(html, /connect-src 'self'/);
+  assert.match(html, /OpenAIは手動生成/);
+  assert.doesNotMatch(html, /API課金は発生しません/);
+  const app = await readFile(resolve(dir, "app.js"), "utf8");
+  const requests = [];
+  const context = createContext({
+    standalone: false,
+    hosted: true,
+    apiToken: "synthetic-csrf-token",
+    crypto: { randomUUID: () => "synthetic-request-id" },
+    fetch: async (path, options) => {
+      requests.push({ path, options });
+      return { ok: true, json: async () => ({}) };
+    },
+  });
+  runInContext(
+    app.slice(
+      app.indexOf("async function api("),
+      app.indexOf("function readStoredGame("),
+    ),
+    context,
+  );
+  await assert.rejects(
+    () => runInContext('api("/api/ai/config", {})', context),
+    /接続設定/,
+  );
+  await runInContext(
+    'api("/api/scene", {save:"synthetic",cloudConsent:true})',
+    context,
+  );
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].path, "/api/scene");
+  assert.deepEqual(JSON.parse(requests[0].options.body), {
+    save: "synthetic",
+    cloudConsent: true,
+    requestId: "synthetic-request-id",
+  });
+  assert.equal(
+    requests[0].options.headers["X-Unwritten-Token"],
+    "synthetic-csrf-token",
+  );
+});

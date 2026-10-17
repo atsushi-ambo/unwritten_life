@@ -59,7 +59,7 @@ Ollama・LM Studioでは、ダウンロード済みモデルの一覧から選�
 
 Codex・Claude Code・Gemini CLI等でサブスク枠を使う経路は [公式資料に基づく調査と接続方針](docs/subscription-ai.md) に整理しました。これらのCLIとの自動接続、OpenCode独自API、ChatGPTのOAuthログインはこの版では実装していません。手動交換で利用できます。[Sign in with ChatGPTの公式OSS向けガイド](https://developers.openai.com/cookbook/articles/sign-in-with-chatgpt)は、将来の接続方式の候補です。
 
-クラウドへ送る前に送信先と内容を画面で確認し、送信への同意を選びます。APIキーはローカルサーバーのメモリにのみ保持し、端末保存・Git・レスポンス・ログには含めません。アプリを終了すると失われます。
+クラウドへ送る前に送信先と内容を画面で確認し、送信への同意を選びます。PC版のAPIキーはローカルサーバーのメモリにのみ保持し、端末保存・Git・レスポンス・ログには含めません。アプリを終了すると失われます。スマホ用バックエンドは[サーバーの秘密情報と累計上限を使う準備版](hosted/README.md)を追加していますが、まだ配備していません。
 
 費用は [docs/ai-and-costs.md](docs/ai-and-costs.md) を参照。設定単価からの見積り上限、回数上限、1回の出力上限、同じ場面のキャッシュを設けています。提供者の実請求を保証する上限ではありません。
 

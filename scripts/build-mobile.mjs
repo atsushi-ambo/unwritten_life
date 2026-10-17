@@ -9,7 +9,7 @@ import { resolve, dirname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse, serialize } from "parse5";
 
-export async function buildMobile(output) {
+export async function buildMobile(output, { cloud = false } = {}) {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   const target = resolve(output ?? resolve(root, "artifacts/mobile"));
   const protectedPaths = [
@@ -45,10 +45,13 @@ export async function buildMobile(output) {
     await readFile(resolve(publicDir, "index.html"), "utf8"),
   );
   const html = document.childNodes.find((n) => n.tagName === "html");
-  html.attrs.push({ name: "data-edition", value: "mobile" });
+  html.attrs.push({
+    name: "data-edition",
+    value: cloud ? "mobile-cloud" : "mobile",
+  });
   const head = html.childNodes.find((n) => n.tagName === "head");
   const csp = parse(
-    "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'\">",
+    `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src ${cloud ? "'self'" : "'none'"}; object-src 'none'; base-uri 'none'; form-action 'none'">`,
   )
     .childNodes.find((n) => n.tagName === "html")
     .childNodes.find((n) => n.tagName === "head").childNodes[0];
@@ -56,7 +59,9 @@ export async function buildMobile(output) {
   head.childNodes.unshift(csp);
   const body = html.childNodes.find((n) => n.tagName === "body");
   const banner = parse(
-    '<aside class="mobile-edition-banner"><strong>スマホ体験版 · AI接続なし</strong><span>入力はこのブラウザで処理します。PCのAPIキーやセーブとは接続せず、API課金は発生しません。保存を選んだ場合はこの端末のブラウザに保存します。</span></aside>',
+    cloud
+      ? '<aside class="mobile-edition-banner"><strong>スマホ体験版 · OpenAIは手動生成</strong><span>AI生成を押したときだけプロフィールと選択履歴をOpenAIへ送ります。見積り累計$0.10・100回まで。セーブはこの端末のブラウザに保存します。</span></aside>'
+      : '<aside class="mobile-edition-banner"><strong>スマホ体験版 · AI接続なし</strong><span>入力はこのブラウザで処理します。PCのAPIキーやセーブとは接続せず、API課金は発生しません。保存を選んだ場合はこの端末のブラウザに保存します。</span></aside>',
   )
     .childNodes.find((n) => n.tagName === "html")
     .childNodes.find((n) => n.tagName === "body").childNodes[0];
@@ -73,7 +78,11 @@ if (
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
   const args = process.argv.slice(2);
+  const cloud = args.includes("--cloud");
+  if (cloud) args.splice(args.indexOf("--cloud"), 1);
   if (args.length && (args.length !== 2 || args[0] !== "--output"))
-    throw new Error("使い方: npm run build:mobile -- --output 出力先");
-  console.log(JSON.stringify(await buildMobile(args[1])));
+    throw new Error(
+      "使い方: npm run build:mobile -- [--cloud] --output 出力先",
+    );
+  console.log(JSON.stringify(await buildMobile(args[1], { cloud })));
 }
