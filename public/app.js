@@ -675,6 +675,9 @@ function renderAI() {
   $("ai-status").textContent = generating
     ? `${local ? "PC内のAI" : "接続したAI"}が、この結果から次の場面と選択肢を考えています…`
     : `${local ? "PC内" : "クラウド"}：${aiState.provider} / ${aiState.model} · ${aiState.calls}${hosted ? "/" + aiState.requestCap : ""}回 · 見積り予約 $${aiState.reservedUSD.toFixed(4)}${hosted ? " / $" + aiState.usdCap + "（累計）" : ""}`;
+  if (!generating && aiState.provider === "disabled")
+    $("ai-status").textContent =
+      "端末内の物語で進行中。好きなAIで展開を作るボタンから、AIも使えます。";
   if (needsCareerServerUpdate())
     $("ai-status").textContent +=
       " 新しい企業・職種のAI生成は、PC版のサーバーを次に起動した後に使えます。今はAIなしで続けられます。";
@@ -1560,10 +1563,12 @@ function setupNameSearch(career = false) {
     list = $(career ? "career-candidates" : "company-candidates"),
     message = $(career ? "career-research-status" : "research-status");
   button.addEventListener("click", async () => {
+    const originalLabel = button.textContent;
     const rev = career ? ++careerResearchRevision : ++companyResearchRevision;
     const current = () =>
       rev === (career ? careerResearchRevision : companyResearchRevision);
     button.disabled = true;
+    button.textContent = "調べています…";
     if (!career) document.querySelector(".company-research").hidden = false;
     list.replaceChildren();
     message.textContent = "企業名から会社情報と公式サイトを探しています…";
@@ -1662,6 +1667,7 @@ function setupNameSearch(career = false) {
       if (current()) message.textContent = error.message;
     } finally {
       button.disabled = false;
+      button.textContent = originalLabel;
     }
   });
 }

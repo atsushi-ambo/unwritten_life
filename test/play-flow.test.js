@@ -8,6 +8,7 @@ import {
   encodeSave,
   decodeSave,
   eventFor,
+  availableChoices,
 } from "../public/engine.js";
 import {
   browserDirectoryText,
@@ -133,6 +134,13 @@ test("local narrative distinguishes product/SI work and preserves game facts ins
   assert.equal(a.employer.name, p.company);
   assert.equal(a.family.childAges.length, 0);
   assert.equal(a.income, b.income);
+  const side = a.history[0].episode;
+  if (side.sideAction && availableChoices(a).includes(side.sideAction))
+    assert.ok(
+      eventFor(a).options.some(
+        (o) => o.id === side.sideAction && o.label === side.sideLabel,
+      ),
+    );
 });
 
 test("new-game form has three levels, no required financial entries, and company lookup beside the name", async () => {

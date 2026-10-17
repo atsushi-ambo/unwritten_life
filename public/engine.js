@@ -1253,6 +1253,17 @@ export function eventFor(g) {
         ? `初期費用${opportunityAt(g)?.setup}万円。収入が減ることも、事業が失敗することもある`
         : CHOICES[id].hint,
   }));
+  const side = g.history.at(-1)?.episode;
+  if (side?.sideAction && availableChoices(g).includes(side.sideAction)) {
+    const option = {
+      id: side.sideAction,
+      label: side.sideLabel,
+      hint: CHOICES[side.sideAction].hint,
+    };
+    const index = options.findIndex((o) => o.id === side.sideAction);
+    if (index >= 0) options[index] = option;
+    else options[options.length - 1] = option;
+  }
   const last = decisionId(g.decisions.at(-1)),
     company = g.employer.name;
   const business =
@@ -1294,6 +1305,25 @@ export function eventFor(g) {
     last !== "switch" &&
     g.cash >= g.livingCost * 6 &&
     g.history.at(-1)?.episode;
+  if (!g.history.length && worldEnabled(g) && !g.retired) {
+    title = {
+      growth: "少し先の自分が、気になった。",
+      switch: "この場所に残る未来と、外へ出る未来。",
+      business: "まだ、名前のない仕事。",
+      balance: "仕事の予定と、暮らしの予定。",
+    }[g.profile.careerGoal];
+    const hook = {
+      growth:
+        "帰り道、気になっていた学びのページをもう一度開いた。まず毎日少しずつ学ぶか、仕事で試す場を探すか。",
+      switch:
+        "いつもの一週間が終わるころ、別の働き方が頭に浮かんだ。今の経験を深める道も、別の会社で使う道もある。",
+      business:
+        "暮らしの中の小さな不便を、自分の仕事にできないかと思った。すぐに始める前に、誰かに会う、学ぶ、小さく試すという道もある。",
+      balance:
+        "予定表には仕事が並んでいる。その隙間に、自分や大切な人との時間をどれくらい残したいだろう。",
+    }[g.profile.careerGoal];
+    body = `${g.age}歳、${REGIONS[g.region].label}で暮らすあなた。${g.employer.role === "other" ? "次の仕事と暮らしを考える日々。" : `${company}で${JOBS[g.employer.role].label}を担っている。`}${hook} 今年は、何を大切にしてみよう。`;
+  }
   if (continuation) {
     title = continuation.nextTitle;
     const workplace = workContext(g).model;
@@ -1416,10 +1446,72 @@ export function annualEpisode(before, record) {
   }
   if (record.familyOutcome && record.familyOutcome !== record.outcome)
     body += ` ${record.familyOutcome.body}`;
-  if (record.world?.shock.id !== "calm" && record.world)
+  if (
+    record.world?.shock.id !== "calm" &&
+    record.world &&
+    record.world.shock.id !== before.history.at(-1)?.world?.shock.id
+  )
     body += ` ${record.world.shock.body}`;
+  const detours = [
+    {
+      action: "connect",
+      label: "気になった勉強会で人と話す",
+      body: "小さな勉強会の案内を見かけた。自分とは違う仕事の人の話も、聞いてみたくなる。",
+    },
+    {
+      action: "rest",
+      label: "予定を空けて、自分の時間を取り戻す",
+      body: "休日の予定を見て、少し詰め込みすぎたかもしれないと思った。何もしない日も必要そうだ。",
+    },
+    {
+      action: "move",
+      label: "暮らす場所から、働き方を考える",
+      body: "いつもと違う道を歩いた。別の街で暮らしたら、毎日の仕事も変わるだろうか。",
+    },
+    {
+      action: "explore",
+      label: "身近な不便を、小さな挑戦に変える",
+      body: "身近な不便に気づいた。解決できたら誰が喜ぶだろう、と少し考えてみた。",
+    },
+    {
+      action: "learn",
+      label: "AIに任せることと自分で学ぶことを探す",
+      body: "新しい道具を試すと、任せやすい作業と、自分で確かめたい作業の両方が見えてきた。",
+    },
+    ...(before.family.childAges.length
+      ? [
+          {
+            action: "careLeave",
+            label: "子どもの成長に合わせ、時間を組み直す",
+            body: "子どもの成長とともに、家族の予定も変わっていく。今の時間配分が合っているか、見直してみたい。",
+          },
+        ]
+      : []),
+  ].filter(
+    (entry) =>
+      entry.action !== id && availableChoices(before).includes(entry.action),
+  );
+  const detour =
+    detours[
+      Math.floor(
+        randomAt(before.seed, before.decisions.length, 92) * detours.length,
+      )
+    ];
+  const showDetour =
+    detour &&
+    !record.familyOutcome &&
+    !["failure", "closure"].includes(record.outcome?.kind);
+  if (showDetour) body += ` ${detour.body}`;
   if (record.intention) body += `選んだ方針は「${record.intention}」。`;
-  return { title, body, nextTitle, next };
+  return {
+    title,
+    body,
+    nextTitle,
+    next,
+    ...(showDetour
+      ? { sideAction: detour.action, sideLabel: detour.label }
+      : {}),
+  };
 }
 export function advanceYears(game, decision, years = 1) {
   if (![1, 5, 10].includes(years)) fail();
