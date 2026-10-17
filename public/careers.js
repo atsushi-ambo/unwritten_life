@@ -138,6 +138,33 @@ export const VENTURES = Object.freeze({
     detail: "人との信頼を軸に、小さな生活支援サービスを始める。",
   },
 });
+// This describes the player's work, separately from employer size or job title.
+export const WORK_MODELS = Object.freeze({
+  unknown: "まだ指定しない",
+  product: "自社サービス・自社製品を育てる",
+  services: "受託開発・SI・顧客の案件を支える",
+  inhouse: "事業会社の社内IT・業務部門",
+  public: "公共・非営利の仕事",
+  self: "自営・フリーランス",
+});
+export function workContext(game) {
+  const explicit =
+    game.employer.workModel ??
+    (game.employer.kind === "initial" ? game.profile.workModel : "unknown");
+  const model = Object.hasOwn(WORK_MODELS, explicit) ? explicit : "unknown";
+  return {
+    model,
+    description: WORK_MODELS[model],
+    basis:
+      model === "unknown"
+        ? "不明。職種や会社名だけで断定しない"
+        : game.employer.proposal
+          ? "ゲーム内の仮定"
+          : "本人の入力",
+    proposal: game.employer.proposal ?? null,
+    note: "会社の規模、業界、仕事の形、職種・専門は別の軸。同じエンジニアでも一律の候補にしない。",
+  };
+}
 export function careerCandidates(game) {
   return Object.entries(EMPLOYERS)
     .filter(
@@ -341,4 +368,7 @@ function careerIdentity(name) {
       (n) => companyName(n) === companyName(name),
     ),
   );
+}
+export function employerKey(name) {
+  return companyName(careerIdentity(name)?.name ?? name);
 }

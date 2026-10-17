@@ -124,6 +124,9 @@ test("hosted generation validates identity, CSRF, origin, consent and input befo
     [{ cloudConsent: false }, {}, user, 400],
     [{ save: "{}" }, {}, user, 400],
     [{ requestId: "malformed" }, {}, user, 400],
+    [{ choiceVersion: 2 }, {}, user, 400],
+    [{ mode: "shell", choiceVersion: 1 }, {}, user, 400],
+    [{ mode: "career" }, {}, user, 400],
     [{ usdCap: 50 }, {}, user, 400],
     [{ save: "x".repeat(1048577) }, {}, user, 413],
   ])
@@ -137,6 +140,52 @@ test("hosted generation validates identity, CSRF, origin, consent and input befo
   assert.equal((await disabled.scene(request(auth), user)).status, 503);
   const noDB = makeHostedAPI({ origin, apiKey: "synthetic-key" });
   assert.equal((await noDB.scene(request(auth), user)).status, 503);
+});
+test("hosted personalized requests enforce four executable choices before returning a scene", async (t) => {
+  const { db } = database(t);
+  let calls = 0;
+  const api = makeHostedAPI({
+    db,
+    origin,
+    apiKey: "synthetic-key",
+    fetchAI: async (_url, options) => {
+      calls++;
+      const payload = JSON.parse(options.body);
+      assert.equal(
+        JSON.parse(payload.messages[1].content).generationMode,
+        "life",
+      );
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                ...validScene,
+                options: ["learn", "focus", "rest", "connect"].map((id) => ({
+                  id,
+                  label: id,
+                  hint: "時間の使い方を選ぶ",
+                  reason: "現在の暮らしとの接点",
+                  decision: { id, intent: `現在の暮らしで${id}を大切にする` },
+                })),
+              }),
+            },
+          },
+        ],
+      });
+    },
+  });
+  const auth = await session(api);
+  const response = await api.scene(
+    request(auth, { mode: "life", choiceVersion: 1 }),
+    user,
+  );
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(result.scene.options.length, 4);
+  assert.equal(result.scene.options[0].decision.id, "learn");
+  assert.equal(result.accounting.calls, 1);
+  assert.equal(calls, 1);
 });
 test("successful hosted request uses fixed standard endpoint/model, returns a validated scene, and never exposes or stores key/profile", async (t) => {
   const { db, sql } = database(t);

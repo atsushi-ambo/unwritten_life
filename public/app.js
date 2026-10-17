@@ -17,12 +17,14 @@ import {
   encodeSave,
   decodeSave,
   applyScene,
+  validateGeneratedScene,
 } from "./engine.js";
 import {
   EMPLOYERS,
   VENTURES,
   careerCandidates,
   careerOffers,
+  workContext,
 } from "./careers.js";
 import {
   worldAt,
@@ -56,6 +58,19 @@ let game = null,
 let generationStarted = 0,
   generationTimer;
 let serverCareerOffers = false;
+let serverPersonalizedChoices = false,
+  careerDraft = null,
+  careerGenerating = false,
+  exchangeMode = "life",
+  exchangeRevision = 0;
+function needsChoiceServerUpdate() {
+  return (
+    !standalone &&
+    aiState &&
+    aiState.provider !== "disabled" &&
+    !serverPersonalizedChoices
+  );
+}
 function needsCareerServerUpdate() {
   return (
     !standalone &&
@@ -112,6 +127,7 @@ async function status() {
     );
   const data = await res.json();
   serverCareerOffers = data.engineRevision === "career-offers-v1";
+  serverPersonalizedChoices = data.choicesRevision === "personalized-four-v1";
   apiToken = data.token;
   aiState = data.ai;
   renderAI();
@@ -274,12 +290,14 @@ function renderGame() {
   $("profile-caption").textContent = [
     REGIONS[game.region].label,
     JOBS[game.employer.role].label,
+    workContext(game).model !== "unknown" ? workContext(game).description : "",
     game.employer.name +
       (game.employer.kind === "fictional" || game.employer.kind === "venture"
         ? "（架空）"
         : game.employer.kind === "real"
           ? "（転職は仮想）"
           : ""),
+    game.employer.unverifiedCandidate ? "企業・職務はAI未確認" : "",
     game.housing === "own" ? "持ち家" : "賃貸等",
     game.retired
       ? "退職後"
@@ -537,6 +555,15 @@ function renderGame() {
           `${option.hint}${offer ? ` / 開業費${offer.setup}万円・年間運営費${VENTURES[offer.venture].overhead}万円` : ""}${event.generated ? " / 行動：" + c.label : ""}`,
         ),
       );
+      if (option.reason)
+        copy.append(node("small", `あなたとの接点：${option.reason}`));
+      if (option.decision?.id === "switch")
+        copy.append(
+          node(
+            "small",
+            `候補：${option.decision.name ?? EMPLOYERS[option.decision.target]?.name} / ${JOBS[option.decision.role].label}（架空の転職・AIの候補は未確認）`,
+          ),
+        );
       button.append(
         node("span", c.icon, "choice-symbol"),
         copy,
@@ -544,6 +571,14 @@ function renderGame() {
       );
       button.addEventListener("click", () => {
         if (!button.isConnected || game.ended || generating) return;
+        if (option.decision) {
+          game = advance(game, option.decision);
+          revision++;
+          renderGame();
+          moveToStory();
+          void maybeGenerateScene();
+          return;
+        }
         if (["switch", "startup"].includes(option.id)) {
           openCareer(option.id);
           return;
@@ -601,13 +636,27 @@ function renderAI() {
   if (needsCareerServerUpdate())
     $("ai-status").textContent +=
       " 新しい企業・職種のAI生成は、PC版のサーバーを次に起動した後に使えます。今はAIなしで続けられます。";
+  if (needsChoiceServerUpdate())
+    $("ai-status").textContent +=
+      " 新しいプロフィール別4択は、更新したPCサーバーの次回起動後に使えます。今はAIなし・手動交換で続けられます。";
   $("cloud-consent-label").hidden = local;
   $("generate-button").disabled =
     generating ||
     !game ||
     game.ended ||
     aiState.provider === "disabled" ||
-    needsCareerServerUpdate();
+    needsCareerServerUpdate() ||
+    needsChoiceServerUpdate();
+  $("career-generate").disabled =
+    generating ||
+    !game ||
+    game.ended ||
+    game.retired ||
+    aiState.provider === "disabled" ||
+    needsChoiceServerUpdate();
+  $("career-exchange").disabled =
+    generating || !game || game.ended || game.retired;
+  $("career-consent-label").hidden = local;
   $("career-compare-button").disabled =
     generating || !game || game.ended || game.retired;
   $("back-setup").disabled = generating;
@@ -632,6 +681,7 @@ function autoLocal() {
     aiState &&
     !aiState.cloud &&
     !needsCareerServerUpdate() &&
+    !needsChoiceServerUpdate() &&
     aiState.provider !== "disabled"
   );
 }
@@ -662,7 +712,7 @@ $("auto-scene").addEventListener("change", () => {
 });
 async function generateScene() {
   if (!game || game.ended || generating) return;
-  if (needsCareerServerUpdate()) return;
+  if (needsCareerServerUpdate() || needsChoiceServerUpdate()) return;
   const current = revision;
   const timingKey = connectionKey(aiState);
   generationStarted = performance.now();
@@ -678,6 +728,8 @@ async function generateScene() {
     const result = await api("/api/scene", {
       save: encodeSave(game),
       cloudConsent: $("cloud-consent").checked,
+      choiceVersion: 1,
+      mode: "life",
     });
     aiState = result.accounting;
     if (current === revision) {
@@ -1092,7 +1144,50 @@ function openCareer(mode) {
   $("venture-name").value = "";
   renderCareer();
   $("career-dialog").showModal();
+  if (mode === "switch" && autoLocal() && careerDraft?.revision !== revision)
+    void generateCareerChoices();
 }
+async function generateCareerChoices() {
+  if (
+    !game ||
+    game.ended ||
+    game.retired ||
+    generating ||
+    needsChoiceServerUpdate()
+  )
+    return;
+  const current = revision;
+  careerGenerating = true;
+  generating = true;
+  generationStarted = performance.now();
+  generationTimer = setInterval(renderAITiming, 1000);
+  renderGame();
+  renderCareerOffers();
+  try {
+    const result = await api("/api/scene", {
+      save: encodeSave(game),
+      cloudConsent: $("career-consent").checked,
+      choiceVersion: 1,
+      mode: "career",
+    });
+    aiState = result.accounting;
+    if (current === revision)
+      careerDraft = { revision: current, scene: result.scene };
+  } catch (error) {
+    toast(`転職4択を生成できませんでした。${error.message}`);
+    try {
+      await status();
+    } catch {}
+  } finally {
+    clearInterval(generationTimer);
+    careerGenerating = false;
+    generating = false;
+    renderGame();
+    renderCareerOffers();
+  }
+}
+$("career-generate").addEventListener("click", generateCareerChoices);
+$("career-exchange").addEventListener("click", () => openExchange("career"));
 function takeCareerDecision(decision) {
   if (generating || !availableChoices(game).includes(decisionId(decision)))
     throw new Error("今の状態では選べません。");
@@ -1111,7 +1206,28 @@ function renderCareerOffers() {
   container.replaceChildren();
   const currentRevision = revision;
   if (careerMode !== "switch") return;
-  for (const offer of careerOffers(game)) {
+  const generated =
+    careerDraft?.revision === revision ? careerDraft.scene : null;
+  $("career-generation-status").textContent = careerGenerating
+    ? "AIがプロフィール・仕事の形・直前の結果から、企業と役割を考えています…"
+    : generated
+      ? "AIが作った4択です。企業名・職務の提案は未確認のゲーム内設定で、実際の求人ではありません。"
+      : "まだAIでは生成していません。以下はゲームのルールで用意した候補です。上のAI生成・手動交換で、固定リストにない候補も作れます。";
+  const offers = generated
+    ? generated.options.map((o) => ({
+        label: o.label,
+        company:
+          o.id === "switch"
+            ? (o.decision.name ?? EMPLOYERS[o.decision.target]?.name)
+            : game.employer.name,
+        kind: o.decision.candidateKind,
+        work: o.decision.proposal ?? o.decision.intent ?? o.label,
+        reason: o.reason,
+        tradeoff: o.hint,
+        decision: o.decision,
+      }))
+    : careerOffers(game);
+  for (const offer of offers) {
     const card = node("article", undefined, "career-offer");
     const button = node("button", undefined, "career-offer-button");
     button.type = "button";
@@ -1147,6 +1263,8 @@ function renderCareerOffers() {
       details.append(link);
     } else if (offer.kind === "fictional")
       card.append(node("small", "この世界で生まれた架空の企業"));
+    else if (generated && offer.kind === "real")
+      card.append(node("small", "AIが挙げた候補。実在・事業・職務は未確認"));
     card.append(details);
     container.append(card);
   }
@@ -1548,16 +1666,19 @@ $("ai-form").addEventListener("submit", async (e) => {
     $("ai-error").textContent = error.message;
   }
 });
-$("exchange-button").addEventListener("click", () => {
+function openExchange(mode = "life") {
   if (!game || game.ended) return;
-  const request = storyRequest(game);
+  exchangeMode = mode;
+  exchangeRevision = revision;
+  const request = storyRequest(game, { personalized: true, mode });
   $("exchange-prompt").value = request.messages
     .map((m) => m.content)
     .join("\n\n");
   $("exchange-result").value = "";
   $("exchange-error").textContent = "";
   $("exchange-dialog").showModal();
-});
+}
+$("exchange-button").addEventListener("click", () => openExchange());
 $("copy-prompt").addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText($("exchange-prompt").value);
@@ -1571,7 +1692,18 @@ $("import-scene").addEventListener("click", () => {
     const text = $("exchange-result")
       .value.replace(/^\s*```(?:json)?\s*/i, "")
       .replace(/\s*```\s*$/, "");
-    game = applyScene(game, JSON.parse(text));
+    if (exchangeRevision !== revision)
+      throw new Error(
+        "ゲームが進んだため、現在の場面で依頼文を作り直してください。",
+      );
+    const scene = validateGeneratedScene(JSON.parse(text), game, {
+      personalized: true,
+      mode: exchangeMode,
+    });
+    if (exchangeMode === "career") {
+      careerDraft = { revision, scene };
+      renderCareerOffers();
+    } else game = applyScene(game, scene);
     renderGame();
     $("exchange-dialog").close();
     toast("AIの場面を取り込みました。");

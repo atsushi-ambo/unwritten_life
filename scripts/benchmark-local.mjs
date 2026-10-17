@@ -6,7 +6,7 @@ import { isDeepStrictEqual } from "node:util";
 import {
   createGame,
   advance,
-  validateScene,
+  validateGeneratedScene,
   eventFor,
 } from "../public/engine.js";
 import { storyRequest, sceneSchema, groundScene } from "../public/story.js";
@@ -305,7 +305,7 @@ try {
         ].map((key) => [key, data[key]]),
       );
       const parsed = JSON.parse(result.raw);
-      const validated = validateScene(parsed, game);
+      const validated = validateGeneratedScene(parsed, game);
       result.contractUnchanged = isDeepStrictEqual(parsed, validated);
       result.scene = groundScene(validated, game);
       result.valid = true;

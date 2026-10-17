@@ -425,6 +425,24 @@
                     autocomplete="off"
                     placeholder="空欄・ニックネームでも可"
                 /></label>
+                <label
+                  ><span class="field-label"
+                    >仕事の形
+                    <small>任意。会社の規模や職種とは別の背景</small></span
+                  >
+                  <select name="workModel">
+                    <option value="unknown">まだ指定しない</option>
+                    <option value="product">
+                      自社サービス・自社製品を育てる
+                    </option>
+                    <option value="services">
+                      受託開発・SI・顧客の案件を支える
+                    </option>
+                    <option value="inhouse">事業会社の社内IT・業務部門</option>
+                    <option value="public">公共・非営利の仕事</option>
+                    <option value="self">自営・フリーランス</option>
+                  </select>
+                </label>
               </div>
               <div id="home-fields" class="form-grid optional-grid" hidden>
                 <label
@@ -987,8 +1005,21 @@
       <p id="career-intro"></p>
       <section id="career-offer-section" aria-label="働き方の4つの分岐">
         <p class="field-note">
-          経験を深める・別業界で生かす・残る・意外な接点。いまのあなたから考える、4つの道。
+          勤務先の仕事の形、専門、暮らし、これまでの選択から、AIに4つの道を考えてもらえます。会社は固定リストに限りません。
         </p>
+        <button id="career-generate" type="button" class="button primary small">
+          プロフィールからAIで4択を作る ✳
+        </button>
+        <button id="career-exchange" type="button" class="text-button">
+          好きなAIと転職4択を手動で交換 ↗
+        </button>
+        <label id="career-consent-label" class="save-toggle" hidden
+          ><input
+            id="career-consent"
+            type="checkbox"
+          />OpenAIなど接続中のクラウドAIへ、プロフィール・家計・勤務先・選択履歴を送信する</label
+        >
+        <p id="career-generation-status" class="field-note" role="status"></p>
         <p class="field-note">
           選ぶと1年進みます。転職は移行費用30万円。仕事や結果はゲーム上の架空の設定です。
         </p>

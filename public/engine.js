@@ -1,4 +1,10 @@
-import { EMPLOYERS, VENTURES } from "./careers.js";
+import {
+  EMPLOYERS,
+  VENTURES,
+  WORK_MODELS,
+  workContext,
+  employerKey,
+} from "./careers.js";
 import { worldAt, worldEnabled, opportunityAt, TONES } from "./world.js";
 // All monetary values are illustrative, in 2026 purchasing-power units of ¥10,000.
 export const VERSION = 2;
@@ -356,6 +362,8 @@ export function validateProfile(raw) {
   )
     fail();
   p.company = str(raw.company ?? "", 60);
+  p.workModel = raw.workModel ?? "unknown";
+  if (!Object.hasOwn(WORK_MODELS, p.workModel)) fail();
   p.housing = raw.housing ?? "rent";
   if (!["rent", "own"].includes(p.housing)) fail();
   if (p.housing === "rent" && (p.homeValue || p.mortgage)) fail();
@@ -421,6 +429,20 @@ export function validateDecision(raw, g) {
     return raw;
   }
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail();
+  const detail =
+    raw.intent === undefined ? {} : { intent: str(raw.intent, 100) };
+  if (raw.intent !== undefined && !detail.intent) fail();
+  if (!["switch", "startup"].includes(id)) {
+    if (id === "opportunity") return { ...validateDecision(id, g), ...detail };
+    if (!detail.intent) fail();
+    const result = { id, ...detail };
+    if (id === "move" && raw.region !== undefined) {
+      if (!Object.hasOwn(REGIONS, raw.region) || raw.region === g.region)
+        fail();
+      result.region = raw.region;
+    }
+    return result;
+  }
   if (id === "startup") {
     if (
       typeof raw.venture !== "string" ||
@@ -429,7 +451,7 @@ export function validateDecision(raw, g) {
       fail();
     const name = str(raw.name, 60);
     if (!name || g.cash < VENTURES[raw.venture].setup) fail();
-    return { id, venture: raw.venture, name };
+    return { id, venture: raw.venture, name, ...detail };
   }
   if (
     id !== "switch" ||
@@ -448,6 +470,20 @@ export function validateDecision(raw, g) {
     )
       fail();
     if (facts && (!facts.confirmed || !facts.sources.length)) fail();
+    const generated = raw.proposal !== undefined;
+    let proposal;
+    if (generated) {
+      proposal = str(raw.proposal, 300, true);
+      if (
+        !proposal ||
+        facts ||
+        !["real", "fictional"].includes(raw.candidateKind) ||
+        (raw.candidateKind === "fictional" && g.year < 2036) ||
+        !Object.hasOwn(WORK_MODELS, raw.workModel) ||
+        name === g.employer.name
+      )
+        fail();
+    }
     return {
       id,
       target: "custom",
@@ -455,6 +491,14 @@ export function validateDecision(raw, g) {
       name,
       companyType: raw.companyType,
       facts,
+      ...detail,
+      ...(generated
+        ? {
+            proposal,
+            candidateKind: raw.candidateKind,
+            workModel: raw.workModel,
+          }
+        : {}),
     };
   }
   if (typeof raw.target !== "string" || !Object.hasOwn(EMPLOYERS, raw.target))
@@ -462,7 +506,7 @@ export function validateDecision(raw, g) {
   const c = EMPLOYERS[raw.target];
   if (g.year < (c.availableFrom ?? START_YEAR) || g.employer.id === raw.target)
     fail();
-  return { id, target: raw.target, role: raw.role };
+  return { id, target: raw.target, role: raw.role, ...detail };
 }
 function nextEmployer(g, decision) {
   if (typeof decision === "string") {
@@ -477,6 +521,7 @@ function nextEmployer(g, decision) {
         }
       : g.employer;
   }
+  if (!["switch", "startup"].includes(decision.id)) return g.employer;
   if (decision.id === "startup") {
     const v = VENTURES[decision.venture];
     return {
@@ -493,13 +538,20 @@ function nextEmployer(g, decision) {
   }
   if (decision.target === "custom")
     return {
-      kind: "real",
+      kind: decision.candidateKind ?? "real",
       id: "custom",
       name: decision.name,
       role: decision.role,
       companyType: decision.companyType,
       facts: decision.facts,
       summary: decision.facts?.summary ?? "事業内容は未確認",
+      ...(decision.proposal
+        ? {
+            proposal: decision.proposal,
+            workModel: decision.workModel,
+            unverifiedCandidate: decision.candidateKind === "real",
+          }
+        : {}),
     };
   const c = EMPLOYERS[decision.target];
   return {
@@ -608,6 +660,7 @@ export function createGame(
       name: p.company || "いまの職場",
       role: p.job,
       companyType: p.companyType,
+      workModel: p.workModel,
       facts: p.companyFacts,
       summary: p.companyFacts?.confirmed ? p.companyFacts.summary : "",
     },
@@ -742,11 +795,11 @@ export function suggestedChoices(g) {
       ]),
     ]
       .filter(Boolean)
-      .slice(0, 5);
+      .slice(0, 4);
   }
   return [
     ...new Set([...contextual, ...rotations[g.decisions.length % 3]]),
-  ].slice(0, 5);
+  ].slice(0, 4);
 }
 export function workSuccessChance(g, employer = g.employer) {
   const w = worldAt(g, employer);
@@ -1006,9 +1059,34 @@ export function validateScene(raw, g) {
   const allowed = availableChoices(g),
     seen = new Set();
   const options = raw.options.map((o) => {
-    if (!o || !allowed.includes(o.id) || seen.has(o.id)) fail();
-    seen.add(o.id);
-    return { id: o.id, label: str(o.label, 50), hint: str(o.hint, 100) };
+    if (!o || !allowed.includes(o.id)) fail();
+    const decision =
+      o.decision === undefined ? null : validateDecision(o.decision, g);
+    if (
+      decision &&
+      decisionId(decision) !== o.id &&
+      !(o.id === "opportunity" && decisionId(decision) === "startup")
+    )
+      fail();
+    const key =
+      decision && ["switch", "startup"].includes(o.id)
+        ? JSON.stringify([
+            o.id,
+            decision.target,
+            decision.name,
+            decision.venture,
+            decision.role,
+          ])
+        : o.id;
+    if (seen.has(key)) fail();
+    seen.add(key);
+    return {
+      id: o.id,
+      label: str(o.label, 50),
+      hint: str(o.hint, 100),
+      ...(o.reason === undefined ? {} : { reason: str(o.reason, 100) }),
+      ...(decision ? { decision } : {}),
+    };
   });
   if (options.some((o) => !o.label) || !raw.title || !raw.body) fail();
   return {
@@ -1017,6 +1095,107 @@ export function validateScene(raw, g) {
     insight: str(raw.insight ?? "", 300, true),
     options,
   };
+}
+export function validateGeneratedScene(
+  raw,
+  g,
+  { personalized = true, mode = "life" } = {},
+) {
+  if (!personalized) {
+    if (raw?.options?.some((o) => o.decision !== undefined)) fail();
+    return validateScene(raw, g);
+  }
+  if (!raw || !Array.isArray(raw.options) || raw.options.length !== 4)
+    throw new Error(
+      "AIの返答は、実行できる4択である必要があります。自動再試行はしません。",
+    );
+  const options = raw.options.map((o) => {
+    if (!o || !str(o.reason, 100)) fail();
+    const decision = o.decision ?? { id: o.id, intent: o.label };
+    const fields = [
+      "id",
+      "intent",
+      ...(o.id === "switch"
+        ? [
+            "target",
+            "name",
+            "role",
+            "companyType",
+            "candidateKind",
+            "workModel",
+            "proposal",
+          ]
+        : o.id === "startup"
+          ? ["venture", "name"]
+          : o.id === "move"
+            ? ["region"]
+            : []),
+    ];
+    if (
+      !decision ||
+      typeof decision !== "object" ||
+      Array.isArray(decision) ||
+      Object.keys(decision).some((k) => !fields.includes(k))
+    )
+      fail();
+    const fieldLeak =
+      /target\s*:\s*custom|["\\](?:intent|target|role|workModel|companyType|candidateKind)["\\]*\s*:/iu;
+    if (
+      [o.label, o.hint, o.reason, decision.intent, decision.proposal].some(
+        (value) => typeof value === "string" && fieldLeak.test(value),
+      )
+    )
+      fail();
+    if (
+      decision.id === "switch" &&
+      decision.target === "custom" &&
+      (!decision.proposal || !decision.candidateKind || !decision.workModel)
+    )
+      fail();
+    if (
+      decision.id === "switch" &&
+      employerKey(decision.name ?? EMPLOYERS[decision.target]?.name ?? "") ===
+        employerKey(g.employer.name)
+    )
+      fail();
+    if (
+      decision.id === "switch" &&
+      decision.candidateKind === "real" &&
+      /^(?:未公開|未定|未確認|不明|非公開|匿名|架空)|^(?:大手|中小|某).*(?:企業|会社|部門|推進部)$|^(?:AI|技術|地域|一般的な|新興)?スタートアップ$/u.test(
+        decision.name ?? "",
+      )
+    )
+      fail();
+    // AI may propose an employer, never mark its invented facts as verified.
+    return { ...o, decision };
+  });
+  const scene = validateScene({ ...raw, options }, g);
+  if (mode === "career") {
+    const moves = scene.options.filter((o) => o.id === "switch");
+    const stay = scene.options.filter(
+      (o) => o.id === (g.employer.kind === "seeking" ? "rest" : "focus"),
+    );
+    const names = moves.map((o) =>
+      employerKey(o.decision.name ?? EMPLOYERS[o.decision.target]?.name ?? ""),
+    );
+    const currentName = employerKey(g.employer.name);
+    if (
+      g.retired ||
+      moves.length !== 3 ||
+      stay.length !== 1 ||
+      new Set(names).size !== 3 ||
+      names.includes(currentName) ||
+      names.some((n) => !n)
+    )
+      fail();
+    const background = workContext(g).model;
+    if (
+      ["product", "services", "inhouse", "public"].includes(background) &&
+      !moves.some((o) => o.decision.workModel === background)
+    )
+      fail();
+  }
+  return scene;
 }
 export function applyScene(g, scene) {
   if (g.ended) fail();
@@ -1211,7 +1390,7 @@ export function advance(g, rawDecision) {
   if (choice === "move") {
     const order = ["metro", "city", "rural"];
     const prev = REGIONS[region].cost;
-    region = order[(order.indexOf(region) + 1) % 3];
+    region = decision.region ?? order[(order.indexOf(region) + 1) % 3];
     livingCost *= REGIONS[region].cost / prev;
     rent *= REGIONS[region].cost / prev;
   }
@@ -1296,17 +1475,23 @@ export function advance(g, rawDecision) {
     retire: "給与収入を止めた。65歳以降は設定した退職後収入を受け取る。",
   };
   const event = eventFor(g),
-    option = event.options.find((o) => o.id === choice);
+    option = event.options.find(
+      (o) =>
+        o.id === choice &&
+        (!o.decision ||
+          JSON.stringify(o.decision) === JSON.stringify(decision)),
+    );
   const record = {
     year: g.year,
     age: g.age,
     choice,
+    ...(decision.intent ? { intention: decision.intent } : {}),
     choiceLabel:
       choice === "startup"
         ? `${employer.name}を開業`
         : choice === "switch" && typeof decision === "object"
           ? `${employer.name}へ転職`
-          : (option?.label ?? c.label),
+          : (option?.label ?? decision.intent ?? c.label),
     employer,
     title: event.title,
     income,

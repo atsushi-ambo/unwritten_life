@@ -86,7 +86,9 @@ test("example engineer gets NTT DATA, Mizuho, staying and Chugai; marketers rece
     careerOffers(g).map((o) => o.company),
   );
   assert.deepEqual(
-    storyRequest(g).context.careerRoutes.map((o) => o.company),
+    storyRequest(g, { personalized: false }).context.careerRoutes.map(
+      (o) => o.company,
+    ),
     careerOffers(g).map((o) => o.company),
   );
 });

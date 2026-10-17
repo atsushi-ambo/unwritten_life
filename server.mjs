@@ -70,6 +70,7 @@ export function makeServer({
         token,
         ai: ai.status(),
         engineRevision: "career-offers-v1",
+        choicesRevision: "personalized-four-v1",
       });
     }
     if (req.url?.startsWith("/api/")) {
@@ -107,12 +108,18 @@ export function makeServer({
           });
         if (req.url === "/api/ai/config")
           return json(res, 200, { ai: await ai.configure(body) });
-        if (req.url === "/api/scene")
+        if (req.url === "/api/scene") {
+          if (body.choiceVersion !== undefined && body.choiceVersion !== 1)
+            throw new Error("選択肢の形式を確認してください。");
           return json(
             res,
             200,
-            await ai.generate(body.save, body.cloudConsent),
+            await ai.generate(body.save, body.cloudConsent, {
+              personalized: body.choiceVersion === 1,
+              mode: body.mode ?? "life",
+            }),
           );
+        }
         if (req.url === "/api/company")
           return json(res, 200, { facts: await research(body.url) });
         return json(res, 404, { error: "Unknown endpoint" });
