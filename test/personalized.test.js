@@ -199,6 +199,7 @@ test("four-choice validation rejects invented rewards/evidence, duplicate/curren
     { workModel: "__proto__" },
     { intent: "target:custom" },
     { name: "未公開のAIスタートアップ" },
+    { name: "グローバル展開を加速させるテック企業" },
   ]) {
     const copy = structuredClone(base);
     Object.assign(copy.options[0].decision, patch);

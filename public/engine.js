@@ -1196,7 +1196,7 @@ export function validateGeneratedScene(
     if (
       decision.id === "switch" &&
       decision.candidateKind === "real" &&
-      /^(?:未公開|未定|未確認|不明|非公開|匿名|架空)|^(?:大手|中小|某).*(?:企業|会社|部門|推進部)$|^(?:AI|技術|地域|一般的な|新興)?スタートアップ$/u.test(
+      /^(?:未公開|未定|未確認|不明|非公開|匿名|架空)|^(?:大手|中小|某).*(?:企業|会社|部門|推進部)$|^(?:AI|技術|地域|一般的な|新興)?スタートアップ$|企業$/u.test(
         decision.name ?? "",
       )
     )
