@@ -259,3 +259,36 @@ test("misread financial balances in generated prose never replace the authoritat
   assert.match(result.scene.body, /顧客の声/);
   assert.equal(g.cash, 300);
 });
+
+test("OpenAI Luna uses the scene output allowance without hidden reasoning; other models keep their supported defaults", async () => {
+  const requests = [];
+  const ai = makeAI({
+    validateDestination: async () => {},
+    transport: async (_url, options) => {
+      requests.push(JSON.parse(options.body));
+      return {
+        status: 200,
+        text: JSON.stringify({
+          choices: [{ message: { content: JSON.stringify(scene) } }],
+        }),
+      };
+    },
+  });
+  for (const model of ["gpt-6-luna", "gpt-6-astra"]) {
+    await ai.configure({
+      provider: "openai",
+      baseURL: "https://api.openai.com/v1",
+      model,
+      apiKey: "synthetic-test-key",
+      inputRate: 0.1,
+      outputRate: 0.5,
+      usdCap: 0.1,
+      requestCap: 10,
+    });
+    await ai.generate(encodeSave(createGame(p)), true);
+  }
+  assert.equal(requests[0].reasoning_effort, "none");
+  assert.equal(requests[0].max_completion_tokens, 1500);
+  assert.equal(Object.hasOwn(requests[1], "reasoning_effort"), false);
+  assert.equal(ai.status().calls, 2);
+});
