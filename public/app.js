@@ -6,6 +6,8 @@ import {
   REGIONS,
   PRIORITIES,
   CHOICES,
+  decisionId,
+  availableChoices,
   createGame,
   advance,
   replay,
@@ -16,6 +18,7 @@ import {
   decodeSave,
   applyScene,
 } from "./engine.js";
+import { EMPLOYERS, VENTURES, careerCandidates } from "./careers.js";
 import { storyRequest } from "./story.js";
 const $ = (id) => document.getElementById(id),
   saveKey = "unwritten-life:v2",
@@ -30,7 +33,10 @@ let game = null,
   aiState = null,
   generating = false,
   revision = 0,
-  customCost = false;
+  customCost = false,
+  careerMode = "switch",
+  careerSources = [],
+  careerResearchRevision = 0;
 function node(tag, text, className) {
   const el = document.createElement(tag);
   if (text !== undefined) el.textContent = text;
@@ -202,8 +208,13 @@ function renderGame() {
     : `${game.year}年、${game.age}歳のあなた。`;
   $("profile-caption").textContent = [
     REGIONS[game.region].label,
-    JOBS[game.profile.job].label,
-    game.careerMoves ? "新しい職場（仮想）" : game.profile.company,
+    JOBS[game.employer.role].label,
+    game.employer.name +
+      (game.employer.kind === "fictional" || game.employer.kind === "venture"
+        ? "（架空）"
+        : game.employer.kind === "real"
+          ? "（転職は仮想）"
+          : ""),
     game.housing === "own" ? "持ち家" : "賃貸等",
     game.retired ? "退職後" : "就業中",
   ]
@@ -277,7 +288,7 @@ function renderGame() {
       node("h2", "あなたが選んだ時間が、ここにある。"),
     );
     const counts = Object.keys(CHOICES)
-      .map((k) => [k, game.decisions.filter((x) => x === k).length])
+      .map((k) => [k, game.decisions.filter((x) => decisionId(x) === k).length])
       .sort((a, b) => b[1] - a[1]);
     card.append(
       node(
@@ -312,7 +323,15 @@ function renderGame() {
       node("p", event.body),
       node("p", event.insight, "insight"),
     );
-    for (const option of event.options) {
+    const options = [...event.options];
+    for (const id of ["switch", "startup"]) {
+      if (
+        availableChoices(game).includes(id) &&
+        !options.some((o) => o.id === id)
+      )
+        options.push({ id, label: CHOICES[id].label, hint: CHOICES[id].hint });
+    }
+    for (const option of options) {
       const button = node("button", undefined, "choice");
       button.type = "button";
       button.dataset.choice = option.id;
@@ -332,6 +351,10 @@ function renderGame() {
       );
       button.addEventListener("click", () => {
         if (!button.isConnected || game.ended || generating) return;
+        if (["switch", "startup"].includes(option.id)) {
+          openCareer(option.id);
+          return;
+        }
         const step = Number($("year-step").value);
         for (let i = 0; i < step && !game.ended; i++) {
           try {
@@ -631,6 +654,220 @@ $("research-button").addEventListener("click", async () => {
     $("research-status").textContent = error.message;
   } finally {
     button.disabled = false;
+  }
+});
+function resetCareerResearch() {
+  careerResearchRevision++;
+  careerSources = [];
+  $("career-summary").value = "";
+  $("career-confirmed").checked = false;
+  $("career-research-status").textContent = "";
+}
+function openCareer(mode) {
+  careerMode = mode;
+  resetCareerResearch();
+  $("career-title").textContent =
+    mode === "startup"
+      ? "まだない仕事を、自分でつくる。"
+      : "次は、どこで働こう。";
+  $("career-intro").textContent =
+    mode === "startup"
+      ? "事業と名前を決めて、暮らしとのバランスを試してみよう。"
+      : `${game.year}年の分岐。会社と役割の組み合わせが、その後の物語と収支を変えます。`;
+  $("career-job-fields").hidden = mode !== "switch";
+  $("career-venture-fields").hidden = mode !== "startup";
+  $("career-error").textContent = "";
+  $("career-name").value = "";
+  $("career-url").value = "";
+  $("career-type").value = "unknown";
+  $("career-target").replaceChildren();
+  for (const c of careerCandidates(game)) {
+    const o = node(
+      "option",
+      `${c.name}${c.kind === "fictional" ? "（未来の架空企業）" : "（実在企業）"}`,
+    );
+    o.value = c.id;
+    $("career-target").append(o);
+  }
+  const custom = node("option", "ほかの実在企業を入力する");
+  custom.value = "custom";
+  $("career-target").append(custom);
+  $("career-role").replaceChildren();
+  $("career-sector").replaceChildren();
+  const unknown = node("option", "わからない");
+  unknown.value = "unknown";
+  $("career-sector").append(unknown);
+  for (const [id, job] of Object.entries(JOBS)) {
+    const o = node("option", job.label);
+    o.value = id;
+    $("career-sector").append(o);
+    if (!["other", "independent"].includes(id))
+      $("career-role").append(o.cloneNode(true));
+  }
+  $("career-role").value = ["other", "independent"].includes(game.employer.role)
+    ? "people"
+    : game.employer.role;
+  $("career-venture").replaceChildren();
+  for (const [id, v] of Object.entries(VENTURES)) {
+    const o = node(
+      "option",
+      `${v.label}${game.cash < v.setup ? "（資金不足）" : ""}`,
+    );
+    o.value = id;
+    o.disabled = game.cash < v.setup;
+    $("career-venture").append(o);
+  }
+  $("career-venture").value = Object.keys(VENTURES).find(
+    (id) => game.cash >= VENTURES[id].setup,
+  );
+  $("venture-name").value = "";
+  renderCareer();
+  $("career-dialog").showModal();
+}
+function renderCareer() {
+  const preview = $("career-preview");
+  preview.replaceChildren();
+  $("career-custom").hidden =
+    careerMode !== "switch" || $("career-target").value !== "custom";
+  $("career-future").textContent =
+    careerMode === "switch"
+      ? game.year < 2036
+        ? "2036年になると、この世界で生まれた架空の企業も候補に加わります。"
+        : "未来の架空企業も登場。実在企業の事業情報は2026年時点の資料を使っています。"
+      : "転職すると自分の事業から離れます。退職すると運営と事業収入を止めます。事業売却益は仮定しません。";
+  if (careerMode === "startup") {
+    const v = VENTURES[$("career-venture").value];
+    preview.append(node("b", "自分が起こす架空の事業"), node("p", v.detail));
+    $("career-cost").textContent =
+      `手元現金 ${money(game.cash)}万円 / 初期費用 ${v.setup}万円 ＋ 年間運営費 ${v.overhead}万円。初年の事業収入は今の労働収入の30〜85%を基準に変動（収入ゼロなら年120万円を基準）。以後もAIの需要・競争と経験で上下します。すべてゲームの仮定です。`;
+  } else {
+    const c = EMPLOYERS[$("career-target").value];
+    if (c) {
+      preview.append(
+        node(
+          "b",
+          c.kind === "real" ? "確認した公開情報" : "この未来の、架空の設定",
+        ),
+        node("p", c.summary),
+      );
+      if (c.url) {
+        const a = node("a", `公式の出典 ↗ / 確認 ${c.checkedAt}`);
+        a.href = c.url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        preview.append(a);
+      }
+    } else {
+      preview.append(
+        node("b", "入力した企業への、架空の転職"),
+        node(
+          "p",
+          "会社名だけでは事業内容を判断しません。公開情報を加えると、確認した事業分野もその後に反映します。",
+        ),
+      );
+      for (const s of careerSources) {
+        const a = node("a", `${s.title || s.url} / 取得 ${s.checkedAt}`);
+        a.href = s.url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        preview.append(a);
+      }
+    }
+    $("career-cost").textContent =
+      "移行費用30万円。収入は現在の労働収入・経験・職種変更・年ごとの偶然から上下します。会社のタイプと事業分野が、以後のAIの影響を変えます。職種変更時は移行の負担があり、収入ゼロなら仮の年180万円を基準にします。実際の募集や年収データは使っていません。";
+  }
+}
+for (const id of ["career-target", "career-venture"])
+  $(id).addEventListener("change", () => {
+    resetCareerResearch();
+    renderCareer();
+  });
+for (const id of ["career-name", "career-url"])
+  $(id).addEventListener("input", () => {
+    resetCareerResearch();
+    renderCareer();
+  });
+for (const id of ["career-summary", "career-sector"])
+  $(id).addEventListener("input", () => {
+    $("career-confirmed").checked = false;
+  });
+$("career-research").addEventListener("click", async () => {
+  const button = $("career-research"),
+    rev = ++careerResearchRevision;
+  button.disabled = true;
+  $("career-research-status").textContent =
+    "指定した公開ページを取得しています。";
+  try {
+    const { facts } = await api("/api/company", { url: $("career-url").value });
+    if (rev !== careerResearchRevision) return;
+    careerSources = facts.sources;
+    $("career-summary").value = facts.summary;
+    $("career-confirmed").checked = false;
+    $("career-research-status").textContent =
+      "取得元と企業の一致・内容を確認してからチェックしてください。";
+    renderCareer();
+  } catch (e) {
+    if (rev === careerResearchRevision)
+      $("career-research-status").textContent = e.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+$("career-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  try {
+    if (generating || !availableChoices(game).includes(careerMode))
+      throw new Error("今の状態では選べません。");
+    let decision;
+    if (careerMode === "startup") {
+      if (!$("venture-name").value.trim())
+        throw new Error("あなたの事業に名前をつけてください。");
+      decision = {
+        id: "startup",
+        venture: $("career-venture").value,
+        name: $("venture-name").value,
+      };
+    } else {
+      decision = {
+        id: "switch",
+        target: $("career-target").value,
+        role: $("career-role").value,
+      };
+      if (decision.target === "custom") {
+        if (!$("career-name").value.trim())
+          throw new Error("転職先の企業名を入力してください。");
+        const summary = $("career-summary").value.trim();
+        if (
+          summary &&
+          (!$("career-confirmed").checked || !careerSources.length)
+        )
+          throw new Error(
+            "公開ページを取得し、企業と内容の一致を確認してください。資料なしでも企業名だけで進められます。",
+          );
+        Object.assign(decision, {
+          name: $("career-name").value,
+          companyType: $("career-type").value,
+          facts: summary
+            ? {
+                summary,
+                sector: $("career-sector").value,
+                confirmed: true,
+                sources: careerSources,
+              }
+            : null,
+        });
+      }
+    }
+    game = advance(game, decision);
+    revision++;
+    $("career-dialog").close();
+    renderGame();
+    moveToStory();
+    toast(
+      "この分岐で1年進みました。会社と役割は、以後の人生にも引き継がれます。",
+    );
+  } catch (error) {
+    $("career-error").textContent = error.message;
   }
 });
 const presets = {

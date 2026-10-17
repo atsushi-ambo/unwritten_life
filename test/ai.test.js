@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { makeAI, configFrom } from "../lib/ai.mjs";
 import { publicAddress, destination, requestText } from "../lib/network.mjs";
-import { createGame, encodeSave } from "../public/engine.js";
+import { createGame, encodeSave, advance } from "../public/engine.js";
 import { storyRequest } from "../public/story.js";
 import http from "node:http";
 const p = {
@@ -166,4 +166,37 @@ test("bounded response sizes reject excess bodies over actual HTTP", async (t) =
       }),
     /容量/,
   );
+});
+
+test("AI receives the chosen company and business context, and different employers do not share a cache entry", async () => {
+  const contexts = [];
+  const ai = makeAI({
+    transport: async (_url, options) => {
+      const payload = JSON.parse(options.body);
+      contexts.push(JSON.parse(payload.messages[1].content));
+      return {
+        status: 200,
+        text: JSON.stringify({ message: { content: JSON.stringify(scene) } }),
+      };
+    },
+  });
+  const g = createGame(p, "steady", 42);
+  const real = advance(g, { id: "switch", target: "microsoft", role: "tech" });
+  const other = advance(g, { id: "switch", target: "toyota", role: "tech" });
+  await ai.generate(encodeSave(real));
+  assert.equal((await ai.generate(encodeSave(real))).cached, true);
+  await ai.generate(encodeSave(other));
+  const venture = advance(g, {
+    id: "startup",
+    venture: "ai",
+    name: "合成事業",
+  });
+  await ai.generate(encodeSave(venture));
+  assert.equal(contexts.length, 3);
+  assert.equal(contexts[0].currentEmployer, "Microsoft");
+  assert.match(contexts[0].companyEvidence.sources[0].url, /microsoft/);
+  assert.equal(contexts[1].currentEmployer, "トヨタ自動車");
+  assert.equal(contexts[2].career.kind, "venture");
+  assert.equal(contexts[2].currentEmployer, "合成事業");
+  assert.equal(contexts[2].companyEvidence, null);
 });

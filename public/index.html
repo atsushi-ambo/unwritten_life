@@ -740,7 +740,9 @@
         </p>
         <p id="ai-accounting" class="field-note"></p>
         <p id="ai-error" class="error" role="alert"></p>
-        <button class="button primary" type="submit">この接続先を使う ↗</button>
+        <button class="button primary" type="submit">
+          この接続先を使う ↗
+        </button>
       </form>
     </dialog>
     <dialog id="exchange-dialog">
@@ -770,6 +772,91 @@
       <button id="import-scene" class="button primary">
         この場面を取り込む ↗
       </button>
+    </dialog>
+    <dialog id="career-dialog" aria-labelledby="career-title">
+      <div class="dialog-top">
+        <p class="eyebrow">A DIFFERENT WORKING LIFE.</p>
+        <button class="close-button" data-close aria-label="閉じる">×</button>
+      </div>
+      <h2 id="career-title">次は、どこで働こう。</h2>
+      <p id="career-intro"></p>
+      <form id="career-form">
+        <div id="career-job-fields">
+          <label>転職先<select id="career-target"></select></label>
+          <label>挑戦する職種<select id="career-role"></select></label>
+          <div id="career-custom" hidden>
+            <label
+              >企業名<input
+                id="career-name"
+                maxlength="60"
+                placeholder="転職してみたい企業"
+            /></label>
+            <label
+              >会社のタイプ<select id="career-type">
+                <option value="unknown">わからない</option>
+                <option value="large">大規模な組織</option>
+                <option value="small">小規模・成長中の組織</option>
+                <option value="public">公共の組織</option>
+              </select></label
+            >
+            <details>
+              <summary>公開情報を加える（任意）</summary>
+              <label
+                >会社の公式ページURL<input
+                  id="career-url"
+                  type="url"
+                  placeholder="https://..."
+                  maxlength="2048"
+              /></label>
+              <button
+                type="button"
+                id="career-research"
+                class="button secondary"
+              >
+                公開ページを取得
+              </button>
+              <p
+                id="career-research-status"
+                class="field-note"
+                role="status"
+              ></p>
+              <label
+                >確認した事業内容<textarea
+                  id="career-summary"
+                  rows="4"
+                  maxlength="1800"
+                ></textarea>
+              </label>
+              <label>主な事業分野<select id="career-sector"></select></label>
+              <label class="check-row"
+                ><input
+                  type="checkbox"
+                  id="career-confirmed"
+                />取得元と内容が、この企業のものだと確認しました</label
+              >
+            </details>
+          </div>
+        </div>
+        <div id="career-venture-fields" hidden>
+          <label>始めたい事業<select id="career-venture"></select></label>
+          <label
+            >あなたの事業の名前<input
+              id="venture-name"
+              maxlength="60"
+              placeholder="まだない会社に、名前をつけよう"
+          /></label>
+        </div>
+        <div id="career-preview" class="career-preview"></div>
+        <p id="career-cost" class="field-note"></p>
+        <p id="career-future" class="field-note"></p>
+        <p id="career-error" class="form-error" role="alert"></p>
+        <button class="button primary" id="career-submit" type="submit">
+          この道へ、1年進む ↗
+        </button>
+      </form>
+      <p class="field-note">
+        企業の事業情報は記載の確認日時点。転職・役割・給与・AI普及や企業の未来はゲーム内の仮定です。
+      </p>
     </dialog>
     <dialog id="compare-dialog">
       <div class="dialog-top">

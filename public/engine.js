@@ -1,3 +1,4 @@
+import { EMPLOYERS, VENTURES } from "./careers.js";
 // All monetary values are illustrative, in 2026 purchasing-power units of ¥10,000.
 export const VERSION = 2;
 export const START_YEAR = 2026;
@@ -104,14 +105,24 @@ export const CHOICES = Object.freeze({
     icon: "✳",
   },
   switch: {
-    label: "働く環境を変える",
-    hint: "転職・独立。収入が上下する可能性",
+    label: "転職先を選ぶ",
+    hint: "実在企業や未来の架空企業で、次の役割を選ぶ",
     cost: 30,
     skill: 5,
     health: -2,
     connection: 2,
     freedom: 4,
     icon: "⇄",
+  },
+  startup: {
+    label: "自分の事業を起こす",
+    hint: "事業と名前を決める。初期費用と毎年の運営費、収入の変動あり",
+    cost: 0,
+    skill: 7,
+    health: -4,
+    connection: 4,
+    freedom: 8,
+    icon: "✧",
   },
   invest: {
     label: "金融資産の配分を変える",
@@ -239,6 +250,123 @@ export function validateCompanyFacts(raw) {
   });
   return { summary, sector, confirmed: raw.confirmed, sources };
 }
+// New career choices are structured; old v2 string choices retain their rules.
+export const decisionId = (value) =>
+  typeof value === "string" ? value : value?.id;
+export function validateDecision(raw, g) {
+  const id = decisionId(raw);
+  if (!availableChoices(g).includes(id)) fail();
+  if (typeof raw === "string") {
+    if (id === "startup") fail();
+    return raw;
+  }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail();
+  if (id === "startup") {
+    if (
+      typeof raw.venture !== "string" ||
+      !Object.hasOwn(VENTURES, raw.venture)
+    )
+      fail();
+    const name = str(raw.name, 60);
+    if (!name || g.cash < VENTURES[raw.venture].setup) fail();
+    return { id, venture: raw.venture, name };
+  }
+  if (
+    id !== "switch" ||
+    typeof raw.role !== "string" ||
+    !Object.hasOwn(JOBS, raw.role) ||
+    raw.role === "other" ||
+    raw.role === "independent"
+  )
+    fail();
+  if (raw.target === "custom") {
+    const name = str(raw.name, 60),
+      facts = validateCompanyFacts(raw.facts ?? null);
+    if (
+      !name ||
+      !["unknown", "large", "small", "public"].includes(raw.companyType)
+    )
+      fail();
+    if (facts && (!facts.confirmed || !facts.sources.length)) fail();
+    return {
+      id,
+      target: "custom",
+      role: raw.role,
+      name,
+      companyType: raw.companyType,
+      facts,
+    };
+  }
+  if (typeof raw.target !== "string" || !Object.hasOwn(EMPLOYERS, raw.target))
+    fail();
+  const c = EMPLOYERS[raw.target];
+  if (g.year < (c.availableFrom ?? START_YEAR) || g.employer.id === raw.target)
+    fail();
+  return { id, target: raw.target, role: raw.role };
+}
+function nextEmployer(g, decision) {
+  if (typeof decision === "string") {
+    return decision === "switch"
+      ? {
+          kind: "legacy",
+          id: "legacy",
+          name: "新しい職場（仮想）",
+          role: g.employer.role,
+          companyType: g.profile.companyType,
+          facts: null,
+        }
+      : g.employer;
+  }
+  if (decision.id === "startup") {
+    const v = VENTURES[decision.venture];
+    return {
+      kind: "venture",
+      id: decision.venture,
+      name: decision.name,
+      role: "independent",
+      companyType: "self",
+      sector: v.sector,
+      summary: v.label,
+      facts: null,
+      started: g.year,
+    };
+  }
+  if (decision.target === "custom")
+    return {
+      kind: "real",
+      id: "custom",
+      name: decision.name,
+      role: decision.role,
+      companyType: decision.companyType,
+      facts: decision.facts,
+      summary: decision.facts?.summary ?? "事業内容は未確認",
+    };
+  const c = EMPLOYERS[decision.target];
+  return {
+    kind: c.kind,
+    id: decision.target,
+    name: c.name,
+    role: decision.role,
+    companyType: c.companyType,
+    sector: c.sector,
+    summary: c.summary,
+    facts:
+      c.kind === "real"
+        ? {
+            summary: c.summary,
+            sector: c.sector,
+            confirmed: true,
+            sources: [
+              {
+                url: c.url,
+                title: c.name + " 公式事業情報",
+                checkedAt: c.checkedAt,
+              },
+            ],
+          }
+        : null,
+  };
+}
 export function randomAt(seed, year, channel = 0) {
   let n =
     (seed ^
@@ -286,6 +414,15 @@ export function createGame(profile, scenario = "steady", seed = 2026) {
     freedom: 55,
     skill: { beginner: 15, sometimes: 40, daily: 65 }[p.ai],
     retired: p.age >= p.retirementAge,
+    employer: {
+      kind: "initial",
+      id: "initial",
+      name: p.company || "いまの職場",
+      role: p.job,
+      companyType: p.companyType,
+      facts: p.companyFacts,
+      summary: p.companyFacts?.confirmed ? p.companyFacts.summary : "",
+    },
     careerMoves: 0,
     ended: false,
     history: [],
@@ -302,6 +439,8 @@ export function technologyAt(g) {
 export function availableChoices(g) {
   const ids = ["learn", "focus", "connect", "rest", "explore"];
   if (!g.retired) ids.push("switch");
+  if (!g.retired && g.employer?.kind !== "venture" && g.cash >= 60)
+    ids.push("startup");
   if (g.cash > 30) ids.push("invest");
   if (
     g.housing === "rent" &&
@@ -391,8 +530,14 @@ export function eventFor(g) {
     label: CHOICES[id].label,
     hint: CHOICES[id].hint,
   }));
-  const last = g.decisions.at(-1),
-    company = g.careerMoves ? "新しい職場" : g.profile.company || "いまの職場";
+  const last = decisionId(g.decisions.at(-1)),
+    company = g.employer.name;
+  const business =
+    g.employer.id === "custom"
+      ? g.employer.facts?.sector && g.employer.facts.sector !== "unknown"
+        ? `確認した事業分野は${JOBS[g.employer.facts.sector].label}。`
+        : ""
+      : g.employer.summary;
   let title, body;
   if (g.retired) {
     title =
@@ -400,9 +545,12 @@ export function eventFor(g) {
         ? "自分のペースで、暮らしをつなぐ。"
         : "仕事の先にある、毎日。";
     body = `${g.age}歳。${REGIONS[g.region].label}で、${g.housing === "own" ? "持ち家を手入れしながら" : "住まいの費用を払いながら"}暮らしている。給与に代わる収入と、これまでの資産をどう使うか。人との時間や新しい楽しみにも、目を向けたい。`;
+  } else if (g.employer.kind === "venture") {
+    title = `${company}を、自分の手で育てる。`;
+    body = `${company}では、${g.employer.summary}という架空の事業で、${g.year - g.employer.started}年目に入った。顧客を探し、運営費を払いながら、自分の仕事をつくる。${technologyAt(g) > 0.5 ? "AIが広く使われる世界では、効率化だけでなく選ばれる理由も必要になっている。" : "AIを試しながら、任せる部分と自分で担う部分を見極めたい。"}手元の現金は約${Math.round(g.cash)}万円。収入の変動と暮らしを両立するには、どこへ時間を使おう。`;
   } else if (last === "switch") {
     title = "新しい環境の、一年目。";
-    body = `働く環境を変え、慣れないことにも向き合う日々。${JOBS[g.profile.job].label}での経験を、新しい役割にどう生かすか。${g.skill > 50 ? "学んだAIの使い方を試せる機会も見えてきた。" : "新しい道具と仕事の進め方に、学ぶ余地がありそうだ。"}`;
+    body = `${company}へ移る架空の転職を経験し、${JOBS[g.employer.role].label}の役割で慣れないことにも向き合う日々。${business ? `事業の背景：${business} ` : ""}これまでの経験を、新しい役割にどう生かすか。${g.skill > 50 ? "学んだAIの使い方を試せる機会も見えてきた。" : "新しい道具と仕事の進め方に、学ぶ余地がありそうだ。"}`;
   } else if (g.cash < g.livingCost * 6) {
     title = "暮らしの収支を、見つめなおす。";
     body = `手元の現金が、生活費の半年分を下回っている。${g.investments > 0 ? "株式を持っていても、必要な時に同じ価格で売れるとは限らない。" : ""}${g.housing === "own" ? "住まいの維持とローンにも費用がかかる。" : "家賃も毎月の支出のひとつ。"}仕事や暮らしの組み合わせを考える一年になりそうだ。`;
@@ -411,7 +559,7 @@ export function eventFor(g) {
       technologyAt(g) > 0.5
         ? "仕事のかたちを、作りなおす。"
         : `${company}で、次の役割を考える。`;
-    body = `${g.age}歳、${JOBS[g.profile.job].label}のあなた。${SCENARIOS[g.scenario].label}の世界では、AIを使う仕事の比重が${technologyAt(g) > 0.5 ? "大きく変わってきた" : "少しずつ増えている"}。${g.profile.household === "care" ? "育児やケアとの両立も、時間の使い方を左右する。" : ""}${last === "learn" ? "去年の学びを、実際の仕事で試す場面が見えてきた。" : last === "connect" ? "大切な人と過ごした時間が、選びたい働き方を考えるきっかけになった。" : "収入だけでなく、暮らしに残る時間も大切にしたい。"}`;
+    body = `${g.age}歳、${company}で${JOBS[g.employer.role].label}を担うあなた。${SCENARIOS[g.scenario].label}の世界では、AIを使う仕事の比重が${technologyAt(g) > 0.5 ? "大きく変わってきた" : "少しずつ増えている"}。${g.profile.household === "care" ? "育児やケアとの両立も、時間の使い方を左右する。" : ""}${last === "learn" ? "去年の学びを、実際の仕事で試す場面が見えてきた。" : last === "connect" ? "大切な人と過ごした時間が、選びたい働き方を考えるきっかけになった。" : "収入だけでなく、暮らしに残る時間も大切にしたい。"}`;
   }
   return {
     title,
@@ -421,15 +569,17 @@ export function eventFor(g) {
     generated: false,
   };
 }
-export function advance(g, choice) {
+export function advance(g, rawDecision) {
   if (g.ended || g.decisions.length >= MAX_AGE)
     throw new Error("この人生の物語は完結しました。");
-  if (!availableChoices(g).includes(choice)) fail();
+  const decision = validateDecision(rawDecision, g),
+    choice = decisionId(decision);
+  const employer = nextEmployer(g, decision);
   const c = CHOICES[choice],
     p = g.profile,
     tech = technologyAt(g),
     i = g.decisions.length,
-    job = JOBS[p.job];
+    job = JOBS[employer.role];
   let {
     cash,
     investments,
@@ -449,13 +599,11 @@ export function advance(g, choice) {
     small: 1.1,
     public: 0.75,
     self: 1.15,
-  }[p.companyType];
-  const sector =
-    !g.careerMoves &&
-    p.companyFacts?.confirmed &&
-    p.companyFacts.sector !== "unknown"
-      ? JOBS[p.companyFacts.sector]
-      : null;
+  }[employer.companyType];
+  const sectorKey = employer.facts?.confirmed
+    ? employer.facts.sector
+    : employer.sector;
+  const sector = sectorKey && sectorKey !== "unknown" ? JOBS[sectorKey] : null;
   const exposure = sector
     ? job.exposure * 0.8 + sector.exposure * 0.2
     : job.exposure;
@@ -474,9 +622,34 @@ export function advance(g, choice) {
     0.12,
   );
   if (choice === "switch") growth += -0.12 + randomAt(g.seed, i, 7) * 0.3;
-  const salary = retired ? 0 : clamp(g.salary * (1 + growth), 0, 20000);
+  if (choice === "switch" && typeof decision === "object") {
+    growth +=
+      employer.role === g.employer.role ? (g.skill / 100) * 0.025 : -0.08;
+  }
+  const venture = employer.kind === "venture" ? VENTURES[employer.id] : null;
+  if (venture)
+    growth +=
+      (randomAt(g.seed, i, 21) - 0.5) * 0.4 +
+      tech * (g.skill / 100 - 0.5) * 0.1;
+  const transitionIncome =
+    choice === "startup" ? 0.3 + randomAt(g.seed, i, 22) * 0.55 : 1;
+  const salary = retired
+    ? 0
+    : clamp(
+        (choice === "startup"
+          ? g.salary || 120
+          : choice === "switch" && typeof decision === "object"
+            ? g.salary || 180
+            : g.salary) *
+          (1 + growth) *
+          transitionIncome,
+        0,
+        20000,
+      );
   const income = salary + (g.age >= 65 ? p.pension : 0);
-  let cost = c.cost,
+  const businessSetup = choice === "startup" ? venture.setup : 0;
+  const businessOverhead = venture && !retired ? venture.overhead : 0;
+  let cost = c.cost + businessSetup + businessOverhead,
     investmentTransfer = 0,
     homeTransaction = 0;
   if (choice === "invest") {
@@ -553,7 +726,11 @@ export function advance(g, choice) {
     connect: "大切な人と過ごし、つながりが深まった。",
     rest: "心と体をいたわり、暮らしのペースを整えた。",
     explore: "小さな挑戦を通じて、経験と新しいつながりが増えた。",
-    switch: "働く環境を変更。移行費用を払い、収入と自由が変化した。",
+    switch:
+      typeof decision === "object"
+        ? `${employer.name}へ、${JOBS[employer.role].label}として移る架空の転職。移行費用30万円と役割の変化を反映した。`
+        : "働く環境を変更。移行費用を払い、収入と自由が変化した。",
+    startup: `${employer.name}を開業（架空）。${venture?.label ?? ""}。初期費用${businessSetup}万円、年間運営費${businessOverhead}万円を支払い、収入が変化した。`,
     invest: "現金の一部を株式へ配分。以後の価格変動の影響も変わる。",
     home: "住まいを購入。金融資産・不動産・ローンの構成が変わった。",
     move: "地域を移り、生活費・住居費・人との距離が変わった。",
@@ -565,7 +742,13 @@ export function advance(g, choice) {
     year: g.year,
     age: g.age,
     choice,
-    choiceLabel: option?.label ?? c.label,
+    choiceLabel:
+      choice === "startup"
+        ? `${employer.name}を開業`
+        : choice === "switch" && typeof decision === "object"
+          ? `${employer.name}へ転職`
+          : (option?.label ?? c.label),
+    employer,
     title: event.title,
     income,
     salary,
@@ -584,6 +767,8 @@ export function advance(g, choice) {
     transitionCost,
     volatility,
     expenses,
+    businessSetup,
+    businessOverhead,
     disposable,
     bonus,
     investmentGain,
@@ -597,7 +782,9 @@ export function advance(g, choice) {
   };
   return {
     ...g,
-    careerMoves: g.careerMoves + (choice === "switch" ? 1 : 0),
+    employer,
+    careerMoves:
+      g.careerMoves + (["switch", "startup"].includes(choice) ? 1 : 0),
     year: g.year + 1,
     age: g.age + 1,
     income,
@@ -619,7 +806,7 @@ export function advance(g, choice) {
     skill,
     retired,
     ended,
-    decisions: [...g.decisions, choice],
+    decisions: [...g.decisions, decision],
     history: [...g.history, record],
   };
 }
@@ -646,7 +833,15 @@ export function replay(
       if (stopAtEnd) break;
       fail();
     }
-    if (stopAtEnd && !availableChoices(g).includes(decisions[i])) {
+    let unavailable = false;
+    if (stopAtEnd) {
+      try {
+        validateDecision(decisions[i], g);
+      } catch {
+        unavailable = true;
+      }
+    }
+    if (unavailable) {
       g = { ...g, comparisonBlocked: true };
       break;
     }
@@ -663,7 +858,7 @@ export function compareWorlds(g) {
   );
 }
 export function encodeSave(g) {
-  return JSON.stringify({
+  const value = JSON.stringify({
     version: VERSION,
     profile: g.profile,
     scenario: g.scenario,
@@ -671,6 +866,9 @@ export function encodeSave(g) {
     decisions: g.decisions,
     scenes: g.scenes,
   });
+  if (value.length > 250000)
+    throw new Error("保存データが上限を超えました。元の保存は保持しています。");
+  return value;
 }
 export function decodeSave(value) {
   if (typeof value !== "string" || value.length > 250000) fail();

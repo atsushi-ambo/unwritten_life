@@ -1495,3 +1495,38 @@ textarea:focus-visible {
 .game h1 {
   text-wrap: balance;
 }
+
+#career-form > div > label,
+#career-custom > label,
+#career-custom details > label {
+  display: grid;
+  gap: 8px;
+  margin-block: 18px;
+}
+#career-form select,
+#career-form input:not([type="checkbox"]),
+#career-form textarea {
+  width: 100%;
+  min-width: 0;
+}
+#career-dialog {
+  width: min(680px, calc(100% - 32px));
+}
+.career-preview {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  padding: 20px;
+  margin-block: 22px 12px;
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+.career-preview p {
+  margin-block: 10px;
+}
+.career-preview a {
+  display: block;
+  font-size: 12px;
+}
+#career-submit {
+  width: 100%;
+}
