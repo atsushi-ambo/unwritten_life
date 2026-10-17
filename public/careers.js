@@ -147,6 +147,63 @@ export const WORK_MODELS = Object.freeze({
   public: "公共・非営利の仕事",
   self: "自営・フリーランス",
 });
+// Detailed labels map to the existing broad game roles; they add narrative
+// context, not new or evidence-based pay/AI coefficients.
+export const OCCUPATIONS = Object.freeze(
+  Object.fromEntries(
+    [
+      ["software", "ソフトウェア・アプリ開発", "tech"],
+      ["infrastructure", "インフラ・クラウド・SRE", "tech"],
+      ["security", "セキュリティ", "tech"],
+      ["data", "データ分析・AI・機械学習", "tech"],
+      ["hardware", "機械・電気・ハードウェア設計", "tech"],
+      ["research", "研究・開発", "tech"],
+      ["product", "商品企画・プロダクト管理", "creative"],
+      ["design", "デザイン・UX・映像制作", "creative"],
+      ["writing", "編集・執筆・翻訳", "creative"],
+      ["marketing", "マーケティング・広告", "marketing"],
+      ["pr", "広報・PR", "marketing"],
+      ["sales", "営業・事業開発", "people"],
+      ["support", "顧客支援・カスタマーサクセス", "people"],
+      ["teaching", "教育・研修・講師", "people"],
+      ["service", "接客・販売・飲食", "people"],
+      ["hr", "人事・採用・組織開発", "office"],
+      ["accounting", "経理・財務・金融専門職", "office"],
+      ["legal", "法務・総務・行政事務", "office"],
+      ["office", "一般事務・業務支援", "office"],
+      ["medical", "医療・保健", "care"],
+      ["care", "介護・福祉", "care"],
+      ["manufacturing", "製造・生産・品質管理", "physical"],
+      ["logistics", "物流・運輸・配送", "physical"],
+      ["construction", "建設・設備・保守", "physical"],
+      ["agriculture", "農業・林業・漁業", "physical"],
+      ["management", "経営・事業運営", "independent"],
+      ["independent", "自営・フリーランス", "independent"],
+      ["student", "学生・学習が中心", "other"],
+      ["notWorking", "求職中・休職中・仕事以外が中心", "other"],
+      ["other", "その他（下に自由に書けます）", "other"],
+    ].map(([id, label, job]) => [id, { label, job }]),
+  ),
+);
+export const PROFILE_INDUSTRIES = Object.freeze({
+  software: "IT・ソフトウェア・インターネット",
+  services: "SI・ITサービス・コンサルティング",
+  finance: "銀行・証券・保険・金融",
+  manufacturing: "製造・自動車・電機",
+  health: "医薬品・医療機器・バイオ",
+  medical: "医療・介護・福祉サービス",
+  retail: "小売・卸売・EC",
+  media: "広告・メディア・エンタメ",
+  education: "教育・研究機関",
+  logistics: "運輸・物流・倉庫",
+  property: "建設・不動産・住宅",
+  energy: "エネルギー・インフラ・通信",
+  hospitality: "旅行・宿泊・飲食",
+  agriculture: "農林水産・食品",
+  public: "官公庁・自治体・非営利",
+  professional: "専門サービス・士業・人材",
+  other: "その他",
+});
 export function workContext(game) {
   const explicit =
     game.employer.workModel ??
@@ -162,6 +219,21 @@ export function workContext(game) {
           ? "ゲーム内の仮定"
           : "本人の入力",
     proposal: game.employer.proposal ?? null,
+    startingWork: {
+      occupation: OCCUPATIONS[game.profile.occupation]?.label ?? null,
+      jobDetail: game.profile.jobDetail || null,
+      industry: PROFILE_INDUSTRIES[game.profile.industry] ?? null,
+      note: "開始時点の本人入力。転職・開業後の現職の詳細ではなく、能力の証拠でもない。",
+    },
+    ...(game.employer.kind === "initial"
+      ? {
+          occupation: OCCUPATIONS[game.profile.occupation]?.label ?? null,
+          jobDetail: game.profile.jobDetail || null,
+          industry: PROFILE_INDUSTRIES[game.profile.industry] ?? null,
+          profileBasis:
+            "本人が入力した開始時の仕事。企業の確認済み資料や能力の証拠ではない。",
+        }
+      : {}),
     note: "会社の規模、業界、仕事の形、職種・専門は別の軸。同じエンジニアでも一律の候補にしない。",
   };
 }

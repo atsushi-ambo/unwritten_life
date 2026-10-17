@@ -289,7 +289,11 @@ test("actual local HTTP route forwards the personalized career contract and reje
   let calls = 0;
   const ai = makeAI({
     validateDestination: async () => {},
-    transport: async () => {
+    transport: async (_url, options) => {
+      const request = JSON.parse(options.body);
+      const context = JSON.parse(request.messages[1].content);
+      assert.equal(context.life.municipality, "合成県あおば市");
+      assert.equal(context.workplace.industry, "銀行・証券・保険・金融");
       calls++;
       return {
         status: 200,
@@ -310,6 +314,7 @@ test("actual local HTTP route forwards the personalized career contract and reje
   const origin = `http://127.0.0.1:${server.address().port}`;
   const status = await (await fetch(origin + "/api/status")).json();
   assert.equal(status.choicesRevision, "personalized-four-v1");
+  assert.equal(status.profileRevision, "profile-details-v1");
   const send = (extra) =>
     fetch(origin + "/api/scene", {
       method: "POST",
@@ -319,7 +324,15 @@ test("actual local HTTP route forwards the personalized career contract and reje
         "X-Unwritten-Token": status.token,
       },
       body: JSON.stringify({
-        save: encodeSave(createGame(profile)),
+        save: encodeSave(
+          createGame({
+            ...profile,
+            municipality: "合成県あおば市",
+            occupation: "infrastructure",
+            industry: "finance",
+            jobDetail: "銀行のクラウド運用",
+          }),
+        ),
         choiceVersion: 1,
         mode: "career",
         ...extra,

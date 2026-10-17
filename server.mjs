@@ -71,6 +71,7 @@ export function makeServer({
         ai: ai.status(),
         engineRevision: "career-offers-v1",
         choicesRevision: "personalized-four-v1",
+        profileRevision: "profile-details-v1",
       });
     }
     if (req.url?.startsWith("/api/")) {

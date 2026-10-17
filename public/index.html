@@ -161,7 +161,7 @@
               必須の自由入力はありません。分からない項目は空欄でOK。未入力の年収や資産には、下に表示するゲーム用の仮値を使います。
             </p>
             <div class="form-grid quick-grid">
-              <label
+              <label id="quick-fields"
                 ><span class="field-label">近い現在地を選ぶ</span
                 ><select id="quick-preset">
                   <option value="balanced">
@@ -191,14 +191,16 @@
               >
             </div>
             <p id="quick-summary" class="field-note"></p>
-            <button id="quick-start" type="submit" class="button primary">
-              この設定ですぐ始める ↗
-            </button>
-            <details class="optional-fields" id="profile-standard">
-              <summary>
-                2 · 詳しく入れる
-                <span>すべて任意 · 年齢 / 仕事 / 会社 / 年収</span>
-              </summary>
+            <section
+              class="optional-fields"
+              id="profile-standard"
+              hidden
+              aria-labelledby="standard-heading"
+            >
+              <h3 id="standard-heading">いまの仕事と、暮らす場所</h3>
+              <p class="field-note">
+                すべて任意です。会社名だけ、仕事内容だけでも始められます。
+              </p>
               <div class="form-grid optional-grid">
                 <label
                   ><span class="field-label">年齢</span
@@ -213,30 +215,47 @@
                     /><span>歳</span></span
                   ></label
                 ><label
-                  ><span class="field-label">住んでいる地域</span
+                  ><span class="field-label">暮らしのエリア</span
                   ><select name="region" id="region">
                     <option value="metro">首都圏・大都市</option>
                     <option value="city" selected>地方都市</option>
                     <option value="rural">郊外・地方</option>
                   </select></label
                 ><label
-                  ><span class="field-label">主な仕事・活動</span
-                  ><select name="job">
-                    <option value="tech">IT・技術・研究</option>
-                    <option value="marketing">マーケティング・広報</option>
-                    <option value="office">事務・管理・金融</option>
-                    <option value="creative">企画・デザイン・制作</option>
-                    <option value="people">営業・接客・教育</option>
-                    <option value="care">医療・介護・福祉</option>
-                    <option value="physical">現場・製造・運輸</option>
-                    <option value="independent">
-                      自営・経営・フリーランス
-                    </option>
-                    <option value="other">学生・休職中・その他</option>
-                  </select></label
-                ><label
                   ><span class="field-label"
-                    >勤務先の名前 <small>初期の物語の前提</small></span
+                    >市区町村 <small>任意・番地は不要</small></span
+                  ><input
+                    name="municipality"
+                    maxlength="80"
+                    autocomplete="off"
+                    placeholder="例：埼玉県久喜市、東京都世田谷区"
+                  /><small
+                    >地名は物語に使います。家賃などはエリア区分や入力額を使います。</small
+                  ></label
+                >
+                <label
+                  ><span class="field-label">主な仕事・活動</span
+                  ><select name="occupation" id="occupation">
+                    <option value="">まだ指定しない</option>
+                  </select></label
+                >
+                <label id="industry-field"
+                  ><span class="field-label"
+                    >働く業界 <small>職種とは別・任意</small></span
+                  ><select name="industry" id="industry">
+                    <option value="">まだ指定しない</option>
+                  </select></label
+                >
+                <label class="wide-field"
+                  ><span class="field-label"
+                    >具体的な仕事内容 <small>任意・120文字まで</small></span
+                  ><input
+                    name="jobDetail"
+                    maxlength="120"
+                    placeholder="例：銀行の社内システム運用、製薬会社でデータ分析" /></label
+                ><label id="company-field"
+                  ><span class="field-label"
+                    >勤務先・屋号の名前 <small>初期の物語の前提</small></span
                   >
                   <div class="company-search-row">
                     <input
@@ -245,7 +264,7 @@
                       type="text"
                       maxlength="60"
                       autocomplete="off"
-                      placeholder="例：NTTデータ、GMO、任天堂（任意）"
+                      placeholder="会社名を直接入力できます（任意）"
                     /><button
                       type="button"
                       id="company-search"
@@ -254,7 +273,7 @@
                       会社情報を取得
                     </button>
                   </div></label
-                ><label
+                ><label data-company-config
                   ><span class="field-label"
                     >仕事の形
                     <small>任意。会社の規模や職種とは別の背景</small></span
@@ -271,7 +290,7 @@
                     <option value="public">公共・非営利の仕事</option>
                     <option value="self">自営・フリーランス</option>
                   </select> </label
-                ><label
+                ><label data-company-config
                   ><span class="field-label">勤務先のタイプ</span
                   ><select name="companyType">
                     <option value="unknown">指定しない</option>
@@ -311,8 +330,12 @@
                   ></label
                 >
               </div>
-              <section class="company-research">
-                <h3>取得した会社情報</h3>
+              <details
+                class="company-research"
+                id="company-research-panel"
+                hidden
+              >
+                <summary>取得した会社情報を確認する</summary>
                 <p class="field-note">
                   会社名の横の「会社情報を取得」で調べます。会社を入れずに始めてもかまいません。
                 </p>
@@ -370,13 +393,35 @@
                   内容・会社の一致を確認し、この情報を前提として使う</label
                 >
                 <p id="research-status" class="field-note" role="status"></p>
-              </section>
-            </details>
-            <details class="optional-fields" id="profile-advanced">
-              <summary>
-                3 · さらに詳しく入れる
-                <span>すべて任意 · 資産 / 家計 / 家族 / 職歴</span>
-              </summary>
+              </details>
+              <details class="profile-notes">
+                <summary>職歴・希望をもう少し書く（任意）</summary>
+                <label
+                  ><span class="field-label"
+                    >職歴・得意なこと・試したい仕事
+                    <small>任意・1000文字まで</small></span
+                  ><textarea
+                    name="careerNotes"
+                    maxlength="1000"
+                    rows="3"
+                    placeholder="例：クラウド運用を経験。顧客に近いAIの仕事へ移りたい。"
+                  ></textarea>
+                </label>
+                <p class="field-note">
+                  職歴メモは物語や選択肢の参考に使います。能力や成功を保証する情報にはしません。クラウドAIを使う場合はこのメモも送信されます。
+                </p>
+              </details>
+            </section>
+            <section
+              class="optional-fields"
+              id="profile-advanced"
+              hidden
+              aria-labelledby="advanced-heading"
+            >
+              <h3 id="advanced-heading">家族・住まい・お金のこと</h3>
+              <p class="field-note">
+                分かる範囲だけで大丈夫です。入力しない項目にはゲーム用の仮値を使います。
+              </p>
               <div class="form-grid optional-grid">
                 <label
                   ><span class="field-label">パートナーとの暮らし</span
@@ -398,7 +443,7 @@
                     <option value="6">6人</option>
                   </select></label
                 >
-                <label
+                <label id="child-stage-field"
                   ><span class="field-label">子どもの年代の目安</span
                   ><select name="childStage">
                     <option value="young">未就学（モデルでは3歳）</option>
@@ -418,19 +463,9 @@
                     <option value="three">合計3人くらい</option>
                   </select></label
                 >
-                <label class="wide-field"
-                  ><span class="field-label"
-                    >職歴・得意なこと・試したい仕事
-                    <small>任意 / 1000文字まで</small></span
-                  ><textarea
-                    name="careerNotes"
-                    maxlength="1000"
-                    rows="3"
-                    placeholder="例：クラウド運用を経験。顧客に近いAIの仕事へ移りたい。"
-                  ></textarea>
-                </label>
+
                 <p class="field-note wide-field">
-                  いまの家族の支出は生活費に含めてください。全員を選んだ代表年齢として扱い、ゲーム開始後に迎えた子には年36万円を22歳まで追加する簡略モデルです。家族を迎える確率はゲーム用で、医学的な予測ではありません。職歴メモは端末内でもキーワードを話題や選択肢に使います。拾えない内容はメモとして引用し、経験や能力を推定・加点しません。文章全体の解釈には接続したAIを使い、クラウド利用時はメモも送信されます。LinkedInの自動取得は未対応です。
+                  いまの家族の支出は生活費に含めてください。全員を選んだ代表年齢として扱い、ゲーム開始後に迎えた子には年36万円を22歳まで追加する簡略モデルです。家族を迎える確率はゲーム用で、医学的な予測ではありません。
                 </p>
                 <label
                   ><span class="field-label"
@@ -566,7 +601,7 @@
                     /><span>万円</span></span
                   ></label
                 >
-                <label
+                <label data-loan-field
                   ><span class="field-label">残りの返済期間</span
                   ><span class="input-unit"
                     ><input
@@ -578,7 +613,7 @@
                     /><span>年</span></span
                   ></label
                 >
-                <label
+                <label data-loan-field
                   ><span class="field-label">住宅ローン金利</span
                   ><span class="input-unit"
                     ><input
@@ -592,7 +627,7 @@
                   ></label
                 >
               </div>
-            </details>
+            </section>
             <p id="budget-summary" class="field-note"></p>
             <fieldset class="world-picker">
               <legend>
@@ -628,8 +663,8 @@
                 ><input type="checkbox" id="remember" />
                 この端末に物語を保存する
                 <small>共有PCではオフを推奨</small></label
-              ><button type="submit" class="button primary">
-                この私で、はじめる ↗
+              ><button id="quick-start" type="submit" class="button primary">
+                この設定ですぐ始める ↗
               </button>
             </div>
             <p class="model-note">

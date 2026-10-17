@@ -13,6 +13,8 @@ import {
   advanceYears,
   optionalProfileInputs,
   PROFILE_DEFAULTS,
+  profileInputForLevel,
+  residenceName,
   replay,
   compareWorlds,
   eventFor,
@@ -30,6 +32,8 @@ import {
   workContext,
   makeDirectorySearch,
   browserDirectoryText,
+  OCCUPATIONS,
+  PROFILE_INDUSTRIES,
 } from "./careers.js";
 import {
   worldAt,
@@ -44,7 +48,7 @@ import {
 import { storyRequest } from "./story.js";
 let knowledgeCatalog = KNOWLEDGE;
 let lastJourney = null;
-let profileDefaults = { ...PROFILE_DEFAULTS };
+let profileLevel = "quick";
 const $ = (id) => document.getElementById(id),
   saveKey = "unwritten-life:v2",
   nf = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 0 });
@@ -69,6 +73,7 @@ let game = null,
 let generationStarted = 0,
   generationTimer;
 let serverCareerOffers = false;
+let serverProfileDetails = false;
 let serverPersonalizedChoices = false,
   careerDraft = null,
   careerGenerating = false,
@@ -79,7 +84,15 @@ function needsChoiceServerUpdate() {
     !standalone &&
     aiState &&
     aiState.provider !== "disabled" &&
-    !serverPersonalizedChoices
+    (!serverPersonalizedChoices ||
+      (game &&
+        [
+          game.profile.municipality,
+          game.profile.occupation,
+          game.profile.industry,
+          game.profile.jobDetail,
+        ].some(Boolean) &&
+        !serverProfileDetails))
   );
 }
 function needsCareerServerUpdate() {
@@ -139,6 +152,7 @@ async function status() {
   const data = await res.json();
   serverCareerOffers = data.engineRevision === "career-offers-v1";
   serverPersonalizedChoices = data.choicesRevision === "personalized-four-v1";
+  serverProfileDetails = data.profileRevision === "profile-details-v1";
   apiToken = data.token;
   aiState = data.ai;
   renderAI();
@@ -215,23 +229,22 @@ function persist() {
   }
 }
 function readProfile() {
-  const p = optionalProfileInputs(
+  const raw = profileInputForLevel(
     Object.fromEntries(new FormData($("profile-form"))),
-    profileDefaults,
+    profileLevel,
+    $("quick-preset").value,
   );
-  if (p.housing === "rent") {
-    p.homeValue = 0;
-    p.mortgage = 0;
-  } else p.rent = 0;
+  const p = optionalProfileInputs(raw, PROFILE_DEFAULTS);
   const summary = $("company-summary").value.trim();
-  p.companyFacts = summary
-    ? {
-        summary,
-        sector: $("company-sector").value,
-        confirmed: $("company-confirmed").checked,
-        sources: companySources,
-      }
-    : null;
+  p.companyFacts =
+    profileLevel !== "quick" && p.company && summary
+      ? {
+          summary,
+          sector: $("company-sector").value,
+          confirmed: $("company-confirmed").checked,
+          sources: companySources,
+        }
+      : null;
   return p;
 }
 function showGame(focus = false) {
@@ -343,7 +356,7 @@ function renderGame() {
     ? `${game.age}歳。ひとつの人生の、終わり。`
     : `${game.year}年、${game.age}歳のあなた。`;
   $("profile-caption").textContent = [
-    REGIONS[game.region].label,
+    residenceName(game),
     JOBS[game.employer.role].label,
     workContext(game).model !== "unknown" ? workContext(game).description : "",
     game.employer.name +
@@ -973,107 +986,67 @@ $("undo-button").addEventListener("click", () => {
 });
 $("compare-button").addEventListener("click", openComparison);
 $("generate-button").addEventListener("click", generateScene);
-function updateBudget() {
+function updateProfileVisibility() {
   const f = $("profile-form"),
-    values = optionalProfileInputs(
-      Object.fromEntries(new FormData(f)),
-      profileDefaults,
-    ),
-    own = f.elements.housing.value === "own";
+    detailed = profileLevel !== "quick",
+    advanced = profileLevel === "advanced";
+  const occupation = f.elements.occupation.value;
+  const working = !["student", "notWorking"].includes(occupation);
+  const own = f.elements.housing.value === "own";
+  $("quick-fields").hidden = detailed;
+  $("quick-summary").hidden = detailed;
+  $("profile-standard").hidden = !detailed;
+  $("profile-advanced").hidden = !advanced;
+  $("child-stage-field").hidden = Number(f.elements.children.value) === 0;
   $("home-fields").hidden = !own;
   $("rent-field").hidden = own;
+  for (const el of f.querySelectorAll("[data-loan-field]"))
+    el.hidden = !own || Number(f.elements.mortgage.value) <= 0;
+  $("company-field").hidden = !working;
+  $("industry-field").hidden = !working;
+  for (const el of f.querySelectorAll("[data-company-config]"))
+    el.hidden = !working || occupation === "independent";
+  $("company-research-panel").hidden =
+    !detailed || !working || !$("company-name").value.trim();
+  $("company-search").disabled =
+    !detailed ||
+    !working ||
+    !$("company-name").value.trim() ||
+    $("company-search").textContent.includes("調べています");
+  for (const el of f.querySelectorAll("input,select,textarea"))
+    el.disabled = !!el.closest("[hidden]");
+  $("quick-start").textContent = detailed
+    ? "この私で、はじめる ↗"
+    : "この設定ですぐ始める ↗";
+}
+function updateBudget() {
+  updateProfileVisibility();
+  const values = readProfile();
   $("quick-summary").textContent =
-    `${values.age}歳 / ${JOBS[f.elements.job.value].label}でスタート。年収・資産・会社名は任意。お金が未入力なら年収${values.income}万円・資産${values.savings}万円などの仮値を使います。`;
+    `${values.age}歳 / ${JOBS[values.job].label}でスタート。年収${values.income}万円・資産${values.savings}万円など、選んだ人物のゲーム用設定を使います。`;
   $("budget-summary").textContent =
-    `このゲームの初期設定：年収 ${values.income}万円、金融資産 ${values.savings}万円（うち株式 ${values.stocks}万円）、生活費 ${values.monthlyCost}万円/月 ＋ ${own ? "持ち家の維持・返済費" : "家賃 " + values.rent + "万円/月"}。空欄の項目は選んだ現在地の仮値です。実際の資産を入力する必要はありません。`;
+    `このゲームの初期設定：年収 ${values.income}万円、金融資産 ${values.savings}万円（うち株式 ${values.stocks}万円）、生活費 ${values.monthlyCost}万円/月 ＋ ${values.housing === "own" ? "持ち家の維持・返済費" : "家賃 " + values.rent + "万円/月"}。未入力はゲーム用の仮値です。実際の資産を入力する必要はありません。`;
+}
+for (const [id, occupation] of Object.entries(OCCUPATIONS)) {
+  const option = node("option", occupation.label);
+  option.value = id;
+  $("occupation").append(option);
+}
+for (const [id, label] of Object.entries(PROFILE_INDUSTRIES)) {
+  const option = node("option", label);
+  option.value = id;
+  $("industry").append(option);
 }
 for (const button of document.querySelectorAll("[data-profile-level]")) {
   button.addEventListener("click", () => {
-    const level = button.dataset.profileLevel;
-    $("quick-start").hidden = level !== "quick";
-    $("profile-standard").open = level !== "quick";
-    $("profile-advanced").open = level === "advanced";
+    profileLevel = button.dataset.profileLevel;
     for (const b of document.querySelectorAll("[data-profile-level]"))
       b.setAttribute("aria-pressed", String(b === button));
+    $("form-error").textContent = "";
+    updateBudget();
   });
 }
-$("quick-preset").addEventListener("change", () => {
-  const presets = {
-    balanced: {
-      age: 30,
-      region: "city",
-      income: 500,
-      savings: 300,
-      household: "solo",
-      partner: "unspecified",
-      children: 0,
-      monthlyCost: 12,
-      rent: 7,
-    },
-    starter: {
-      age: 23,
-      region: "metro",
-      income: 300,
-      savings: 80,
-      household: "solo",
-      partner: "solo",
-      children: 0,
-      monthlyCost: 12,
-      rent: 8,
-    },
-    experienced: {
-      age: 40,
-      region: "metro",
-      income: 700,
-      savings: 1000,
-      household: "solo",
-      partner: "unspecified",
-      children: 0,
-      monthlyCost: 15,
-      rent: 10,
-    },
-    family: {
-      age: 35,
-      region: "city",
-      income: 550,
-      savings: 500,
-      household: "care",
-      partner: "partner",
-      children: 2,
-      childStage: "young",
-      childrenWish: "two",
-      monthlyCost: 24,
-      rent: 9,
-    },
-    later: {
-      age: 55,
-      region: "city",
-      income: 650,
-      savings: 1800,
-      household: "shared",
-      partner: "partner",
-      children: 0,
-      monthlyCost: 20,
-      rent: 9,
-    },
-  };
-  const f = $("profile-form");
-  profileDefaults = {
-    ...PROFILE_DEFAULTS,
-    ...presets[$("quick-preset").value],
-  };
-  // Presets replace their visible assumptions; detailed company/assets remain user controlled.
-  for (const [k, v] of Object.entries({
-    childStage: "school",
-    childrenWish: "undecided",
-    ...presets[$("quick-preset").value],
-  }))
-    f.elements[k].value = String(v);
-  if (Number(f.elements.stocks.value) > Number(f.elements.savings.value))
-    f.elements.stocks.value = "0";
-  customCost = true;
-  updateBudget();
-});
+$("quick-preset").addEventListener("change", updateBudget);
 function knowledgeItem(fact) {
   const item = node("p"),
     link = node(
@@ -1164,7 +1137,8 @@ $("company-name").addEventListener("input", () => {
   $("company-summary").value = "";
   $("company-sources").replaceChildren();
   $("company-confirmed").checked = false;
-  document.querySelector(".company-research").hidden = true;
+  $("company-research-panel").open = false;
+  updateBudget();
 });
 document.querySelector(".company-research").hidden = true;
 $("company-name").addEventListener("keydown", (event) => {
@@ -1582,10 +1556,14 @@ function setupNameSearch(career = false) {
     const originalLabel = button.textContent;
     const rev = career ? ++careerResearchRevision : ++companyResearchRevision;
     const current = () =>
-      rev === (career ? careerResearchRevision : companyResearchRevision);
+      rev === (career ? careerResearchRevision : companyResearchRevision) &&
+      (career || (profileLevel !== "quick" && !$("company-field").hidden));
     button.disabled = true;
     button.textContent = "調べています…";
-    if (!career) document.querySelector(".company-research").hidden = false;
+    if (!career) {
+      $("company-research-panel").hidden = false;
+      $("company-research-panel").open = true;
+    }
     list.replaceChildren();
     message.textContent = "企業名から会社情報と公式サイトを探しています…";
     async function load(candidate) {

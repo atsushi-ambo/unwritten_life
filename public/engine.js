@@ -4,6 +4,8 @@ import {
   WORK_MODELS,
   workContext,
   employerKey,
+  OCCUPATIONS,
+  PROFILE_INDUSTRIES,
 } from "./careers.js";
 import { worldAt, worldEnabled, opportunityAt, TONES } from "./world.js";
 // All monetary values are illustrative, in 2026 purchasing-power units of ¥10,000.
@@ -362,6 +364,19 @@ export function validateProfile(raw) {
   )
     fail();
   p.company = str(raw.company ?? "", 60);
+  p.municipality = str(raw.municipality ?? "", 80);
+  p.jobDetail = str(raw.jobDetail ?? "", 120);
+  p.occupation = raw.occupation ?? "";
+  p.industry = raw.industry ?? "";
+  if (
+    typeof p.occupation !== "string" ||
+    (p.occupation !== "" &&
+      (!Object.hasOwn(OCCUPATIONS, p.occupation) ||
+        OCCUPATIONS[p.occupation].job !== p.job)) ||
+    typeof p.industry !== "string" ||
+    (p.industry !== "" && !Object.hasOwn(PROFILE_INDUSTRIES, p.industry))
+  )
+    fail();
   p.workModel = raw.workModel ?? "unknown";
   if (!Object.hasOwn(WORK_MODELS, p.workModel)) fail();
   p.housing = raw.housing ?? "rent";
@@ -417,6 +432,181 @@ export function optionalProfileInputs(raw, defaults = PROFILE_DEFAULTS) {
       result[key] = Number(raw[key]);
     else fail();
   return result;
+}
+export const QUICK_PRESETS = Object.freeze({
+  balanced: {
+    age: 30,
+    region: "city",
+    income: 500,
+    savings: 300,
+    monthlyCost: 12,
+    rent: 7,
+  },
+  starter: {
+    age: 23,
+    region: "metro",
+    income: 300,
+    savings: 80,
+    partner: "solo",
+    monthlyCost: 12,
+    rent: 8,
+  },
+  experienced: {
+    age: 40,
+    region: "metro",
+    income: 700,
+    savings: 1000,
+    monthlyCost: 15,
+    rent: 10,
+  },
+  family: {
+    age: 35,
+    region: "city",
+    income: 550,
+    savings: 500,
+    household: "care",
+    partner: "partner",
+    children: 2,
+    childStage: "young",
+    childrenWish: "two",
+    monthlyCost: 24,
+    rent: 9,
+  },
+  later: {
+    age: 55,
+    region: "city",
+    income: 650,
+    savings: 1800,
+    household: "shared",
+    partner: "partner",
+    monthlyCost: 20,
+    rent: 9,
+  },
+});
+// New-game UI only: inactive sections retain their draft values in the DOM,
+// but never leak into the chosen starting profile. Saves stay strictly validated.
+export function profileInputForLevel(
+  raw,
+  level = "quick",
+  preset = "balanced",
+) {
+  if (
+    !raw ||
+    typeof raw !== "object" ||
+    Array.isArray(raw) ||
+    !["quick", "standard", "advanced"].includes(level) ||
+    !Object.hasOwn(QUICK_PRESETS, preset)
+  )
+    fail();
+  const base = {
+    age: 30,
+    region: "city",
+    job: "tech",
+    ai: "sometimes",
+    priority: "balance",
+    gender: "undisclosed",
+    household: "solo",
+    partner: "unspecified",
+    children: 0,
+    childStage: "school",
+    childrenWish: "undecided",
+    companyType: "unknown",
+    workModel: "unknown",
+    housing: "rent",
+    company: "",
+    municipality: "",
+    occupation: "",
+    industry: "",
+    jobDetail: "",
+    careerNotes: "",
+    careerGoal: "growth",
+    tone: "realistic",
+  };
+  const pick = (keys) =>
+    Object.fromEntries(
+      keys.filter((k) => raw[k] !== undefined).map((k) => [k, raw[k]]),
+    );
+  const common = pick(["careerGoal", "tone", "scenario"]);
+  if (level === "quick")
+    return { ...base, ...QUICK_PRESETS[preset], ...common };
+  const p = {
+    ...base,
+    ...pick([
+      "age",
+      "region",
+      "municipality",
+      "occupation",
+      "industry",
+      "jobDetail",
+      "company",
+      "workModel",
+      "companyType",
+      "ai",
+      "priority",
+      "income",
+      "careerNotes",
+    ]),
+    ...common,
+  };
+  if (
+    typeof p.occupation !== "string" ||
+    (p.occupation !== "" && !Object.hasOwn(OCCUPATIONS, p.occupation))
+  )
+    fail();
+  p.job = OCCUPATIONS[p.occupation]?.job ?? "other";
+  if (["student", "notWorking"].includes(p.occupation)) {
+    p.company = "";
+    p.companyType = "unknown";
+    p.workModel = "unknown";
+    p.industry = "";
+    if (p.income === undefined || p.income === "") p.income = 0;
+  } else if (p.occupation === "independent") {
+    p.companyType = "self";
+    p.workModel = "self";
+  }
+  if (level === "advanced")
+    Object.assign(
+      p,
+      pick([
+        "partner",
+        "children",
+        "childStage",
+        "childrenWish",
+        "gender",
+        "household",
+        "monthlyCost",
+        "stocks",
+        "rent",
+        "retirementAge",
+        "pension",
+        "housing",
+        "savings",
+        "homeValue",
+        "mortgage",
+        "mortgageYears",
+        "mortgageRate",
+      ]),
+    );
+  if (Number(p.children) === 0) p.childStage = "school";
+  if (p.housing === "own") {
+    p.rent = 0;
+    if (Number(p.mortgage ?? 0) === 0) {
+      delete p.mortgageYears;
+      delete p.mortgageRate;
+    }
+  } else {
+    p.homeValue = 0;
+    p.mortgage = 0;
+    delete p.mortgageYears;
+    delete p.mortgageRate;
+  }
+  return p;
+}
+export function residenceName(g) {
+  const moved = g.decisions.some((d) => decisionId(d) === "move");
+  return !moved && g.region === g.profile.region && g.profile.municipality
+    ? g.profile.municipality
+    : REGIONS[g.region].label;
 }
 export function validateCompanyFacts(raw) {
   if (raw === null) return null;
@@ -1382,6 +1572,33 @@ export function profileStoryContext(g, { action = null, intention = "" } = {}) {
       },
       "work",
     );
+  if (
+    g.employer.kind === "initial" &&
+    (p.occupation || p.industry || p.jobDetail)
+  ) {
+    const occupation = OCCUPATIONS[p.occupation]?.label ?? JOBS[p.job].label;
+    const industry = PROFILE_INDUSTRIES[p.industry];
+    const detail = [occupation, industry, p.jobDetail]
+      .filter(Boolean)
+      .join(" / ");
+    add(
+      "work-detail",
+      "profile.occupation,industry,jobDetail",
+      "入力した仕事と業界",
+      detail,
+      [
+        `入力した仕事の背景は「${detail}」。この分野で大切にしたいことと、新しく学ぶことを考えてみる。`,
+        `「${detail}」という現在地を見返す。同じ分野を深める道と、違う現場で試す道のどちらに時間を使おう。`,
+        `仕事のメモ「${detail}」から、次に小さく試せることを探す。今ある暮らしの予定も、並べて考えたい。`,
+      ],
+      {
+        learn: `${occupation}に関わる課題を一つ学ぶ`,
+        explore: `${industry ?? occupation}で小さな試みを考える`,
+        connect: "仕事と暮らしの希望を人と話す",
+      },
+      "work",
+    );
+  }
   const facts = g.employer.facts;
   if (
     facts?.confirmed &&
@@ -1499,11 +1716,11 @@ export function profileStoryContext(g, { action = null, intention = "" } = {}) {
       "housing",
       "housing,rent,region",
       "賃貸等の住まいと地域",
-      `${REGIONS[g.region].label}・住居費 月${g.rent}万円`,
+      `${residenceName(g)}・住居費 月${g.rent}万円`,
       [
-        `住居費は月${g.rent}万円。${REGIONS[g.region].label}で暮らし続ける道と、別の地域で仕事と生活を組み直す道を考えてみる。`,
+        `住居費は月${g.rent}万円。${residenceName(g)}で暮らし続ける道と、別の地域で仕事と生活を組み直す道を考えてみる。`,
         `今の住まいの費用を払いながら、新しいことに使える時間を考える。住む場所を変えたら、暮らしのペースも変わるだろうか。`,
-        `${REGIONS[g.region].label}の暮らしにも慣れた。働く場所と住む場所を、一緒に考え直すこともできそうだ。`,
+        `${residenceName(g)}の暮らしにも慣れた。働く場所と住む場所を、一緒に考え直すこともできそうだ。`,
       ],
       { move: "住居費と仕事から、暮らす地域を変える" },
     );
@@ -1681,7 +1898,7 @@ export function eventFor(g) {
       g.age >= 80
         ? "自分のペースで、暮らしをつなぐ。"
         : "仕事の先にある、毎日。";
-    body = `${g.age}歳。${REGIONS[g.region].label}で、${g.housing === "own" ? "持ち家を手入れしながら" : "住まいの費用を払いながら"}暮らしている。給与に代わる収入と、これまでの資産をどう使うか。人との時間や新しい楽しみにも、目を向けたい。`;
+    body = `${g.age}歳。${residenceName(g)}で、${g.housing === "own" ? "持ち家を手入れしながら" : "住まいの費用を払いながら"}暮らしている。給与に代わる収入と、これまでの資産をどう使うか。人との時間や新しい楽しみにも、目を向けたい。`;
   } else if (g.employer.kind === "seeking") {
     title = "経験を持って、次の一歩を探す。";
     body = `事業を終え、暮らしと仕事を組み直している。手元現金は約${Math.round(g.cash)}万円。これまでの経験を別の企業で生かすか、まず生活のペースを整えるか。収入と支出の変化を確かめながら、次の選択を考える。`;
@@ -1725,7 +1942,7 @@ export function eventFor(g) {
       balance:
         "予定表には仕事が並んでいる。その隙間に、自分や大切な人との時間をどれくらい残したいだろう。",
     }[g.profile.careerGoal];
-    body = `${g.age}歳、${REGIONS[g.region].label}で暮らすあなた。${g.employer.role === "other" ? "次の仕事と暮らしを考える日々。" : `${company}で${JOBS[g.employer.role].label}を担っている。`}${hook} 今年は、何を大切にしてみよう。`;
+    body = `${g.age}歳、${residenceName(g)}で暮らすあなた。${g.employer.role === "other" ? "次の仕事と暮らしを考える日々。" : `${company}で${JOBS[g.employer.role].label}を担っている。`}${hook} 今年は、何を大切にしてみよう。`;
   }
   if (continuation) {
     title = continuation.nextTitle;
@@ -1733,8 +1950,12 @@ export function eventFor(g) {
     const setting = g.retired
       ? "仕事の区切りを越えた今、これまでの経験と暮らしの時間をどう使うか。"
       : `${company}で迎えた新しい年。${{ product: "利用者から届く声を、サービスの改善につなげたい。", services: "顧客の課題と、任される仕事の範囲を見つめ直す。", inhouse: "社内の現場と、仕事を支える仕組みを見渡す。" }[workplace] ?? `${JOBS[g.employer.role].label}の経験を、次にどう生かそう。`}`;
-    body = `${continuation.title} ${REGIONS[g.region].label}の${g.housing === "own" ? "持ち家" : "賃貸等の住まい"}で迎えた${g.year}年。${setting} ${continuation.next}${g.family?.childAges.length ? `子ども${g.family.childAges.length}人との時間も、同じ一年の中にある。` : ""}`;
+    body = `${continuation.title} ${residenceName(g)}の${g.housing === "own" ? "持ち家" : "賃貸等の住まい"}で迎えた${g.year}年。${setting} ${continuation.next}${g.family?.childAges.length ? `子ども${g.family.childAges.length}人との時間も、同じ一年の中にある。` : ""}`;
   }
+  const currentMunicipality =
+    residenceName(g) === g.profile.municipality ? g.profile.municipality : "";
+  if (currentMunicipality && !body.includes(currentMunicipality))
+    body = `${currentMunicipality}で暮らす。${body}`;
   const personalization = profileStoryContext(g);
   if (worldEnabled(g)) {
     body +=
@@ -1754,6 +1975,16 @@ export function eventFor(g) {
     profileBasis: worldEnabled(g)
       ? [
           ...new Set([
+            ...(currentMunicipality
+              ? [
+                  {
+                    id: "municipality",
+                    source: "profile.municipality",
+                    label: "現在の市区町村",
+                    detail: currentMunicipality,
+                  },
+                ]
+              : []),
             ...personalization.focus,
             ...options
               .map((o) =>

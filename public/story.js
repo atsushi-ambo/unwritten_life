@@ -16,6 +16,7 @@ import {
   technologyAt,
   eventFor,
   profileStoryContext,
+  residenceName,
 } from "./engine.js";
 import { careerOffers, workContext, WORK_MODELS, VENTURES } from "./careers.js";
 
@@ -134,6 +135,10 @@ export function storyRequest(
       : null,
     life: {
       region: REGIONS[game.region].label,
+      municipality:
+        residenceName(game) === game.profile.municipality
+          ? game.profile.municipality
+          : null,
       housing: game.housing,
       income: Math.round(game.income),
       cash: Math.round(game.cash),
@@ -248,7 +253,7 @@ export function storyRequest(
         role: "system",
         content:
           system +
-          " profileStoryは端末内で選んだ物語の種。focusから少なくとも一つと、別の入力条件を、本文の具体的な迷いと4択の理由へ結びつける。単にプロフィールを列挙せず、例えば専門を学ぶ時間と子の世話、転職の挑戦と住宅ローンの継続を同じ場面で考える。careerNotesの文章全体も参考にできるが、キーワードがあるだけで経験済み・得意・希望すると断定しない。未経験、希望しない等の否定も尊重する。会社資料はcompanyEvidenceで確認できた背景に限定する。直前のintentionやpastChoicesのepisodeを引き継ぎ、前年と同じ葛藤をそのまま繰り返さない。関心は能力の加点や成功の保証にしない。" +
+          " 市区町村名は本人入力であり、その地域の家賃・給与・求人・施設を調べた証拠ではない。名前だけで相場や地元企業の募集を創作しない。workplaceのstartingWorkは開始時の経歴で、転職後の現職と取り違えない。profileStoryは端末内で選んだ物語の種。focusから少なくとも一つと、別の入力条件を、本文の具体的な迷いと4択の理由へ結びつける。単にプロフィールを列挙せず、例えば専門を学ぶ時間と子の世話、転職の挑戦と住宅ローンの継続を同じ場面で考える。careerNotesの文章全体も参考にできるが、キーワードがあるだけで経験済み・得意・希望すると断定しない。未経験、希望しない等の否定も尊重する。会社資料はcompanyEvidenceで確認できた背景に限定する。直前のintentionやpastChoicesのepisodeを引き継ぎ、前年と同じ葛藤をそのまま繰り返さない。関心は能力の加点や成功の保証にしない。" +
           " localKnowledgeはローカルで選んだ参考資料。歴史は過去の事実、companySnapshotsはasOf時点の事業概要、gameAssumptionsはゲーム独自の仮定で統計ではない。資料にない事実を補わず、未来の企業発表や雇用・給与として書かない。historicalReferenceを今年の事件として再発させない。関連資料は場面の背景に使い、毎回歴史の解説を繰り返さず、本人の入力と選択の結果から具体的な選択肢を考える。" +
           (personalized
             ? ""
