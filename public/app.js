@@ -279,6 +279,9 @@ function renderGame() {
         game = advance(game, key);
         renderGame();
         $("chapter-title").focus({ preventScroll: true });
+        if (window.matchMedia("(max-width: 640px)").matches) {
+          $("event-card").scrollIntoView({ block: "start", behavior: "instant" });
+        }
       });
       choices.append(button);
     }
@@ -424,6 +427,9 @@ $("undo-button").addEventListener("click", () => {
   );
   renderGame();
   $("chapter-title").focus({ preventScroll: true });
+  if (window.matchMedia("(max-width: 640px)").matches) {
+    $("event-card").scrollIntoView({ block: "start", behavior: "instant" });
+  }
 });
 $("compare-button").addEventListener("click", openComparison);
 let customCost = false;

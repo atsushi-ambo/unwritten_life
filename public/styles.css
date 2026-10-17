@@ -1249,7 +1249,7 @@ progress::-moz-progress-bar {
     gap: 16px;
   }
   .game h1 {
-    font-size: 31px;
+    font-size: 26px;
   }
   .game .section-heading .button {
     padding: 8px 14px;
@@ -1260,7 +1260,11 @@ progress::-moz-progress-bar {
     margin-top: 24px;
     gap: 22px;
   }
+  .story-column {
+    grid-row: 1;
+  }
   .life-sidebar {
+    grid-row: 2;
     padding: 16px 18px;
   }
   .life-sidebar > .eyebrow {
