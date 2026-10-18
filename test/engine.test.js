@@ -144,11 +144,11 @@ test("pre-fix care-leave histories keep their salary, cash and recorded investme
   assert.deepEqual(replay(restored.profile, restored.scenario, restored.seed,
     restored.decisions, restored.scenes, false, restored.dynamicFrom,
     restored.worldFrom, restored.retirementFrom, restored.careLeaveSalaryFrom,
-    restored.prepayFrom, restored.debtRepayFrom), restored);
+    restored.prepayFrom, restored.debtRepayFrom, restored.salaryCapFrom), restored);
   const beforeInvestment = replay(restored.profile, restored.scenario, restored.seed,
     restored.decisions.slice(0, -1), {}, false, restored.dynamicFrom,
     restored.worldFrom, restored.retirementFrom, restored.careLeaveSalaryFrom,
-    restored.prepayFrom, restored.debtRepayFrom);
+    restored.prepayFrom, restored.debtRepayFrom, restored.salaryCapFrom);
   assert.ok(beforeInvestment.cash > 30);
   assert.deepEqual(advance(beforeInvestment, "invest"), restored);
   const currentMath = replay(restored.profile, restored.scenario, restored.seed,
@@ -307,11 +307,12 @@ test("pre-change retirement saves preserve boundary work history and the current
   for (const { id, save, expected } of fixtures) {
     assert.ok(!Object.hasOwn(save, "retirementFrom"));
     const restored = decodeSave(JSON.stringify(save));
-    const { retirementFrom, careLeaveSalaryFrom, prepayFrom, debtRepayFrom, ...state } = restored;
+    const { retirementFrom, careLeaveSalaryFrom, prepayFrom, debtRepayFrom, salaryCapFrom, ...state } = restored;
     assert.equal(retirementFrom, save.decisions.length + 1);
     assert.equal(careLeaveSalaryFrom, save.decisions.length);
     assert.equal(prepayFrom, save.decisions.length);
     assert.equal(debtRepayFrom, save.decisions.length);
+    assert.equal(salaryCapFrom, save.decisions.length);
     state.history = state.history.map(({ budget, debtRepayment, ...entry }) => entry);
     assert.deepEqual(JSON.parse(JSON.stringify(state)), expected, id);
     assert.deepEqual(decodeSave(encodeSave(restored)), restored, id);
@@ -329,6 +330,7 @@ test("pre-change retirement saves preserve boundary work history and the current
         restored.careLeaveSalaryFrom,
         restored.prepayFrom,
         restored.debtRepayFrom,
+        restored.salaryCapFrom,
       ),
       restored,
     );
