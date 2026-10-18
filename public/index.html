@@ -416,6 +416,18 @@
                 <p class="field-note">
                   職歴メモは物語や選択肢の参考に使います。能力や成功を保証する情報にはしません。クラウドAIを使う場合はこのメモも送信されます。
                 </p>
+                <label
+                  ><span class="field-label"
+                    >気になる会社・仕事（任意・AIへの候補のヒント）</span
+                  ><textarea
+                    name="careerInterests"
+                    maxlength="300"
+                    rows="3"
+                  ></textarea>
+                </label>
+                <p class="field-note">
+                  例：事業会社のAI推進、カスタマーサクセス、外資SaaS。AIが候補を考えるときの参考にするだけで、この中から選ぶとは限りません。
+                </p>
               </details>
             </section>
             <section
@@ -1140,6 +1152,10 @@
           選ぶと1年進みます。転職は移行費用30万円。仕事や結果はゲーム上の架空の設定です。
         </p>
         <div id="career-offers" class="career-offers"></div>
+        <details id="career-rule-fallback" hidden>
+          <summary>AIを使わずに選ぶ（ルールで用意した仮の候補）</summary>
+          <div id="career-rule-offers" class="career-offers"></div>
+        </details>
         <button
           id="career-manual-toggle"
           type="button"

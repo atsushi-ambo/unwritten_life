@@ -312,6 +312,9 @@ test("pre-change retirement saves preserve boundary work history and the current
     assert.equal(careLeaveSalaryFrom, save.decisions.length);
     assert.equal(prepayFrom, save.decisions.length);
     assert.equal(debtRepayFrom, save.decisions.length);
+    assert.equal(state.profile.careerInterests, "");
+    state.profile = { ...state.profile };
+    delete state.profile.careerInterests;
     state.history = state.history.map(({ budget, debtRepayment, ...entry }) => entry);
     assert.deepEqual(JSON.parse(JSON.stringify(state)), expected, id);
     assert.deepEqual(decodeSave(encodeSave(restored)), restored, id);

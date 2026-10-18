@@ -112,3 +112,44 @@ test("corrupt current saves retain the legacy backup and download the exact reco
   expect(Buffer.concat(chunks).toString()).toBe(raw);
   expect(await page.evaluate(() => localStorage.getItem("unwritten-life:v2"))).toBe(raw);
 });
+
+test("career interests survive profile tier changes and reach the existing AI context", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('[data-profile-level="standard"]').click();
+  await page.locator(".profile-notes summary").click();
+  const interests = page.locator('[name="careerInterests"]');
+  await interests.fill("事業会社のAI推進、外資SaaS");
+  await page.locator('[data-profile-level="quick"]').click();
+  await expect(interests).toBeHidden();
+  await page.locator('[data-profile-level="advanced"]').click();
+  await expect(interests).toHaveValue("事業会社のAI推進、外資SaaS");
+  await page.locator('[data-profile-level="standard"]').click();
+  await expect(interests).toHaveValue("事業会社のAI推進、外資SaaS");
+  await page.locator("#quick-start").click();
+  await expect(page.locator("#hud-year")).toHaveText("2026年");
+  await page.locator("#career-compare-button").click();
+  await page.locator("#career-exchange").click();
+  await expect(page.locator("#exchange-prompt")).toHaveValue(/careerInterests/);
+  // Career offers get one interest item per year, never the whole list.
+  await expect(page.locator("#exchange-prompt")).toHaveValue(/"careerInterests":"(?:事業会社のAI推進|外資SaaS)"/);
+});
+
+test("rule career fallback opens by keyboard and remains usable without AI", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("#demo-button").click();
+  await page.locator("#career-compare-button").click();
+  await expect(page.locator("#career-generate")).toBeVisible();
+  await expect(page.locator("#career-exchange")).toBeVisible();
+  const fallback = page.locator("#career-rule-fallback");
+  const cards = fallback.locator(".career-offer-button");
+  await expect(cards).toHaveCount(4);
+  await expect(cards.first()).toBeHidden();
+  const summary = fallback.locator(":scope > summary");
+  await expect(summary).toHaveText("AIを使わずに選ぶ（ルールで用意した仮の候補）");
+  await summary.focus();
+  await page.keyboard.press("Enter");
+  await expect(cards.first()).toBeVisible();
+  await cards.first().click();
+  await expect(page.locator("#career-dialog")).toBeHidden();
+  await expect(page.locator("#hud-year")).toHaveText("2027年");
+});

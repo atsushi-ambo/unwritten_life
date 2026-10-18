@@ -56,6 +56,11 @@ test("mobile build contains only public assets, opts out of network calls, and k
   assert.deepEqual((await readdir(dir)).sort(), result.files.sort());
   const html = await readFile(resolve(dir, "index.html"), "utf8");
   assert.match(html, /data-edition="mobile"/);
+  assert.match(html, /name="careerInterests"/);
+  assert.match(html, /id="career-rule-fallback"/);
+  const story = await readFile(resolve(dir, "story.js"), "utf8");
+  assert.match(story, /careerInterests: p.careerInterests/);
+  assert.match(story, /使う場合も最大1社まで/);
   assert.match(html, /connect-src https:\/\/www\.wikidata\.org\/w\/api\.php;/);
   assert.match(html, /API課金は発生しません/);
   for (const id of [
