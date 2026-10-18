@@ -1440,6 +1440,11 @@ function takeCareerDecision(decision) {
 function renderCareerOffers() {
   const container = $("career-offers");
   container.replaceChildren();
+  const ruleContainer = $("career-rule-offers");
+  ruleContainer.replaceChildren();
+  const fallback = $("career-rule-fallback");
+  fallback.hidden = true;
+  fallback.open = false;
   const currentRevision = revision;
   if (careerMode !== "switch") return;
   const generated =
@@ -1448,7 +1453,9 @@ function renderCareerOffers() {
     ? "AIがプロフィール・仕事の形・直前の結果から、企業と役割を考えています…"
     : generated
       ? "AIが作った4択です。企業名・職務の提案は未確認のゲーム内設定で、実際の求人ではありません。"
-      : "まだAIでは生成していません。以下はゲームのルールで用意した候補です。上のAI生成・手動交換で、固定リストにない候補も作れます。";
+      : "AIで、あなたの経験・関心・暮らしから4つの道を考えられます。AIを使わない場合は、下のルールの仮候補からも選べます。";
+  if (careerGenerating) return;
+  fallback.hidden = Boolean(generated);
   const offers = generated
     ? generated.options.map((o) => ({
         label: o.label,
@@ -1502,7 +1509,7 @@ function renderCareerOffers() {
     else if (generated && offer.kind === "real")
       card.append(node("small", "AIが挙げた候補。実在・事業・職務は未確認"));
     card.append(details);
-    container.append(card);
+    (generated ? container : ruleContainer).append(card);
   }
 }
 $("career-manual-toggle").addEventListener("click", () => {

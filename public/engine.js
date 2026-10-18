@@ -428,6 +428,7 @@ export function validateProfile(raw) {
   )
     fail();
   p.careerNotes = str(raw.careerNotes ?? "", 1000, true);
+  p.careerInterests = str(raw.careerInterests ?? "", 300, true);
   p.companyFacts = validateCompanyFacts(raw.companyFacts ?? null);
   return p;
 }
@@ -546,6 +547,7 @@ export function profileInputForLevel(
     industry: "",
     jobDetail: "",
     careerNotes: "",
+    careerInterests: "",
     careerGoal: "growth",
     tone: "realistic",
   };
@@ -572,6 +574,7 @@ export function profileInputForLevel(
       "priority",
       "income",
       "careerNotes",
+      "careerInterests",
     ]),
     ...common,
   };

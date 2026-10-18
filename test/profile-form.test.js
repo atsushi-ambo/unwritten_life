@@ -32,6 +32,7 @@ test("each starting level uses only its active fields without mutating the retai
     company: "合成銀行",
     jobDetail: "銀行のクラウド運用",
     careerNotes: "運用を見直したい",
+    careerInterests: "事業会社のAI推進",
     income: "800",
     savings: "900",
     stocks: "400",
@@ -55,6 +56,7 @@ test("each starting level uses only its active fields without mutating the retai
   assert.equal(quick.municipality, "");
   assert.equal(quick.jobDetail, "");
   assert.equal(quick.careerNotes, "");
+  assert.equal(quick.careerInterests, "");
   assert.equal(quick.children, 0);
   assert.equal(quick.scenario, "fast");
   const standard = profile(draft);
@@ -62,12 +64,14 @@ test("each starting level uses only its active fields without mutating the retai
   assert.equal(standard.job, "tech");
   assert.equal(standard.company, draft.company);
   assert.equal(standard.industry, "finance");
+  assert.equal(standard.careerInterests, draft.careerInterests);
   assert.equal(standard.savings, 300);
   assert.equal(standard.children, 0);
   assert.equal(standard.housing, "rent");
   assert.equal(standard.mortgage, 0);
   const advanced = createGame(profile(draft, "advanced"));
   assert.equal(advanced.profile.children, 2);
+  assert.equal(advanced.profile.careerInterests, draft.careerInterests);
   assert.equal(advanced.mortgage, 1000);
   assert.equal(advanced.rent, 0);
   assert.equal(advanced.cash, 500);
@@ -206,6 +210,11 @@ test("quick HTML hides whole detailed sections and exposes only one start contro
     nodes.filter((n) => attr(n, "name") === "careerNotes").length,
     1,
   );
+  const interests = nodes.find((n) => attr(n, "name") === "careerInterests");
+  const notes = nodes.find((n) => attr(n, "name") === "careerNotes");
+  assert.equal(interests.tagName, "textarea");
+  assert.equal(attr(interests, "maxlength"), "300");
+  assert.equal(interests.parentNode.parentNode, notes.parentNode.parentNode);
   assert.ok(
     nodes.some(
       (n) =>

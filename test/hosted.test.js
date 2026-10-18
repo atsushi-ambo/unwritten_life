@@ -195,6 +195,8 @@ test("hosted personalized requests enforce four executable choices before return
         JSON.parse(payload.messages[1].content).life.municipality,
         "合成市",
       );
+      assert.equal(JSON.parse(payload.messages[1].content).careerInterests, "外資SaaS");
+      assert.match(payload.messages[0].content, /関心を能力・適性・採用の根拠にしない/);
       return Response.json({
         choices: [
           {
@@ -227,6 +229,7 @@ test("hosted personalized requests enforce four executable choices before return
           municipality: "合成市",
           industry: "finance",
           jobDetail: "銀行のクラウド運用",
+          careerInterests: "外資SaaS",
         }),
       ),
     }),
