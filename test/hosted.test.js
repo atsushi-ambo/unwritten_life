@@ -522,3 +522,34 @@ test("hosted generation preserves old-client debt rules and rejects invalid boun
   }
   assert.equal(calls, 3);
 });
+
+test("hosted generation accepts saves without a salary cap boundary and rejects invalid ones before reservation", async (t) => {
+  const { db, sql } = database(t);
+  let calls = 0;
+  const api = makeHostedAPI({
+    db, origin, apiKey: "synthetic-key", now: () => 1000,
+    fetchAI: async () => {
+      calls++;
+      return Response.json({ choices: [{ message: { content: JSON.stringify(validScene) } }] });
+    },
+  });
+  const auth = await session(api),
+    saved = JSON.parse(encodeSave(advance(
+      createGame(profile, "steady", 42, 0, 0, 0, 0, 0, 0, 110), "rest")));
+  for (const salaryCapFrom of [null, -1, 1.5, 111, "0"]) {
+    const invalid = await api.scene(request(auth, {
+      save: JSON.stringify({ ...saved, salaryCapFrom }),
+    }), user);
+    assert.equal(invalid.status, 400);
+    assert.equal(calls, 0);
+    assert.equal(sql.prepare("SELECT count(*) AS n FROM ai_attempts").get().n, 0);
+  }
+  delete saved.salaryCapFrom;
+  for (const salaryCapFrom of [undefined, 110, 1]) {
+    const response = await api.scene(request(auth, {
+      save: JSON.stringify({ ...saved, ...(salaryCapFrom === undefined ? {} : { salaryCapFrom }) }),
+    }), user);
+    assert.equal(response.status, 200);
+  }
+  assert.equal(calls, 3);
+});

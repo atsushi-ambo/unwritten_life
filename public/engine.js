@@ -854,6 +854,7 @@ export function createGame(
   careLeaveSalaryFrom = 0,
   prepayFrom = 0,
   debtRepayFrom = 0,
+  salaryCapFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -878,7 +879,10 @@ export function createGame(
     prepayFrom > MAX_AGE ||
     !Number.isInteger(debtRepayFrom) ||
     debtRepayFrom < 0 ||
-    debtRepayFrom > MAX_AGE
+    debtRepayFrom > MAX_AGE ||
+    !Number.isInteger(salaryCapFrom) ||
+    salaryCapFrom < 0 ||
+    salaryCapFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -895,6 +899,7 @@ export function createGame(
     careLeaveSalaryFrom,
     prepayFrom,
     debtRepayFrom,
+    salaryCapFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -1045,7 +1050,14 @@ export function suggestedChoices(g) {
   if (allowed.includes("prepay")) contextual.unshift("prepay");
   if (g.employer.kind === "seeking" && allowed.includes("switch"))
     contextual.unshift("switch");
-  if (
+  // Two loss-making years in a row put withdrawal on the table even when the
+  // years were narrated as customer traction.
+  const losing =
+    g.employer.kind === "venture" &&
+    g.history.at(-1)?.outcome?.deficitYears >= 2 &&
+    allowed.includes("closeBusiness");
+  if (losing) contextual.unshift("closeBusiness");
+  else if (
     g.employer.kind === "venture" &&
     g.businessStage === "setback" &&
     allowed.includes("closeBusiness")
@@ -1088,6 +1100,7 @@ export function suggestedChoices(g) {
       ...new Set([
         ...(allowed.includes("prepay") ? ["prepay"] : []),
         career,
+        ...(losing ? ["closeBusiness"] : []),
         moment,
         ...(g.decisions.length % 2 === 0 ? ["studyDaily"] : []),
         ...contextual,
@@ -1164,6 +1177,110 @@ function familyTurn(g, choice) {
     family.childAges.slice(g.profile.children).filter((age) => age < 22)
       .length * 36;
   return { family, outcome, cost };
+}
+// Venture outcomes are drawn before the year's money is counted. Once the cash
+// flow is known, reword them so a "success" never hides a loss or new borrowing,
+// and so a long-running business is not narrated with the same sentence every
+// year. Text only: kind, salaryFactor and extraCost stay unchanged, and the
+// extra draw uses its own channel, so replayed saves give the same numbers.
+// Applied to world-enabled years, like annualEpisode.
+const VENTURE_PROSE = {
+  success: [
+    ["仕事が紹介され、事業に手応え。", "顧客との仕事に手応えがあった。"],
+    ["前の顧客から、次の相談が届いた。", "続けてきた仕事を見て、声をかけてくれる人がいた。"],
+    ["紹介が、紹介を呼んだ一年。", "知り合いの紹介から、新しい依頼が生まれた。"],
+    ["任せたいと言われる仕事が増えた。", "顧客から、続けて頼みたいと言われる仕事があった。"],
+  ],
+  steady: [
+    ["小さな受注を積み重ねた一年。", "事業を続け、運営費を払いながら顧客との関係を育てた。"],
+    ["大きな変化のない、地道な一年。", "目立つ受注はなかったが、既存の顧客との仕事を丁寧に続けた。"],
+    ["顧客と向き合い、足場を固めた。", "新しい顧客探しと、いまある仕事の両方に時間を使った。"],
+  ],
+  // Loss titles by outcome kind: [first loss year, continuing losses].
+  loss: {
+    success: [
+      ["手応えはあるが、収支は赤字。", "顧客はついた。収支はまだ合わない。"],
+      ["手応えはある。けれど、赤字が続く。", "顧客は増えても、収支はまだ合わない。", "評価と収支の間に、まだ距離がある。"],
+    ],
+    steady: [
+      ["受注は続いたが、収支は赤字。", "地道な一年。収支はまだ赤字。"],
+      ["受注を重ねても、赤字は埋まらない。", "続けてはいる。けれど、収支は苦しい。", "また赤字の一年。続け方が問われる。"],
+    ],
+  },
+};
+function venturePick(pool, g, recent, key = (x) => x) {
+  let index = Math.floor(
+    randomAt(g.seed, g.decisions.length, 93) * pool.length,
+  );
+  for (let n = 0; n < pool.length && recent.has(key(pool[index])); n++)
+    index = (index + 1) % pool.length;
+  return pool[index];
+}
+function narrateVentureYear(g, outcome, money) {
+  if (!["success", "steady", "setback"].includes(outcome?.kind)) return outcome;
+  const businessLoss =
+    money.salary * 0.76 < money.businessOverhead + money.businessSetup;
+  const deficit =
+    businessLoss ||
+    money.operating < 0 ||
+    money.borrowing > 0 ||
+    money.liquidation > 0;
+  let deficitYears = deficit ? 1 : 0;
+  if (deficit)
+    for (const h of [...g.history].reverse()) {
+      if (h.employer?.kind !== "venture" || !h.outcome?.deficit) break;
+      deficitYears += 1;
+    }
+  const meta = {
+    deficit,
+    deficitYears,
+    ...(deficit ? { deficitKind: businessLoss ? "business" : "household" } : {}),
+  };
+  // Setback prose already reports the loss; it only records the money result.
+  if (outcome.kind === "setback") return { ...outcome, ...meta };
+  const recent = new Set(
+    g.history.slice(-2).flatMap((h) => [h.outcome?.title, h.outcome?.body]),
+  );
+  const pivoted = outcome.title.startsWith("方向転換");
+  const [baseTitle, opening] = venturePick(
+    VENTURE_PROSE[outcome.kind],
+    g,
+    recent,
+    (entry) => entry[0],
+  );
+  const lossTitle = venturePick(
+    VENTURE_PROSE.loss[outcome.kind][deficitYears >= 2 ? 1 : 0],
+    g,
+    recent,
+  );
+  const title = deficit && !pivoted ? lossTitle : pivoted ? outcome.title : baseTitle;
+  const raised = money.salary > g.salary;
+  let body = pivoted ? "方向を変えた事業に、新しい顧客がついた。" : opening;
+  if (!deficit) {
+    body +=
+      outcome.kind === "success"
+        ? raised
+          ? "事業収入が伸び、手元の収支も保てた。広げる道も見えてきたが、運営の費用もかかる。次の一歩を選べる。"
+          : "評価は得たが、収入は大きくは伸びていない。それでも手元の収支は保てた。広げるか、続け方を整えるかを選べる。"
+        : "大きく広げる前に、次の一歩を考える。";
+  } else {
+    body += businessLoss
+      ? "ただ、事業の収入は運営費に届かず、事業そのものは赤字だった。"
+      : "ただ、事業の収入だけでは暮らしの支出をまかなえず、家計は赤字だった。";
+    if (money.borrowing > 0)
+      body += "足りない分は借入でつないだ。";
+    else if (money.liquidation > 0)
+      body += "足りない分は、株式を売って補った。";
+    else if (money.operating < 0) body += "手元の現金が減った。";
+    else body += "ほかの収入で家計は保てたが、事業だけでは成り立っていない。";
+    body +=
+      deficitYears >= 3
+        ? `赤字の年は${deficitYears}年続いている。手応えだけを頼りに続けるのか、方向転換や撤退を本気で考えるのか、決める時期かもしれない。`
+        : deficitYears === 2
+          ? "赤字は2年続いた。続ける条件を決めておくか、方向転換や撤退も選択肢に入れたい。"
+          : "手応えと収支は別のもの。続けるなら、どこで黒字にするかを考えたい。";
+  }
+  return { ...outcome, title, body, ...meta };
 }
 function yearlyOutcome(g, choice, employer) {
   const i = g.decisions.length;
@@ -1319,6 +1436,43 @@ function yearlyOutcome(g, choice, employer) {
 }
 const homePrice = (region) =>
   ({ metro: 4500, city: 3000, rural: 2000 })[region];
+// Annual salary (万円) at which raises clearly level off in a regional city.
+const SALARY_CEILINGS = Object.freeze({
+  tech: 1400,
+  marketing: 1100,
+  office: 1000,
+  creative: 1000,
+  people: 1100,
+  care: 750,
+  physical: 750,
+  independent: 1600,
+  other: 650,
+});
+// Soft ceiling for one employer: raises shrink above half of it and are
+// nearly gone at twice it. Losses are never damped, so variance remains.
+export function salaryCeiling(g, employer = g.employer) {
+  const base =
+    SALARY_CEILINGS[employer.role] *
+    { metro: 1.2, city: 1, rural: 0.85 }[g.region] *
+    ({ large: 1.15, small: 0.9, public: 0.9, self: 1.1 }[employer.companyType] ??
+      1) *
+    (employer.kind === "venture" ? 2 : 1);
+  return Math.round(Math.max(base, g.profile.income * 1.3));
+}
+// Only raises are damped. Each factor below 1 (negative growth, care leave)
+// is applied in full, so a loss or a later restoration never cancels a cut and
+// slips past the damping. The ratio uses full-time pay after care leave.
+function cappedSalary(g, employer, base, factors, transition, restore) {
+  const ratio = (base * restore) / salaryCeiling(g, employer);
+  const damp = ratio <= 0.5 ? 1 : Math.exp(-3 * (ratio - 0.5));
+  const merit = factors.reduce((m, f) => m * Math.max(f, 1), 1),
+    cut = factors.reduce((m, f) => m * Math.min(f, 1), 1);
+  return clamp(
+    base * (1 + (merit - 1) * damp) * cut * transition * restore,
+    0,
+    20000,
+  );
+}
 export function mortgagePayment(balance, rate, years) {
   if (balance <= 0) return 0;
   const r = rate / 100 / 12,
@@ -1999,7 +2153,13 @@ export function eventFor(g) {
     body = `事業を終え、暮らしと仕事を組み直している。手元現金は約${Math.round(g.cash)}万円。これまでの経験を別の企業で生かすか、まず生活のペースを整えるか。収入と支出の変化を確かめながら、次の選択を考える。`;
   } else if (g.employer.kind === "venture") {
     title = `${company}を、自分の手で育てる。`;
-    body = `${company}では、${g.employer.summary}という架空の事業で、${g.year - g.employer.started}年目に入った。顧客を探し、運営費を払いながら、自分の仕事をつくる。${technologyAt(g) > 0.5 ? "AIが広く使われる世界では、効率化だけでなく選ばれる理由も必要になっている。" : "AIを試しながら、任せる部分と自分で担う部分を見極めたい。"}手元の現金は約${Math.round(g.cash)}万円。収入の変動と暮らしを両立するには、どこへ時間を使おう。`;
+    body = `${company}では、${g.employer.summary}という架空の事業で、${g.year - g.employer.started}年目に入った。顧客を探し、運営費を払いながら、自分の仕事をつくる。${technologyAt(g) > 0.5 ? "AIが広く使われる世界では、効率化だけでなく選ばれる理由も必要になっている。" : "AIを試しながら、任せる部分と自分で担う部分を見極めたい。"}手元の現金は約${Math.round(g.cash)}万円。${
+      g.history.at(-1)?.outcome?.deficit
+        ? g.history.at(-1).outcome.deficitYears >= 2
+          ? "赤字の年が続き、借入や貯えの減り方も気になる。続ける条件、方向転換、撤退をどう比べよう。"
+          : "去年は収支が赤字だった。手応えを、どうやって収入に変えよう。"
+        : "収入の変動と暮らしを両立するには、どこへ時間を使おう。"
+    }`;
   } else if (last === "switch") {
     title = "新しい環境の、一年目。";
     body = `${company}へ移る架空の転職を経験し、${JOB_PROSE[g.employer.role]}に取り組みながら、慣れないことにも向き合う日々。${business ? `事業の背景：${business} ` : ""}これまでの経験を、新しい役割にどう生かすか。${g.skill > 50 ? "学んだAIの使い方を試せる機会も見えてきた。" : "新しい道具と仕事の進め方に、学ぶ余地がありそうだ。"}`;
@@ -2157,6 +2317,9 @@ export function annualEpisode(before, record) {
     "すぐに答えの出ない課題を、少しずつ調べ続けた。",
     "前なら読み飛ばした説明が、少し分かるようになった。",
   ][variation];
+  const deficit = record.outcome?.deficit === true,
+    deficitYears = record.outcome?.deficitYears ?? 0;
+  let ventureTold = false;
   let title = record.outcome?.title ?? CHOICES[id].label;
   let body = record.outcome?.body ?? record.note;
   let nextTitle = [
@@ -2188,7 +2351,11 @@ export function annualEpisode(before, record) {
     next = ok
       ? "小さく仕事で試す、成果をもとに相談する、学びを続ける。手応えの先にも選び方がある。"
       : "もう一年続けるか、小さな実践へ移るか。それとも、いったん息をつくか。";
-  } else if (id === "focus" || id === "pilot" || id === "negotiate") {
+  } else if (
+    record.employer.kind !== "venture" &&
+    !["failure", "closure"].includes(record.outcome?.kind) &&
+    (id === "focus" || id === "pilot" || id === "negotiate")
+  ) {
     body = `${workplaceName(record.employer)}で、${setting}に向き合った。${record.outcome?.body ?? record.note}`;
     nextTitle = ok
       ? "任されることが増えた、その先。"
@@ -2222,13 +2389,31 @@ export function annualEpisode(before, record) {
     record.outcome?.kind === "failure" ||
     record.outcome?.kind === "closure"
   ) {
-    body = `${record.outcome?.body ?? record.note}${record.outcome?.kind === "failure" || record.outcome?.kind === "closure" ? "事業を終えた経験を持って、暮らしと次の仕事を組み直す。" : "顧客を探す時間と運営の負担。その両方が、仕事を選ぶ意味を変えていく。"}`;
+    const ended =
+      record.outcome?.kind === "failure" || record.outcome?.kind === "closure";
+    ventureTold = true;
+    body = `${record.outcome?.body ?? record.note}${
+      ended
+        ? "事業を終えた経験を持って、暮らしと次の仕事を組み直す。"
+        : [
+            "顧客を探す時間と運営の負担。その両方が、仕事を選ぶ意味を変えていく。",
+            "自分で決められる自由と、収入が読めない不安。その両方を抱えて働いている。",
+            "請求書を送る日と、支払いを確かめる日。事業の一年は、その繰り返しでもあった。",
+          ][
+            // Rotate by business year so consecutive years never repeat.
+            Math.abs(record.year - (record.employer.started ?? record.year)) % 3
+          ]
+    }`;
     nextTitle =
       record.employer.kind === "seeking"
         ? "この経験を、次の暮らしへ。"
-        : ok
-          ? "広げる前に、何を確かめる？"
-          : "続け方を、変えてみる？";
+        : deficit
+          ? deficitYears >= 2
+            ? "続ける、変える、手を引く。"
+            : "手応えを、収支に変えられる？"
+          : ok
+            ? "広げる前に、何を確かめる？"
+            : "続け方を、変えてみる？";
   } else if (["home", "move", "invest", "prepay"].includes(id)) {
     title =
       id === "move"
@@ -2240,6 +2425,15 @@ export function annualEpisode(before, record) {
             : "お金の置き場所を、見直した。";
     body = `${record.note.replace(`${record.outcome?.title} `, "")}働くための時間、手元の余裕、これから守りたい暮らしを、改めて考える。`;
     nextTitle = "この暮らしに合う、働き方は？";
+  }
+  if (deficit) {
+    // Learning or resting in a loss-making venture year still shows the loss.
+    if (!ventureTold)
+      body += ` ${record.outcome.deficitKind === "business" ? "事業の収支" : "事業の収入と暮らしの支出"}は、${deficitYears >= 2 ? "赤字の年が続いている。" : "今年は赤字だった。"}`;
+    next =
+      deficitYears >= 2
+        ? "赤字のまま続けるなら、いつまでに何を変えるかを決めたい。事業の方向を変える、規模を抑える、撤退して働き方を組み直すこともできる。"
+        : "顧客の手応えを、収支の改善につなげたい。運営費を見直す、価格や仕事の選び方を変える、続ける期限を決めることも考えられる。";
   }
   if (record.familyOutcome && record.familyOutcome !== record.outcome)
     body += ` ${record.familyOutcome.body}`;
@@ -2392,7 +2586,7 @@ export function advance(g, rawDecision) {
   const familyChange = familyTurn(g, choice);
   const workOutcome = yearlyOutcome(g, choice, employer);
   // Family events do not suspend business risk. Both can happen in one year.
-  const outcome =
+  let outcome =
     employer.kind === "venture"
       ? workOutcome
       : (familyChange.outcome ?? workOutcome);
@@ -2468,7 +2662,30 @@ export function advance(g, rawDecision) {
     choice === "startup" ? 0.3 + randomAt(g.seed, i, 22) * 0.55 : 1;
   const salary = retired
     ? 0
-    : clamp(
+    : i >= g.salaryCapFrom
+      ? cappedSalary(
+          g,
+          employer,
+          choice === "startup"
+            ? g.salary || 120
+            : choice === "switch" && typeof decision === "object"
+              ? g.salary || 180
+              : g.salary,
+          [
+            1 + growth,
+            outcome?.salaryFactor ?? 1,
+            familyChange.outcome && outcome !== familyChange.outcome
+              ? familyChange.outcome.salaryFactor
+              : 1,
+          ],
+          transitionIncome,
+          world &&
+            (g.decisions.length < g.careLeaveSalaryFrom || g.salary > 0) &&
+            decisionId(g.decisions.at(-1)) === "careLeave"
+            ? 1 / 0.85
+            : 1,
+        )
+      : clamp(
         (choice === "startup"
           ? g.salary || 120
           : choice === "switch" && typeof decision === "object"
@@ -2582,6 +2799,16 @@ export function advance(g, rawDecision) {
   debt -= debtRepayment;
   const debtInterest = debt * 0.02;
   debt += debtInterest;
+  // Legacy (pre-world) years keep their recorded outcome objects verbatim.
+  if (employer.kind === "venture" && world)
+    outcome = narrateVentureYear(g, outcome, {
+      salary,
+      businessOverhead,
+      businessSetup,
+      operating: disposable - expenses + bonus,
+      borrowing,
+      liquidation,
+    });
   const health = clamp(
     g.health +
       c.health -
@@ -2766,6 +2993,7 @@ export function replay(
   careLeaveSalaryFrom = 0,
   prepayFrom = 0,
   debtRepayFrom = 0,
+  salaryCapFrom = 0,
 ) {
   if (
     !Array.isArray(decisions) ||
@@ -2786,6 +3014,7 @@ export function replay(
     careLeaveSalaryFrom,
     prepayFrom,
     debtRepayFrom,
+    salaryCapFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -2826,6 +3055,7 @@ export function compareWorlds(g) {
       g.careLeaveSalaryFrom,
       g.prepayFrom,
       g.debtRepayFrom,
+      g.salaryCapFrom,
     ),
   );
 }
@@ -2836,7 +3066,10 @@ export function encodeSave(g) {
     g.prepayFrom > MAX_AGE ||
     !Number.isInteger(g.debtRepayFrom) ||
     g.debtRepayFrom < 0 ||
-    g.debtRepayFrom > MAX_AGE
+    g.debtRepayFrom > MAX_AGE ||
+    !Number.isInteger(g.salaryCapFrom) ||
+    g.salaryCapFrom < 0 ||
+    g.salaryCapFrom > MAX_AGE
   )
     fail();
   const value = JSON.stringify({
@@ -2847,6 +3080,7 @@ export function encodeSave(g) {
     careLeaveSalaryFrom: g.careLeaveSalaryFrom,
     prepayFrom: g.prepayFrom,
     debtRepayFrom: g.debtRepayFrom,
+    salaryCapFrom: g.salaryCapFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
@@ -2881,5 +3115,6 @@ export function decodeSave(value) {
       : d.decisions?.length,
     Object.hasOwn(d, "prepayFrom") ? d.prepayFrom : d.decisions?.length,
     Object.hasOwn(d, "debtRepayFrom") ? d.debtRepayFrom : d.decisions?.length,
+    Object.hasOwn(d, "salaryCapFrom") ? d.salaryCapFrom : d.decisions?.length,
   );
 }

@@ -301,6 +301,33 @@ test("AI preserves old-client debt rules and separates repayment boundaries in t
   }
 });
 
+test("AI separates salary cap boundaries in the cache and rejects invalid ones", async () => {
+  let calls = 0;
+  const ai = makeAI({
+    transport: async () => {
+      calls++;
+      return {
+        status: 200,
+        text: JSON.stringify({ message: { content: JSON.stringify(scene) } }),
+      };
+    },
+  });
+  const saved = JSON.parse(encodeSave(advance(
+    createGame(p, "steady", 42, 0, 0, 0, 0, 0, 0, 110), "rest")));
+  delete saved.salaryCapFrom;
+  assert.equal((await ai.generate(JSON.stringify(saved))).cached, false);
+  assert.equal((await ai.generate(JSON.stringify({ ...saved, salaryCapFrom: 110 }))).cached, true);
+  for (const salaryCapFrom of [0, 1]) {
+    const explicit = JSON.stringify({ ...saved, salaryCapFrom });
+    assert.equal((await ai.generate(explicit)).cached, false);
+    assert.equal((await ai.generate(explicit)).cached, true);
+  }
+  assert.equal(calls, 3);
+  for (const salaryCapFrom of [null, -1, 1.5, 111, "0"])
+    await assert.rejects(() => ai.generate(JSON.stringify({ ...saved, salaryCapFrom })));
+  assert.equal(calls, 3);
+});
+
 test("local model discovery uses fixed endpoints, filters cloud models, and rejects mistyped selections", async () => {
   const urls = [];
   const ai = makeAI({
