@@ -6,6 +6,7 @@ import {
   employerKey,
   OCCUPATIONS,
   PROFILE_INDUSTRIES,
+  careerMilestones,
 } from "./careers.js";
 import { worldAt, worldEnabled, opportunityAt, TONES } from "./world.js";
 // All monetary values are illustrative, in 2026 purchasing-power units of ¥10,000.
@@ -948,6 +949,7 @@ export function createGame(
     ended: false,
     history: [],
     scenes: {},
+    reflections: {},
   };
 }
 export function technologyAt(g) {
@@ -2525,7 +2527,7 @@ export function annualEpisode(before, record) {
       : {}),
   };
 }
-export function advanceYears(game, decision, years = 1) {
+export function advanceYears(game, decision, years = 1, { pauseAtMilestones = false } = {}) {
   if (![1, 5, 10].includes(years)) fail();
   const repeated = new Set([
     "learn",
@@ -2568,6 +2570,10 @@ export function advanceYears(game, decision, years = 1) {
       ["failure", "closure"].includes(next.history.at(-1).outcome?.kind)
     ) {
       stopReason = "働き方の節目です。ここからの方針を選び直せます。";
+      break;
+    }
+    if (pauseAtMilestones && careerMilestones(next).some((m) => m.step === next.decisions.length)) {
+      stopReason = "キャリアの節目です。ここまでを一行で振り返れます。";
       break;
     }
   }
@@ -3086,6 +3092,7 @@ export function encodeSave(g) {
     seed: g.seed,
     decisions: g.decisions,
     scenes: g.scenes,
+    reflections: validateReflections(Object.hasOwn(g, "reflections") ? g.reflections : {}, g),
   });
   if (value.length > 250000)
     throw new Error("保存データが上限を超えました。元の保存は保持しています。");
@@ -3098,7 +3105,7 @@ export function decodeSave(value) {
     throw new Error(
       "旧版または未対応の保存形式です。元データを保持したまま新しい物語を開始してください。",
     );
-  return replay(
+  const game = replay(
     d.profile,
     d.scenario,
     d.seed,
@@ -3117,4 +3124,20 @@ export function decodeSave(value) {
     Object.hasOwn(d, "debtRepayFrom") ? d.debtRepayFrom : d.decisions?.length,
     Object.hasOwn(d, "salaryCapFrom") ? d.salaryCapFrom : d.decisions?.length,
   );
+  game.reflections = validateReflections(Object.hasOwn(d, "reflections") ? d.reflections : {}, game);
+  return game;
+}
+
+function validateReflections(raw, game) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw) || Object.keys(raw).length > 5) fail();
+  const allowed = new Set(careerMilestones(game).map((m) => m.id));
+  const result = {};
+  for (const [id, text] of Object.entries(raw)) {
+    if (!allowed.has(id) || typeof text !== "string" || /[\u2028\u2029]/u.test(text)) fail();
+    result[id] = str(text, 80);
+  }
+  return result;
+}
+export function recordCareerReflection(game, id, text) {
+  return { ...game, reflections: validateReflections({ ...game.reflections, [id]: text }, game) };
 }

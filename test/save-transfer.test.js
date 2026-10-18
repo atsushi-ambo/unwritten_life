@@ -6,8 +6,9 @@ import { createContext, runInContext } from "node:vm";
 import { parse } from "parse5";
 import {
   createGame, advance, advanceYears, optionalProfileInputs, profileInputForLevel,
-  encodeSave, decodeSave, availableChoices, decisionId, replay,
+  encodeSave, decodeSave, availableChoices, decisionId, replay, recordCareerReflection,
 } from "../public/engine.js";
+import { careerMilestones, pendingCareerReflection } from "../public/careers.js";
 
 const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 const saveKey = "unwritten-life:v2";
@@ -39,8 +40,8 @@ function harness({ game = null, remember = false, stored = {} } = {}) {
   const context = createContext({
     $, game, remember, savedGame: null, corruptSave: null,
     pendingImportedGame: null, saveImportRevision: 0,
-    generating: false, revision: 0, lastJourney: null,
-    saveKey, encodeSave, decodeSave, Blob,
+    generating: false, revision: 0, lastJourney: null, activeReflection: null, favoriteYears: new Set(), favoritesOnly: false,
+    saveKey, encodeSave, decodeSave, Blob, careerMilestones, pendingCareerReflection, recordCareerReflection,
     localStorage: {
       getItem: (key) => storage.get(key) ?? null,
       setItem: (key, value) => storage.set(key, value),
@@ -57,11 +58,13 @@ function harness({ game = null, remember = false, stored = {} } = {}) {
     toast: (message) => notices.push(message),
     window: { scrollTo() {} },
     maybeGenerateScene() {},
+    moveToStory() {},
     renderGame() { rendered++; runInContext("persist()", context); },
   });
   for (const [start, end] of [
     ["function readStoredGame()", "function readProfile()"],
     ["function showGame(", "function stat("],
+    ["function showReflection()", '$("journey-review").addEventListener'],
     ["function downloadSave(", "if (standalone || hosted)"],
   ]) runInContext(app.slice(app.indexOf(start), app.indexOf(end)), context);
   return {
@@ -103,6 +106,26 @@ test("current and stored saves export JSON and round-trip through the actual fil
   runInContext("readStoredGame()", stored.context);
   stored.$("export-save").click();
   assert.equal(await stored.downloads[0].blob.text(), raw);
+});
+
+test("import at a checkpoint asks once, persists a line, and treats closing as an optional skip", async () => {
+  const game = advance(createGame({ ...initial().profile, age: 29 }), "rest");
+  const h = harness({ remember: true });
+  await h.importFile(file(encodeSave(game)));
+  assert.equal(h.$("reflection-dialog").open, true);
+  h.$("reflection-line").value = "これからも学びたい";
+  h.$("reflection-form").listeners.submit({ preventDefault() {} });
+  assert.equal(h.$("reflection-dialog").open, false);
+  assert.equal(decodeSave(h.storage.get(saveKey)).reflections["age-30"], "これからも学びたい");
+  runInContext("showGame()", h.context);
+  assert.equal(h.$("reflection-dialog").open, false);
+
+  const skipped = harness({ remember: true });
+  await skipped.importFile(file(encodeSave(game)));
+  skipped.$("reflection-dialog").close();
+  assert.equal(decodeSave(skipped.storage.get(saveKey)).reflections["age-30"], "");
+  runInContext("showGame()", skipped.context);
+  assert.equal(skipped.$("reflection-dialog").open, false);
 });
 
 test("import persists only with the existing remember option and requires confirmation before replacing a game", async () => {
@@ -241,7 +264,7 @@ test("undo retains the care-leave salary migration boundary and can repeat the r
   assert.equal(h.context.game.careLeaveSalaryFrom, game.careLeaveSalaryFrom);
   assert.equal(h.context.game.decisions.length, 3);
   assert.ok(h.context.game.cash > 30);
-  assert.deepEqual(advance(h.context.game, "invest"), game);
+  assert.deepEqual({ ...advance(h.context.game, "invest"), reflections: { ...h.context.game.reflections } }, game);
 });
 
 test("save controls use external event handlers and a JSON file input", async () => {

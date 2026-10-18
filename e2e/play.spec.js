@@ -1,4 +1,120 @@
 import { test, expect } from "@playwright/test";
+import { createGame, advance, recordCareerReflection, encodeSave } from "../public/engine.js";
+
+const syntheticProfile = {
+  age: 29, region: "city", job: "tech", income: 500, ai: "sometimes",
+  priority: "balance", gender: "undisclosed", household: "solo",
+  savings: 500, monthlyCost: 12, companyType: "small", company: "合成SI社",
+};
+const saveFile = (game) => ({ name: "synthetic-save.json", mimeType: "application/json", buffer: Buffer.from(encodeSave(game)) });
+async function expectFits(page) {
+  const overflow = await page.evaluate(() => ({
+    page: document.documentElement.scrollWidth > innerWidth,
+    dialogs: [...document.querySelectorAll("dialog[open]")].some((d) => d.scrollWidth > d.clientWidth),
+  }));
+  expect(overflow).toEqual({ page: false, dialogs: false });
+}
+
+test("career log favorites filter the newest-first feed and disappear when their year is undone", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("#demo-button").click();
+  await page.locator("#choices button").first().click();
+  await page.locator("#journey-next").click();
+  const favorite = page.getByRole("button", { name: "2026年の記録をお気に入り", exact: true });
+  await favorite.click();
+  await expect(favorite).toHaveAttribute("aria-pressed", "true");
+  await page.locator("#history-favorites-only").click();
+  await page.locator("#choices button").first().click();
+  await page.locator("#journey-next").click();
+  await expect(page.locator("#history .history-row")).toHaveCount(1);
+  await expect(page.locator("#history")).toContainText("2026");
+  await favorite.click();
+  await expect(page.locator("#history .history-row")).toHaveCount(0);
+  await expect(page.locator("#history-favorites-only")).toBeFocused();
+  await page.locator("#history-favorites-only").click();
+  await expect(page.locator("#history .history-row")).toHaveCount(2);
+  await expect(page.locator("#history .history-row").first()).toContainText("2027");
+  await page.getByRole("button", { name: "2027年の記録をお気に入り", exact: true }).click();
+  await page.locator("#undo-button").click();
+  await expect(page.locator("#history-filter-status")).toContainText("★ 0件");
+  await expectFits(page);
+});
+
+test("ending resume shows the career map and milestone line, copies locally, and offers a clipboard fallback", async ({ page, baseURL }) => {
+  const external = [], errors = [];
+  await page.route("**/*", async (route) => {
+    if (new URL(route.request().url()).origin === new URL(baseURL).origin) return route.continue();
+    external.push(route.request().url());
+    return route.abort();
+  });
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: {
+      async writeText(text) {
+        if (window.__clipboardDenied) throw Error("Clipboard unavailable");
+        window.__copiedResume = text;
+      },
+    } });
+  });
+  let game = advance(createGame(syntheticProfile, "steady", 42), "rest");
+  const line = "経験を、次の仕事へ。<script>一行</script>";
+  game = recordCareerReflection(game, "age-30", line);
+  game = advance(game, { id: "switch", target: "microsoft", role: "tech" });
+  while (!game.ended) game = advance(game, "rest");
+  await page.goto("/");
+  await page.locator("#import-save-file").setInputFiles(saveFile(game));
+  const card = page.locator("#ending-resume");
+  await expect(card).toBeVisible();
+  await expect(card.locator(".resume-timeline")).toContainText("Microsoft");
+  await expect(card.locator(".career-reflections")).toContainText(line);
+  await expect(card.locator("script")).toHaveCount(0);
+  await expect(page.locator("#ending-map .career-tile")).toHaveCount(game.decisions.length);
+  await page.locator("#copy-resume").click();
+  await expect(page.locator("#resume-copy-status")).toHaveText("コピーしました。");
+  const text = await page.evaluate(() => window.__copiedResume);
+  for (const expected of ["職務経歴書", "Microsoft", line, "退職後", "キャリアマップ"])
+    expect(text).toContain(expected);
+  await page.evaluate(() => { window.__clipboardDenied = true; });
+  await page.locator("#copy-resume").click();
+  await expect(page.locator("#resume-copy-fallback")).toBeVisible();
+  await expect(page.locator("#resume-copy-fallback")).toHaveValue(text);
+  await expectFits(page);
+  expect(external).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test("career milestones pause multi-year play, save one optional line, and support undo and skip", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("#remember").check();
+  await page.locator("#import-save-file").setInputFiles(saveFile(createGame(syntheticProfile)));
+  await page.locator("#year-step").selectOption("10");
+  await page.locator("#choices button").first().click();
+  await expect(page.locator("#hud-age")).toHaveText("30歳");
+  await expect(page.locator("#career-map .career-tile")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#reflection-dialog")).toBeVisible();
+  await expect(page.locator("#reflection-line")).toBeFocused();
+  await expect(page.locator("#reflection-line")).toHaveAttribute("maxlength", "80");
+  await expectFits(page);
+  await page.locator("#reflection-line").fill("余白のある仕事を続けたい");
+  await page.locator("#reflection-form button[type=submit]").click();
+  await expect(page.locator("#reflection-dialog")).toBeHidden();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("unwritten-life:v2")).reflections["age-30"])).toBe("余白のある仕事を続けたい");
+  await page.reload();
+  await page.locator("#resume-button").click();
+  await expect(page.locator("#reflection-dialog")).toBeHidden();
+  await page.locator("#undo-button").click();
+  await expect(page.locator("#hud-age")).toHaveText("29歳");
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("unwritten-life:v2")).reflections)).toEqual({});
+  await page.locator("#choices button").first().click();
+  await page.locator("#journey-next").click();
+  await expect(page.locator("#reflection-dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#reflection-dialog")).toBeHidden();
+  // The dialog hides before its async close event records the skip.
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("unwritten-life:v2")).reflections["age-30"])).toBe("");
+  await expectFits(page);
+});
 
 test("local play advances, undo restores state, and mobile commands fit without external traffic", async ({ page, baseURL }) => {
   const external = [], errors = [];
@@ -13,14 +129,26 @@ test("local play advances, undo restores state, and mobile commands fit without 
   await page.locator("#demo-button").click();
   await expect(page.locator("#hud-year")).toHaveText("2026年");
   await expect(page.locator("#chapter-label")).toContainText("あなたのキャリア");
-  await expect(page.locator("#choice-title")).toHaveText("キャリアと暮らし、この一年どうする？");
+  await expect(page.locator("#choice-title")).toHaveText("コマンド / 今年のキャリアと暮らし");
   await expect(page.locator(".journal h2")).toHaveText("これまでのキャリアと暮らし。");
   const original = await page.locator(".journey-hud").textContent();
   await expect(page.locator("#choices button")).toHaveCount(4);
-  await page.locator("#choices button").first().click();
+  const commands = page.locator("#choices button");
+  await commands.first().focus();
+  await expect(commands.first().locator(".command-cursor")).toBeVisible();
+  await page.keyboard.press("ArrowUp");
+  await expect(commands.last()).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(commands.first()).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(commands.last()).toBeFocused();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("Enter");
   await expect(page.locator("#hud-year")).toHaveText("2027年");
   await expect(page.locator("#journey-next")).toBeVisible();
   await expect(page.locator("#journey-title")).toHaveText("2026年のキャリア記録。");
+  await expect(page.locator("#career-map .career-tile")).toHaveCount(1);
+  await expect(page.locator("#career-map [role=img]")).toHaveAttribute("aria-label", /2026年.*歳.*選択/);
   await page.locator("#journey-next").click();
   await page.locator("#undo-button").click();
   await expect(page.locator("#hud-year")).toHaveText("2026年");
