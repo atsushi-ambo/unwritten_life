@@ -46,7 +46,7 @@ import {
   knowledgeFor,
   loadKnowledge,
 } from "./world.js";
-import { storyRequest } from "./story.js";
+import { storyRequest, groundScene } from "./story.js";
 let knowledgeCatalog = KNOWLEDGE;
 let lastJourney = null;
 let profileLevel = "quick";
@@ -2001,6 +2001,7 @@ $("ai-form").addEventListener("submit", async (e) => {
     $("ai-key").value = "";
     aiState = data.ai;
     $("cloud-consent").checked = false;
+    $("career-consent").checked = false;
     renderAI();
     $("ai-dialog").close();
     toast("AIの接続設定を更新しました。");
@@ -2042,10 +2043,11 @@ $("import-scene").addEventListener("click", () => {
       throw new Error(
         "ゲームが進んだため、現在の場面で依頼文を作り直してください。",
       );
-    const scene = validateGeneratedScene(JSON.parse(text), game, {
+    const validated = validateGeneratedScene(JSON.parse(text), game, {
       personalized: true,
       mode: exchangeMode,
     });
+    const scene = groundScene(validated, game);
     if (exchangeMode === "career") {
       careerDraft = { revision, scene };
       renderCareerOffers();
