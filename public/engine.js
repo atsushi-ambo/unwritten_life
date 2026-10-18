@@ -295,6 +295,16 @@ export const CHOICES = Object.freeze({
     freedom: 0,
     icon: "◈",
   },
+  prepay: {
+    label: "余裕資金でローンを繰り上げ返済する",
+    hint: "生活費半年分と今年の支払いを残し、元金を減らす。返済期間は維持",
+    cost: 0,
+    skill: 0,
+    health: 0,
+    connection: 0,
+    freedom: 0,
+    icon: "⌂",
+  },
   home: {
     label: "住まいを購入する",
     hint: "頭金・諸費用を払い、住宅ローンを組む",
@@ -839,6 +849,7 @@ export function createGame(
   worldFrom = 0,
   retirementFrom = 0,
   careLeaveSalaryFrom = 0,
+  prepayFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -857,7 +868,10 @@ export function createGame(
     retirementFrom > MAX_AGE ||
     !Number.isInteger(careLeaveSalaryFrom) ||
     careLeaveSalaryFrom < 0 ||
-    careLeaveSalaryFrom > MAX_AGE
+    careLeaveSalaryFrom > MAX_AGE ||
+    !Number.isInteger(prepayFrom) ||
+    prepayFrom < 0 ||
+    prepayFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -872,6 +886,7 @@ export function createGame(
     worldFrom,
     retirementFrom,
     careLeaveSalaryFrom,
+    prepayFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -945,6 +960,12 @@ export function availableChoices(g) {
     ids.push("startup");
   if (g.cash > 30) ids.push("invest");
   if (
+    g.decisions.length >= g.prepayFrom &&
+    g.mortgage > 0 &&
+    g.cash > g.livingCost * 6
+  )
+    ids.push("prepay");
+  if (
     g.housing === "rent" &&
     g.cash > homePrice(g.region) * 0.25 &&
     g.salary > 250 &&
@@ -1013,6 +1034,7 @@ export function suggestedChoices(g) {
     "pilot",
     "mentor",
   ].filter((id) => allowed.includes(id));
+  if (allowed.includes("prepay")) contextual.unshift("prepay");
   if (g.employer.kind === "seeking" && allowed.includes("switch"))
     contextual.unshift("switch");
   if (
@@ -1056,6 +1078,7 @@ export function suggestedChoices(g) {
     ].find((id) => allowed.includes(id));
     return [
       ...new Set([
+        ...(allowed.includes("prepay") ? ["prepay"] : []),
         career,
         moment,
         ...(g.decisions.length % 2 === 0 ? ["studyDaily"] : []),
@@ -1274,6 +1297,7 @@ function yearlyOutcome(g, choice, employer) {
         ? "暮らしのペースを、整える一年に。"
         : ({
             invest: "お金の置き場所を、見直した。",
+            prepay: "手元の備えを残し、ローンを見直した。",
             home: "住まいを買い、暮らしの土台を整えた。",
             move: "暮らす場所を、変える一年に。",
             connect: "人との時間を、大切にした一年。",
@@ -1768,6 +1792,7 @@ export function profileStoryContext(g, { action = null, intention = "" } = {}) {
         `${g.mortgage > 0 ? "住宅ローンを返済し、" : ""}住まいを維持しながら、どんな仕事を続けたいだろう。大きく変える前に、小さく試す道もありそうだ。`,
       ],
       {
+        prepay: "生活の備えを残し、ローンの元金を減らす",
         explore: "住居費を確かめながら小さく挑戦する",
         rest: "住まいの手入れと休む時間を作る",
       },
@@ -1875,6 +1900,7 @@ function profileOptions(g, options, context) {
       "recover",
       "closeBusiness",
       "negotiate",
+      "prepay",
       ...(g.employer.kind === "seeking" ? ["switch"] : []),
       g.history.at(-1)?.episode?.sideAction,
     ]);
@@ -2195,13 +2221,15 @@ export function annualEpisode(before, record) {
         : ok
           ? "広げる前に、何を確かめる？"
           : "続け方を、変えてみる？";
-  } else if (["home", "move", "invest"].includes(id)) {
+  } else if (["home", "move", "invest", "prepay"].includes(id)) {
     title =
       id === "move"
         ? "暮らしの地図を、描き直した。"
         : id === "home"
           ? "帰る場所に、新しい責任が増えた。"
-          : "お金の置き場所を、見直した。";
+          : id === "prepay"
+            ? "手元の備えと、これからの返済を考えた。"
+            : "お金の置き場所を、見直した。";
     body = `${record.note.replace(`${record.outcome?.title} `, "")}働くための時間、手元の余裕、これから守りたい暮らしを、改めて考える。`;
     nextTitle = "この暮らしに合う、働き方は？";
   }
@@ -2490,6 +2518,26 @@ export function advance(g, rawDecision) {
   investments += investmentGain;
   const propertyGain = homeValue * propertyReturn;
   homeValue += propertyGain;
+  let prepayment = 0;
+  if (choice === "prepay") {
+    const buffer = livingCost * 6,
+      scheduled = amortizeYear(mortgage, p.mortgageRate, mortgageYears),
+      reserved =
+        livingCost * 12 * (1 + (world?.shock.costs ?? 0)) +
+        familyChange.cost +
+        (g.age >= 80 ? 12 : 0) +
+        homeValue * 0.01 +
+        cost +
+        scheduled.payment;
+    // Reserve the unreduced annual payment too, so prepayment itself cannot
+    // force asset sales or borrowing, or consume the six-month cash buffer.
+    prepayment = Math.max(
+      0,
+      Math.min(mortgage, cash - buffer, cash + income * 0.76 - reserved - buffer),
+    );
+    cash -= prepayment;
+    mortgage -= prepayment;
+  }
   const loan = amortizeYear(mortgage, p.mortgageRate, mortgageYears),
     loanPayment = loan.payment,
     principal = loan.principal;
@@ -2506,13 +2554,15 @@ export function advance(g, rawDecision) {
     familyChange.cost +
     (g.age >= 80 ? 12 : 0);
   cash += disposable - expenses + bonus;
-  let liquidation = 0;
+  let liquidation = 0,
+    borrowing = 0;
   if (cash < 0 && investments > 0) {
     liquidation = Math.min(-cash, investments);
     cash += liquidation;
     investments -= liquidation;
   }
   if (cash < 0) {
+    borrowing = -cash;
     debt -= cash;
     cash = 0;
   }
@@ -2557,6 +2607,10 @@ export function advance(g, rawDecision) {
         : "働く環境を変更。移行費用を払い、収入と自由が変化した。",
     startup: `${employer.name}を開業（架空）。${venture?.label ?? ""}。初期費用${businessSetup}万円、年間運営費${businessOverhead}万円を支払い、収入が変化した。`,
     invest: "現金の一部を株式へ配分。以後の価格変動の影響も変わる。",
+    prepay:
+      prepayment > 0
+        ? `生活費半年分と今年の支払いを確保できる範囲で、ローン元金を${Math.round(prepayment)}万円繰り上げ返済。残りの返済期間を保ち、毎月の返済額と利息を再計算した。`
+        : "今年の支払いと生活費半年分の備えを優先し、繰り上げ返済は見送った。通常の返済は続けた。",
     home: "住まいを購入。金融資産・不動産・ローンの構成が変わった。",
     move: "地域を移り、生活費・住居費・人との距離が変わった。",
     retire: "給与収入を止めた。65歳以降は設定した退職後収入を受け取る。",
@@ -2617,6 +2671,21 @@ export function advance(g, rawDecision) {
     investmentTransfer,
     homeTransaction,
     liquidation,
+    ...(choice === "prepay" ? { prepayment } : {}),
+    // Signed cash flows, in the same unrounded 万円 as the simulation. Market
+    // gains stay in investmentGain/propertyGain and do not enter cash flow.
+    budget: {
+      income: salary * 0.76,
+      pension: (income - salary) * 0.76,
+      living: -(expenses - housingCost - cost),
+      housing: -(housingCost - loanPayment + homeTransaction),
+      loanInterest: -loan.interest,
+      loanPrincipal: -(principal + prepayment),
+      investment: liquidation - investmentTransfer,
+      other: bonus - cost,
+      borrowing,
+      net: cash - g.cash,
+    },
     ended,
   };
   if (worldEnabled(g)) record.episode = annualEpisode(g, record);
@@ -2679,6 +2748,7 @@ export function replay(
   worldFrom = 0,
   retirementFrom = 0,
   careLeaveSalaryFrom = 0,
+  prepayFrom = 0,
 ) {
   if (
     !Array.isArray(decisions) ||
@@ -2697,6 +2767,7 @@ export function replay(
     worldFrom,
     retirementFrom,
     careLeaveSalaryFrom,
+    prepayFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -2735,16 +2806,24 @@ export function compareWorlds(g) {
       g.worldFrom,
       g.retirementFrom,
       g.careLeaveSalaryFrom,
+      g.prepayFrom,
     ),
   );
 }
 export function encodeSave(g) {
+  if (
+    !Number.isInteger(g.prepayFrom) ||
+    g.prepayFrom < 0 ||
+    g.prepayFrom > MAX_AGE
+  )
+    fail();
   const value = JSON.stringify({
     version: VERSION,
     dynamicFrom: g.dynamicFrom,
     worldFrom: g.worldFrom,
     retirementFrom: g.retirementFrom,
     careLeaveSalaryFrom: g.careLeaveSalaryFrom,
+    prepayFrom: g.prepayFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
@@ -2777,5 +2856,6 @@ export function decodeSave(value) {
     Object.hasOwn(d, "careLeaveSalaryFrom")
       ? d.careLeaveSalaryFrom
       : d.decisions?.length,
+    Object.hasOwn(d, "prepayFrom") ? d.prepayFrom : d.decisions?.length,
   );
 }
