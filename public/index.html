@@ -890,7 +890,7 @@
       </div>
       <h2>好きなAIを、つなぐ。</h2>
       <p id="ai-description">
-        接続設定・APIキーはこの起動中だけ保持します。外部AIは従量課金です。このアプリはクレジットの購入・チャージを行いません。
+        接続設定・APIキーはこの起動中だけ保持します。APIは従量課金です。CLI連携は公式CLIのログインを使い、普段の利用枠と共有します。このアプリはクレジットの購入・チャージを行いません。
       </p>
       <form id="ai-form" method="post" action="/">
         <div class="form-grid">
@@ -899,6 +899,8 @@
             ><select id="ai-provider">
               <option value="ollama">Ollama（PC内・API課金なし）</option>
               <option value="lmstudio">LM Studio（PC内）</option>
+              <option value="codex-cli">Codex CLI（ChatGPTサブスク）</option>
+              <option value="claude-cli">Claude Code（サブスク）</option>
               <option value="openai">OpenAI API</option>
               <option value="openrouter">OpenRouter</option>
               <option value="custom">OpenAI互換API</option>
@@ -982,7 +984,10 @@
           /></label>
         </div>
         <p class="field-note">
-          単価は利用モデルの公式料金に合わせてください。費用上限は設定単価からの保守的な見積りで、提供者の請求額を保証する上限ではありません。提供者側の残高や自動チャージ設定は、このアプリから確認・変更しません。出力は1回1500トークンまで。提供者側の利用制限も併用できます。
+          単価は利用モデルの公式料金に合わせてください。費用上限は設定単価からの保守的な見積りで、提供者の請求額を保証する上限ではありません。提供者側の残高や自動チャージ設定は、このアプリから確認・変更しません。API接続の出力は1回1500トークンまで。提供者側の利用制限も併用できます。
+        </p>
+        <p id="subscription-note" class="field-note" hidden>
+          公式CLIにサブスクのアカウントでログインしてから使います。手動生成のみ、起動中20回・1回120秒まで。APIキーへの自動切り替えはしません。追加利用や自動チャージが有効な場合は提供者側で無効にしてください。このアプリから契約側の課金設定は変更できません。
         </p>
         <div id="model-list-controls">
           <button id="refresh-models" type="button" class="text-button">

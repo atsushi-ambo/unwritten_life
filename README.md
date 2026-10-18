@@ -57,7 +57,7 @@ Ollama・LM Studioでは、ダウンロード済みモデルの一覧から選�
 | その他                        | OpenAI互換API          | ベースURLとモデルを指定。ループバックまたはHTTPSの公開先 |
 | ChatGPT / OpenCode / 任意のAI | 手動交換               | 生成用の文章をコピーし、返答のJSONを取り込む             |
 
-Codex・Claude Code・Gemini CLI等でサブスク枠を使う経路は [公式資料に基づく調査と接続方針](docs/subscription-ai.md) に整理しました。これらのCLIとの自動接続、OpenCode独自API、ChatGPTのOAuthログインはこの版では実装していません。手動交換で利用できます。[Sign in with ChatGPTの公式OSS向けガイド](https://developers.openai.com/cookbook/articles/sign-in-with-chatgpt)は、将来の接続方式の候補です。
+PC版のAI設定で **Codex CLI / Claude Code** を選ぶと、公式CLIのサブスクログインで手動生成できます。APIキーは使わず、起動中最大20回・1回120秒・同時1件に制限します。普段のCLIと利用枠を共有します。各社の追加利用・自動購入設定はアプリから変更できないため、契約側で無効にしてください。[設定と検証結果](docs/subscription-ai.md) にまとめています。スマホからPCのCLIは呼び出しません。
 
 クラウドへ送る前に送信先と内容を画面で確認し、送信への同意を選びます。PC版のAPIキーはローカルサーバーのメモリにのみ保持し、端末保存・Git・レスポンス・ログには含めません。アプリを終了すると失われます。スマホ用バックエンドは[サーバーの秘密情報と累計上限を使う準備版](hosted/README.md)を追加していますが、まだ配備していません。
 

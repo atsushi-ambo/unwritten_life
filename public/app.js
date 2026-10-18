@@ -705,7 +705,9 @@ function renderAI() {
   $("event-card").setAttribute("aria-busy", String(generating));
   $("ai-status").textContent = generating
     ? `${local ? "PC内のAI" : "接続したAI"}が、この結果から次の場面と選択肢を考えています…`
-    : `${local ? "PC内" : "クラウド"}：${aiState.provider} / ${aiState.model} · ${aiState.calls}${hosted ? "/" + aiState.requestCap : ""}回 · 見積り予約 $${aiState.reservedUSD.toFixed(4)}${hosted ? " / $" + aiState.usdCap + "（累計）" : ""}`;
+    : aiState.subscription
+      ? `サブスク：${aiState.provider === "codex-cli" ? "Codex CLI" : "Claude Code"} / ${aiState.model} · ${aiState.calls}/${aiState.requestCap}回（起動中）`
+      : `${local ? "PC内" : "クラウド"}：${aiState.provider} / ${aiState.model} · ${aiState.calls}${hosted ? "/" + aiState.requestCap : ""}回 · 見積り予約 $${aiState.reservedUSD.toFixed(4)}${hosted ? " / $" + aiState.usdCap + "（累計）" : ""}`;
   if (!generating && aiState.provider === "disabled")
     $("ai-status").textContent =
       "端末内の物語で進行中。好きなAIで展開を作るボタンから、AIも使えます。";
@@ -736,8 +738,9 @@ function renderAI() {
   $("career-compare-button").disabled =
     generating || !game || game.ended || isRetiredAt(game);
   $("back-setup").disabled = generating;
-  $("ai-accounting").textContent =
-    `${hosted ? "この体験版の累計" : "この起動中"}：${aiState.calls}/${aiState.requestCap}回、見積り予約 $${aiState.reservedUSD.toFixed(4)} / $${aiState.usdCap}。失敗した呼び出しも数えます。${hosted ? " 再読み込みでも上限は戻りません。" : ""}`;
+  $("ai-accounting").textContent = aiState.subscription
+    ? `普段のCLIとサブスク枠を共有。この起動中 ${aiState.calls}/${aiState.requestCap}回（失敗も含む）。APIキーでの再試行やモデルの自動切り替えは行いません。`
+    : `${hosted ? "この体験版の累計" : "この起動中"}：${aiState.calls}/${aiState.requestCap}回、見積り予約 $${aiState.reservedUSD.toFixed(4)} / $${aiState.usdCap}。失敗した呼び出しも数えます。${hosted ? " 再読み込みでも上限は戻りません。" : ""}`;
   renderAITiming();
 }
 function renderAITiming() {
@@ -1773,6 +1776,15 @@ async function refreshModels() {
   const rev = ++modelListRevision,
     provider = $("ai-provider").value;
   const local = ["ollama", "lmstudio"].includes(provider);
+  const subscription = ["codex-cli", "claude-cli"].includes(provider);
+  $("subscription-note").hidden = !subscription;
+  for (const id of ["ai-base-url", "ai-key", "ai-input-rate", "ai-output-rate", "ai-usd-cap"]) {
+    $(id).closest("label").hidden = subscription;
+    $(id).disabled = subscription;
+  }
+  $("ai-model").readOnly = subscription;
+  $("ai-request-cap").max = subscription ? "20" : "300";
+  if (subscription) $("ai-request-cap").value = Math.min(Number($("ai-request-cap").value) || 20, 20);
   $("local-model-field").hidden = !local;
   $("manual-model-field").hidden = local;
   $("model-list-controls").hidden = !local;
@@ -1815,6 +1827,8 @@ $("refresh-models").addEventListener("click", refreshModels);
 const presets = {
   ollama: ["http://127.0.0.1:11434", "qwen3:8b", 0, 0],
   lmstudio: ["http://127.0.0.1:1234/v1", "local-model", 0, 0],
+  "codex-cli": ["https://chatgpt.com", "gpt-6.1-sol", 0, 0],
+  "claude-cli": ["https://claude.ai", "haiku", 0, 0],
   openai: ["https://api.openai.com/v1", "gpt-6-luna", 0.1, 0.5],
   openrouter: ["https://openrouter.ai/api/v1", "openrouter/free", 0, 0],
 };
