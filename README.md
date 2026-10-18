@@ -104,11 +104,24 @@ LinkedInの職歴自動取得は未対応です。一般的なログインで職
 ## 検証
 
 ```sh
-npm run check
-npm run audit
+npm run check          # 単体・統合テスト
+npm run audit          # 本体の本番依存
+npm run audit:all      # 本体・スマホ版の全依存（期限付き例外も検証）
+npm run check:hosted   # 一時環境でスキーマ生成・Workerビルド・型検査
+npx playwright install chromium
+npm run test:e2e       # PC幅・スマホ幅・生成済みスマホ版の実ブラウザ操作
+# gitleaks 8.30.1 がPATH上に必要（macOS: brew install gitleaks）
+npm run check:secrets  # Git履歴と現在のソース。値は伏せて出力
+npm run check:release  # 上記検査を順に実行。失敗時はそこで停止
 ```
 
-ローカルとCIで同じ入口を使います。計算、全職種・3世界での生涯終了、転職・住まい・資産配分、退職、保存復元、巻き戻し、モデル出力の拒否、実HTTPのAI接続、CSRF・Host・パス・SSRF・容量上限を合成データで検証します。CIはNode 24/26でPR・mainへのpush・手動・週次に実行。外部ActionsはSHA固定、依存はlockfile固定です。クラウドの有料APIをCIから呼びません。
+ローカルとCIで同じ入口を使います。計算、全職種・3世界での生涯終了、転職・住まい・資産配分、退職、保存復元、巻き戻し、モデル出力の拒否、実HTTPのAI接続、CSRF・Host・パス・SSRF・容量上限を合成データで検証します。CIはUbuntu 24.04・Node 24/26でPR・mainへのpush・手動・週次に実行。外部ActionsはSHA固定、依存はlockfile固定です。クラウドの有料APIをCIから呼びません。
+
+CIにはスマホ版のWorkerビルド・型検査・未認証APIのHTTP拒否、全依存監査、PlaywrightによるPC/320px幅と生成済みスマホ版390px幅での年の進行・記録ダイアログ・巻き戻し・保存復元・保存削除・横はみ出し・外部通信なしの検証、Gitleaksによる履歴と現在のソースの検査を追加しています。Gitleaksは公式リリースのバージョンとSHA-256を固定し、合成トークンを検出できることも毎回確認します。実際のキー、保存データ、外部AIはテストに使いません。検査用の依存・生成物・ブラウザ結果は一時ディレクトリに隔離し、`artifacts/` と `.claude/` は対象外です。
+
+修正版のない開発用bracesの警告には、[依存例外](security/dependency-exceptions.json)を設けています。対象アドバイザリ・バージョン・開発用途だけを許可し、新しい警告、本番用への変更、2026-10-24以降は検査を失敗させます。例外を期限だけ延長せず、上流の修正版と利用経路を再評価してください。生の全依存監査がクリーンという意味ではありません。[スマホ版の検証詳細](hosted/README.md)も参照してください。
+
+配備は手動です。配備候補に `npm run check:release` と最新コミットのGitHub CI成功を要求し、Sitesの正式なビルド・配備手順を実施してから起動・主要操作を確認します。CI用の仮Site設定を配備に使わず、既存Siteの本人限定範囲とD1累計を維持します。現在のGitHubプランでは非公開リポジトリのブランチ保護を利用できないため、マージ前に対象コミットと全ジョブの成功を手動で照合します。自動配備、ブランチ保護の強制、スマホ実機での検証は整備済みと扱いません。
 
 ## モデルの限界と公開状態
 
