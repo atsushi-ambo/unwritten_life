@@ -379,6 +379,10 @@ function renderGame() {
   $("world-badge").textContent = `AIの未来：${SCENARIOS[game.scenario].label}`;
   $("progress").value = game.decisions.length;
   $("progress").max = MAX_AGE - game.profile.age;
+  $("hud-year").textContent = `${game.year}年`;
+  $("hud-age").textContent = `${game.age}歳`;
+  $("hud-cash").textContent = `${money(game.cash)}万円`;
+  $("hud-health").textContent = `${Math.round(game.health)} / 100`;
   $("stats").replaceChildren(
     stat(
       "年収（年金等含む）",
