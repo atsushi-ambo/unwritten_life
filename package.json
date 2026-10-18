@@ -11,7 +11,7 @@
     "dev": "node server.mjs",
     "start": "node server.mjs",
     "test": "node --test",
-    "check": "node --check server.mjs && node --check lib/ai.mjs && node --check lib/hosted-ai.mjs && node --check lib/network.mjs && node --check lib/company.mjs && node --check public/world.js && node --check public/careers.js && node --check public/engine.js && node --check public/story.js && node --check public/app.js && node --check scripts/start.mjs && node --check scripts/benchmark-local.mjs && node --check scripts/evaluate-local-model.mjs && node --check scripts/model-eval-fixtures.mjs && node --check scripts/build-mobile.mjs && node --check scripts/prepare-hosted.mjs && node --test",
+    "check": "node --check server.mjs && node --check lib/ai.mjs && node --check lib/subscription-ai.mjs && node --check lib/hosted-ai.mjs && node --check lib/network.mjs && node --check lib/company.mjs && node --check public/world.js && node --check public/careers.js && node --check public/engine.js && node --check public/story.js && node --check public/app.js && node --check scripts/start.mjs && node --check scripts/benchmark-local.mjs && node --check scripts/evaluate-local-model.mjs && node --check scripts/model-eval-fixtures.mjs && node --check scripts/build-mobile.mjs && node --check scripts/prepare-hosted.mjs && node --test",
     "audit": "npm audit --omit=dev --audit-level=high",
     "benchmark:local": "node scripts/benchmark-local.mjs",
     "evaluate:local": "node scripts/evaluate-local-model.mjs",
