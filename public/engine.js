@@ -1378,7 +1378,7 @@ function yearlyOutcome(g, choice, employer) {
         "学びを続けたが、今年の評価には届かず。",
       ],
       learn: [
-        "新しい力を、使える手応えが生まれた。",
+        "学んだ力を、仕事に生かす手応えが生まれた。",
         "学びは続けたが、実践にはまだ距離がある。",
       ],
       focus: [
@@ -1419,17 +1419,17 @@ function yearlyOutcome(g, choice, employer) {
     kind: "steady",
     title:
       choice === "rest" || choice === "recover"
-        ? "暮らしのペースを、整える一年に。"
+        ? "働き方と暮らしのペースを、整える一年に。"
         : ({
             invest: "お金の置き場所を、見直した。",
             prepay: "手元の備えを残し、ローンを見直した。",
             home: "住まいを買い、暮らしの土台を整えた。",
             move: "暮らす場所を、変える一年に。",
-            connect: "人との時間を、大切にした一年。",
+            connect: "これからの働き方と、人との時間を考えた一年。",
             retire: "仕事に区切りをつけ、次の暮らしへ。",
             careLeave: "家族のために、働く時間を調整した。",
-          }[choice] ?? "選んだ行動を、暮らしの中で試した。"),
-    body: "選んだ行動が家計やゆとり、人との関係に反映された。この変化を受けて次の一年を考える。",
+          }[choice] ?? "これからの働き方と暮らしを、選ぶ一年に。"),
+    body: "選んだ行動が家計やゆとり、人との関係に反映された。働き方と暮らしをどう続けるか、次の一年を考える。",
     salaryFactor: 1,
     extraCost: 0,
   };
@@ -1880,7 +1880,7 @@ export function profileStoryContext(g, { action = null, intention = "" } = {}) {
       `${ages.length}人（${ages.join("・")}歳）`,
       [
         `子ども${ages.length}人は${ages.join("・")}歳。${young ? "日々の世話と、自分が学ぶ時間をどう分けよう。" : minor ? "学校生活や成長に向き合う時間と、仕事の予定をどう両立しよう。" : "それぞれの暮らしを尊重しながら、会う時間や自分の仕事を考えたい。"}`,
-        `子どもは${ages.join("・")}歳になった。${minor ? "以前と同じ予定の組み方でよいか、仕事と家族の時間を並べてみる。" : "子育ての頃と違う距離で、家族との関わり方を考える。"}`,
+        `子どもは${ages.join("・")}歳になった。${minor ? "以前と同じ予定の組み方でよいか、仕事と家族の時間を並べてみる。" : "子育ての頃と違う距離で、家族との関わり方と自分の働き方を考える。"}`,
         `子ども${ages.length}人との時間も、この一年にある。${young ? "短い学びの時間を毎日に入れるか、まず暮らしを整えるか。" : "自分の挑戦と家族の予定に、どのくらいの余裕を残そう。"}`,
       ],
       {
@@ -2006,7 +2006,7 @@ export function profileStoryContext(g, { action = null, intention = "" } = {}) {
         : `入力した退職の目安${p.retirementAge}歳`,
       [
         g.retired
-          ? "仕事を離れた今、給与に代わる収入と資産を使う日々になった。新しい楽しみや人との関わりを、どこに作ろう。"
+          ? "仕事を離れた今、給与に代わる収入と資産を使う日々になった。働く中で培った経験やつながりを、その先の暮らしにどう生かそう。"
           : `${p.retirementAge}歳を仕事の区切りの目安にしている。収入だけでなく、その先に続けたいことも少しずつ考えておきたい。`,
         "仕事の時間が変わると、会う人や一日の過ごし方も変わる。次の暮らしで続けたいことを考える。",
         "これまでの経験を誰かに伝える道と、自分のために新しいことを学ぶ道。時間の使い方を選び直せる。",
@@ -2145,9 +2145,9 @@ export function eventFor(g) {
   if (g.retired) {
     title =
       g.age >= 80
-        ? "自分のペースで、暮らしをつなぐ。"
-        : "仕事の先にある、毎日。";
-    body = `${g.age}歳。${residenceProse(g)}で、${g.housing === "own" ? "持ち家を手入れしながら" : "住まいの費用を払いながら"}暮らしている。給与に代わる収入と、これまでの資産をどう使うか。人との時間や新しい楽しみにも、目を向けたい。`;
+        ? "働いた年月を、その先の暮らしへ。"
+        : "仕事で得たものと、その先の毎日。";
+    body = `${g.age}歳。${residenceProse(g)}で、${g.housing === "own" ? "持ち家を手入れしながら" : "住まいの費用を払いながら"}暮らしている。給与に代わる収入と、これまでの資産をどう使うか。仕事で培った経験やつながりと、新しい楽しみにも目を向けたい。`;
   } else if (g.employer.kind === "seeking") {
     title = "経験を持って、次の一歩を探す。";
     body = `事業を終え、暮らしと仕事を組み直している。手元現金は約${Math.round(g.cash)}万円。これまでの経験を別の企業で生かすか、まず生活のペースを整えるか。収入と支出の変化を確かめながら、次の選択を考える。`;
@@ -2186,7 +2186,7 @@ export function eventFor(g) {
     g.history.at(-1)?.episode;
   if (!g.history.length && worldEnabled(g) && !g.retired) {
     title = {
-      growth: "少し先の自分が、気になった。",
+      growth: "今の経験を、次の役割へ。",
       switch: "この場所に残る未来と、外へ出る未来。",
       business: "まだ、名前のない仕事。",
       balance: "仕事の予定と、暮らしの予定。",
@@ -2201,7 +2201,7 @@ export function eventFor(g) {
       balance:
         "予定表には仕事が並んでいる。その隙間に、自分や大切な人との時間をどれくらい残したいだろう。",
     }[g.profile.careerGoal];
-    body = `${g.age}歳、${residenceProse(g)}で暮らすあなた。${g.employer.role === "other" ? "次の仕事と暮らしを考える日々。" : `${company}で${JOB_PROSE[g.employer.role]}に取り組んでいる。`}${hook} 今年は、何を大切にしてみよう。`;
+    body = `${g.age}歳、${residenceProse(g)}で暮らすあなた。${g.employer.role === "other" ? "次の仕事と暮らしを考える日々。" : `${company}で${JOB_PROSE[g.employer.role]}に取り組んでいる。`}${hook} 今年は、働き方と暮らしの何を大切にしてみよう。`;
   }
   if (continuation) {
     title = continuation.nextTitle;
@@ -2243,7 +2243,7 @@ export function eventFor(g) {
     const family = ages.length > oldAges.length
       ? "家族が増え、仕事と暮らしの時間配分も変わり始めた。"
       : ages.some((age, i) => stage(age) !== stage(oldAges[i] ?? age))
-        ? `子どもは${ages.join("・")}歳。成長の節目に、家族の予定も見直したい。`
+        ? `子どもは${ages.join("・")}歳。成長の節目に、仕事と家族の予定も見直したい。`
         : "";
     body = [carry(continuation.title), `${home}${setting}`, carry(continuation.next), family].filter(Boolean).join(" ");
   }
@@ -2265,7 +2265,7 @@ export function eventFor(g) {
     body: worldEnabled(g)
       ? `${body} ${worldAt(g).shock.body}${worldAt(g).frontier ? ` ${worldAt(g).frontier}` : ""}`
       : body,
-    insight: `仕事・資産・住まい・過去の選択を反映したローカルの物語。AI普及指標はゲーム上の仮定。`,
+    insight: `キャリアの歩みと、家計・住まい・過去の選択をつなぐ端末内の物語。AI普及指標はゲーム上の仮定。`,
     options,
     profileBasis: worldEnabled(g)
       ? [
@@ -2313,8 +2313,8 @@ export function annualEpisode(before, record) {
     randomAt(before.seed, before.decisions.length, 91) * 3,
   );
   const learning = [
-    "机に向かう時間を、日々の暮らしに組み込んだ。",
-    "すぐに答えの出ない課題を、少しずつ調べ続けた。",
+    "仕事や暮らしの予定に、机に向かう時間を組み込んだ。",
+    "次に生かしたい専門の課題を、少しずつ調べ続けた。",
     "前なら読み飛ばした説明が、少し分かるようになった。",
   ][variation];
   const deficit = record.outcome?.deficit === true,
@@ -2323,12 +2323,12 @@ export function annualEpisode(before, record) {
   let title = record.outcome?.title ?? CHOICES[id].label;
   let body = record.outcome?.body ?? record.note;
   let nextTitle = [
-    "次の一歩を、誰と考える？",
-    "続けることと、変えること。",
-    "少し先の自分へ、何を残す？",
+    "これからの働き方を、誰と考える？",
+    "働き方と暮らし、続けることと変えること。",
+    "これからのキャリアに、何をつなぐ？",
   ][variation];
   let next =
-    "同じ方針を続けるか、別のことに時間を使うか。次の一年の重点を選ぼう。";
+    "経験を深めるか、働き方や暮らしを見直すか。仕事を離れた後の時間も含め、次の一年の重点を選ぼう。";
   if (["learn", "studyDaily"].includes(id)) {
     title = ok
       ? "学んだことが、現場の言葉になった。"
@@ -2369,16 +2369,16 @@ export function annualEpisode(before, record) {
       "久しぶりに、帰り道を急がなかった。",
       "忙しさから、少し距離を置いた。",
     ][variation];
-    body = `予定を詰めない時間を作り、自分のペースを確かめた。${record.note}次に何をしたいかを考える余地も生まれた。`;
-    nextTitle = "取り戻した時間を、何に使う？";
+    body = `仕事や暮らしの予定を詰めず、自分のペースを確かめた。${record.note}これからの働き方や、仕事の外で大切にしたいことを考える余地も生まれた。`;
+    nextTitle = "これからの働き方に、どんな余白を残す？";
   } else if (id === "connect") {
     title = [
       "久しぶりの会話に、ヒントがあった。",
-      "仕事以外の話を、ゆっくりした。",
+      "仕事の外にある、大切な時間。",
       "予定を合わせて、人に会う時間を作った。",
     ][variation];
-    body = `${record.note}${before.family.childAges.length ? "家族と、これからの時間の使い方も話した。" : "何を大切にしたいか、誰かと話すうちに少し形が見えてきた。"}`;
-    nextTitle = "会話から浮かんだ、次の選択。";
+    body = `${record.note}${before.family.childAges.length ? "家族と、仕事と暮らしの時間の使い方も話した。" : "どう働き、何を大切にしたいか、誰かと話すうちに少し形が見えてきた。"}`;
+    nextTitle = "人との時間から、次の働き方を考える。";
   } else if (id === "switch") {
     title = "いつもの朝が、新しい職場の朝に変わった。";
     body = `${workplaceName(record.employer)}へ移り、${JOB_PROSE[record.employer.role]}に取り組んだ。仕事の進め方と人との距離を、一つずつ覚えていく。これは架空の転職の結果。`;
@@ -2406,7 +2406,7 @@ export function annualEpisode(before, record) {
     }`;
     nextTitle =
       record.employer.kind === "seeking"
-        ? "この経験を、次の暮らしへ。"
+        ? "この事業の経験を、次のキャリアへ。"
         : deficit
           ? deficitYears >= 2
             ? "続ける、変える、手を引く。"
@@ -2417,7 +2417,7 @@ export function annualEpisode(before, record) {
   } else if (["home", "move", "invest", "prepay"].includes(id)) {
     title =
       id === "move"
-        ? "暮らしの地図を、描き直した。"
+        ? "働く場所と暮らしの地図を、描き直した。"
         : id === "home"
           ? "帰る場所に、新しい責任が増えた。"
           : id === "prepay"
@@ -2447,12 +2447,12 @@ export function annualEpisode(before, record) {
     {
       action: "connect",
       label: "気になった勉強会で人と話す",
-      body: "小さな勉強会の案内を見かけた。自分とは違う仕事の人の話も、聞いてみたくなる。",
+      body: "小さな勉強会の案内を見かけた。今の経験をどう生かせるか、違う仕事の人の話も聞いてみたくなる。",
     },
     {
       action: "rest",
       label: "予定を空けて、自分の時間を取り戻す",
-      body: "休日の予定を見て、少し詰め込みすぎたかもしれないと思った。何もしない日も必要そうだ。",
+      body: "休日の予定を見て、少し詰め込みすぎたかもしれないと思った。自分に合う働き方を考えるにも、何もしない日が必要そうだ。",
     },
     {
       action: "move",
@@ -2462,19 +2462,19 @@ export function annualEpisode(before, record) {
     {
       action: "explore",
       label: "身近な不便を、小さな挑戦に変える",
-      body: "身近な不便に気づいた。解決できたら誰が喜ぶだろう、と少し考えてみた。",
+      body: "身近な不便に気づいた。自分の経験で小さく試せないかと、副業や事業の種として考えてみた。",
     },
     {
       action: "learn",
       label: "AIに任せることと自分で学ぶことを探す",
-      body: "新しい道具を試すと、任せやすい作業と、自分で確かめたい作業の両方が見えてきた。",
+      body: "AIの道具を試すと、任せやすい作業と、自分で確かめたい作業の両方が見えてきた。次の仕事に必要な学びは何だろう。",
     },
     ...(before.family.childAges.length
       ? [
           {
             action: "careLeave",
             label: "子どもの成長に合わせ、時間を組み直す",
-            body: "子どもの成長とともに、家族の予定も変わっていく。今の時間配分が合っているか、見直してみたい。",
+            body: "子どもの成長とともに、家族の予定も変わっていく。仕事に使う時間との配分が合っているか、見直してみたい。",
           },
         ]
       : []),
@@ -2553,14 +2553,14 @@ export function advanceYears(game, decision, years = 1) {
     next = advance(next, decision);
     entries.push(next.history.at(-1));
     if (next.ended) {
-      stopReason = "この人生の物語が完結しました。";
+      stopReason = "キャリアと人生の物語が完結しました。";
       break;
     }
     if (
       next.family.childAges.length !== before.family.childAges.length ||
       next.family.partner !== before.family.partner
     ) {
-      stopReason = "家族の節目です。次の一年を選び直せます。";
+      stopReason = "家族の節目です。働き方と暮らしの配分を選び直せます。";
       break;
     }
     if (
@@ -2574,12 +2574,12 @@ export function advanceYears(game, decision, years = 1) {
   if (!entries.length)
     throw new Error("現在の状況では、この選択を実行できません。");
   if (years > 1 && !repeated.has(id))
-    stopReason = "暮らしが変わる選択なので、まず一年の結果を見ます。";
+    stopReason = "キャリアや暮らしが変わる選択なので、まず一年の結果を見ます。";
   return { game: next, entries, requested, stopReason };
 }
 export function advance(g, rawDecision) {
   if (g.ended || g.decisions.length >= MAX_AGE)
-    throw new Error("この人生の物語は完結しました。");
+    throw new Error("キャリアと人生の物語は完結しました。");
   const decision = validateDecision(rawDecision, g),
     choice = decisionId(decision);
   let employer = nextEmployer(g, decision);

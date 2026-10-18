@@ -376,10 +376,10 @@ function showJourney(journey) {
     last = journey.entries.at(-1);
   $("journey-title").textContent =
     journey.entries.length === 1
-      ? `${first.year}年、こんな一年だった。`
-      : `${first.year}〜${last.year}年、あなたが過ごした時間。`;
+      ? `${first.year}年のキャリア記録。`
+      : `${first.year}〜${last.year}年、キャリアと暮らしの記録。`;
   $("journey-caption").textContent =
-    `選んだ方針：${first.choiceLabel}。${journey.stopReason || `${journey.entries.length}年分のできごとを振り返り、次の方針を選べます。`}`;
+    `選んだ方針：${first.choiceLabel}。${journey.stopReason || `${journey.entries.length}年分のキャリアと暮らしを振り返り、次の方針を選べます。`}`;
   const list = $("journey-years");
   list.replaceChildren();
   let previousIncome =
@@ -403,7 +403,7 @@ function showJourney(journey) {
     list.append(row);
   }
   $("journey-next").textContent = game.ended
-    ? "この人生を振り返る →"
+    ? "キャリアの歩みを振り返る →"
     : `${game.year}年の選択へ →`;
   $("journey-dialog").showModal();
 }
@@ -429,11 +429,11 @@ function renderGame() {
       : `${n > 0 ? "+" : "−"}${nf.format(Math.abs(n))}${monetary ? "万円" : ""} / 前年比`;
   };
   $("chapter-label").textContent = complete
-    ? "A LIFE, WITH MANY CHOICES."
-    : `${game.decisions.length}年が経過 / ${game.retired ? "仕事の先の暮らし" : "まだ続く、あなたの人生"}`;
+    ? "A CAREER, A LIFE OF CHOICES."
+    : `${game.decisions.length}年が経過 / ${game.retired ? "仕事の先の暮らし" : "積み重なる、あなたのキャリア"}`;
   $("chapter-title").textContent = complete
-    ? `${game.age}歳。ひとつの人生の、終わり。`
-    : `${game.year}年、${game.age}歳のあなた。`;
+    ? `${game.age}歳。キャリアと暮らしの歩みを振り返る。`
+    : `${game.year}年、${game.age}歳のキャリアと暮らし。`;
   $("profile-caption").textContent = [
     residenceName(game),
     JOBS[game.employer.role].label,
@@ -545,7 +545,7 @@ function renderGame() {
     const h = game.history.at(-1),
       before = game.history.at(-2) ?? initial;
     resultCard.append(
-      node("p", `${h.year}年の選択 → この一年の結果`, "eyebrow"),
+      node("p", `${h.year}年のキャリアと暮らし → この一年の結果`, "eyebrow"),
       node("p", `選んだこと：${h.choiceLabel}`, "result-choice"),
       node("h2", h.outcome?.title ?? h.choiceLabel),
       node("p", h.outcome?.body ?? h.note),
@@ -610,8 +610,8 @@ function renderGame() {
   $("career-actions").replaceChildren();
   if (complete) {
     card.append(
-      node("p", "THE PAGES OF YOUR LIFE.", "eyebrow"),
-      node("h2", "あなたが選んだ時間が、ここにある。"),
+      node("p", "THE STORY OF YOUR WORKING LIFE.", "eyebrow"),
+      node("h2", "働いた年月が、あなたに残したもの。"),
     );
     const counts = Object.keys(CHOICES)
       .map((k) => [k, game.decisions.filter((x) => decisionId(x) === k).length])
@@ -619,7 +619,7 @@ function renderGame() {
     card.append(
       node(
         "p",
-        `${game.profile.age}歳から${game.age}歳まで、${game.decisions.length}年間を過ごしました。いちばん多く選んだのは「${CHOICES[counts[0][0]].label}」。大切にしたかった「${PRIORITIES[game.profile.priority]}」と、どんな関係を作れたでしょう。`,
+        `${game.profile.age}歳から${game.age}歳まで、${game.decisions.length}年間を過ごしました。いちばん多く選んだのは「${CHOICES[counts[0][0]].label}」。仕事で得た経験やつながりは、大切にしたかった「${PRIORITIES[game.profile.priority]}」や、仕事を離れた後の暮らしに何を残したでしょう。`,
       ),
       node(
         "p",
@@ -950,7 +950,7 @@ function openComparison() {
       node("h3", def.label),
       node(
         "p",
-        `${g.year}年 / ${g.age}歳 / ${g.ended ? "物語の終わり" : g.comparisonBlocked ? "実行条件の違いでここまで" : "この時点まで"}`,
+        `${g.year}年 / ${g.age}歳 / ${g.ended ? "キャリアと人生の完結" : g.comparisonBlocked ? "実行条件の違いでここまで" : "この時点まで"}`,
         "world-desc",
       ),
     );

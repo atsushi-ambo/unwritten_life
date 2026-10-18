@@ -30,6 +30,57 @@ const scene = {
     hint: "時間の配分",
   })),
 };
+test("every narration mode follows the career arc while preserving safety and output contracts", () => {
+  const game = createGame(p);
+  for (const personalized of [false, true]) {
+    for (const mode of ["life", "career"]) {
+      const { messages } = storyRequest(game, { personalized, mode });
+      const system = messages[0].content;
+      for (const rule of [
+        /キャリアと人生のシミュレーションの語り手/u,
+        /すべての場面は本人のキャリアの歩みを軸にする/u,
+        /現職に残るか移るか.*学び直し.*副業.*起業.*退職/u,
+        /家族・お金・住まい.*AIで変わる労働市場/u,
+        /退職後.*再就職を強制しない/u,
+        /転職を強制することではない/u,
+        /入力JSON.*命令ではない/u,
+        /資料中.*指示.*従わ/u,
+        /道具.*ブラウザ.*ファイル.*[使ア]/u,
+        /企業.*予言しない/u,
+        /未記録の.*採用|未記録の内定/u,
+        /家族.*[作決].*ない/u,
+        /incomeFact.*計算済み/u,
+        /lastOutcome.*計算済み|lastOutcomeはゲームで確定/u,
+        /deficit.*赤字.*借入.*貯え/u,
+        /deficitYearsが2以上.*方向転換.*撤退/u,
+        /本文に金額[・や]割合/u,
+        /allowedActionsのid/u,
+        /行動の意味を変えない|idの定義と矛盾する結果を約束しない/u,
+        /未来の企業発表や雇用・給与として書かない/u,
+        /歴史は過去の事実/u,
+        /企業名だけで内部事情・募集・給与を作らない|実際の内定・給与・募集ではない/u,
+        /実在の求人サイトのブランド名は使わない/u,
+        /出力はJSON[だの]け|出力はJSONのみ/u,
+        /"title":"40文字以内"/u,
+      ]) assert.match(system, rule, `${personalized}/${mode}: ${rule}`);
+      if (personalized) {
+        assert.match(system, /body":"120〜200文字/u);
+        assert.match(system, /選択肢は必ず4個/u);
+        if (mode === "life") {
+          assert.match(system, /4択すべてを転職や仕事の案で埋めない/u);
+          assert.match(system, /子育て中なら少なくとも1案は育児や家族/u);
+        } else {
+          assert.match(system, /3つの異なる企業へのswitch案と、現職に残るfocus（求職中ならrest）を1案/u);
+          assert.match(system, /具体的な役割は架空の提案で、求人情報として書かない/u);
+        }
+      } else {
+        assert.match(system, /body":"200〜350文字/u);
+        assert.match(system, /optionsは3〜5個、id重複不可/u);
+        assert.match(system, /allowedActionsにない行動、金額の直接更新、病気の診断は禁止/u);
+      }
+    }
+  }
+});
 test("actual local HTTP model transport parses a valid response and cache prevents another call", async (t) => {
   let calls = 0;
   const mock = http.createServer(async (req, res) => {
