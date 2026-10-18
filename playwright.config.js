@@ -12,6 +12,8 @@ export default defineConfig({
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },
     { name: "mobile", use: { viewport: { width: 320, height: 740 }, isMobile: true, hasTouch: true } },
     { name: "mobile-edition", use: { baseURL: "http://127.0.0.1:4398", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },
+    { name: "iphone-webkit", use: { ...devices["iPhone 13"], baseURL: "http://127.0.0.1:4398" } },
+    { name: "hosted-iphone-webkit", use: { ...devices["iPhone 13"], baseURL: "http://127.0.0.1:4399" } },
   ],
   webServer: {
     command: "node scripts/e2e-server.mjs",

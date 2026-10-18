@@ -25,8 +25,6 @@ function run(command, args) {
   if (result.status !== 0) throw Error(`${command} ${args.join(" ")} failed (${result.status})`);
 }
 try {
-  await cp(resolve(root, "hosted/verification"), output, { recursive: true });
-  await cp(resolve(root, "hosted/package.json"), resolve(output, "package.json"));
   await mkdir(resolve(output, ".openai"), { recursive: true });
   await writeFile(resolve(output, ".openai/hosting.json"), JSON.stringify({ d1: "DB", r2: null }));
   await prepareHosted(output);
@@ -47,32 +45,16 @@ try {
   run(process.execPath, ["node_modules/drizzle-kit/bin.cjs", "generate"]);
   if (await migrationDigest(migrations) !== before)
     throw Error("Schema changes have no committed migration; generate and review migrations first");
-  run(process.execPath, ["node_modules/vinext/dist/cli.js", "build"]);
+  run(process.execPath, ["scripts/build-worker.mjs"]);
+  run(process.execPath, ["scripts/validate-artifact.mjs"]);
   run(process.execPath, ["node_modules/typescript/bin/tsc", "--noEmit"]);
-  async function sources(directory) {
-    const all = [];
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
-      const path = resolve(directory, entry.name);
-      if (entry.isDirectory()) all.push(...await sources(path));
-      else if (entry.name.endsWith(".map")) {
-        const map = JSON.parse(await readFile(path, "utf8"));
-        all.push(...(map.sources || []));
-      }
-    }
-    return all;
-  }
-  const bundledSources = await sources(resolve(output, "dist/server"));
-  if (!bundledSources.some((s) => s.includes("node_modules/")))
-    throw Error("Worker dependency source maps missing; reachability was not verified");
-  if (bundledSources.some((s) => /node_modules\/(?:braces|micromatch|fast-glob)\//.test(s)))
-    throw Error("Excepted build-only glob dependencies entered the Worker bundle");
   // Run the built Worker, without platform auth, secrets or persistent user data.
   const socket = createServer();
   await new Promise((done, reject) => { socket.once("error", reject); socket.listen(0, "127.0.0.1", done); });
   const port = socket.address().port;
   await new Promise((done) => socket.close(done));
   const worker = spawn(process.execPath, ["node_modules/wrangler/bin/wrangler.js", "dev",
-    "--config", "dist/server/wrangler.json", "--local", "--ip", "127.0.0.1",
+    "--config", "wrangler.json", "--local", "--ip", "127.0.0.1",
     "--port", String(port), "--inspector-port", "0", "--persist-to", resolve(output, ".worker-state")],
     { cwd: output, env: environment, stdio: ["ignore", "pipe", "pipe"] });
   let failure;
@@ -111,7 +93,7 @@ try {
     await exited;
     clearTimeout(force);
   }
-  console.log("Hosted schema, Worker build, types, dependency reachability and unauthenticated HTTP rejection passed.");
+  console.log("Hosted schema, Worker build, types, self-contained artifact and unauthenticated HTTP rejection passed.");
 } finally {
   await rm(output, { recursive: true, force: true });
 }
