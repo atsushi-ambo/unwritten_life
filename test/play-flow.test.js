@@ -9,6 +9,7 @@ import {
   decodeSave,
   eventFor,
   availableChoices,
+  isRetiredAt,
 } from "../public/engine.js";
 import {
   browserDirectoryText,
@@ -121,6 +122,30 @@ test("one-time actions and major family/work changes pause multi-year progress f
   assert.ok(observedBirth);
   assert.throws(() => advanceYears(base, "rest", 500));
   assert.throws(() => advanceYears(base, "invented", 5));
+});
+
+test("multi-year progress stops at the first retired year and respects the saved migration boundary", () => {
+  const before = createGame({ ...p, age: 64, retirementAge: 65 }, "steady", 42);
+  const journey = advanceYears(before, "rest", 5);
+  assert.equal(journey.entries.length, 1);
+  assert.equal(journey.game.age, 65);
+  assert.equal(journey.game.retired, false);
+  assert.equal(isRetiredAt(journey.game), true);
+  assert.match(journey.stopReason, /働き方の節目/);
+  assert.deepEqual(decodeSave(encodeSave(journey.game)), journey.game);
+
+  // The delayed retired flag alone must not cause a second retirement stop.
+  const after = advanceYears(journey.game, "rest", 5);
+  assert.equal(after.entries.length, 5);
+  const oldSave = JSON.parse(encodeSave(journey.game));
+  delete oldSave.retirementFrom;
+  const legacy = decodeSave(JSON.stringify(oldSave));
+  assert.equal(isRetiredAt(legacy), false);
+  const resumed = advanceYears(legacy, "rest", 5);
+  assert.equal(resumed.entries.length, 1);
+  assert.equal(resumed.game.age, 66);
+  assert.equal(isRetiredAt(resumed.game), true);
+  assert.deepEqual(decodeSave(encodeSave(resumed.game)), resumed.game);
 });
 
 test("local narrative distinguishes product/SI work and preserves game facts instead of making new hires", () => {

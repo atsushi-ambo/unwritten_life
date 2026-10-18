@@ -109,6 +109,7 @@
             <span>この端末に、物語の続きが残っています。</span
             ><button id="resume-button" class="button small">
               続きから遊ぶ →</button
+            ><button id="export-save" class="text-button">セーブを書き出す</button
             ><button id="delete-save" class="text-button">保存を削除</button>
           </div>
           <div id="legacy-banner" class="resume-banner" hidden>
@@ -119,6 +120,19 @@
               旧版データを書き出す
             </button>
           </div>
+          <div id="corrupt-save-banner" class="resume-banner" hidden>
+            <span>保存データを読めませんでした。元データを救出用に書き出せます。</span>
+            <button id="export-corrupt-save" class="text-button">
+              読めない保存の元データを書き出す
+            </button>
+          </div>
+          <div class="save-transfer">
+            <button id="import-save" class="button secondary small" type="button">
+              セーブを読み込む
+            </button>
+            <span class="field-note">別の端末から、JSONファイルで続きを移せます。</span>
+          </div>
+          <input id="import-save-file" type="file" accept="application/json" hidden />
           <form
             id="profile-form"
             class="profile-card"
@@ -807,6 +821,14 @@
                 ↶ ひとつ前の年に戻る</button
               ><span id="save-status"></span>
             </div>
+            <div class="save-transfer">
+              <button id="game-export-save" class="text-button" type="button">
+                セーブを書き出す
+              </button>
+              <button id="game-import-save" class="text-button" type="button">
+                セーブを読み込む
+              </button>
+            </div>
             <p class="model-note">
               金額は2026年の購買力にそろえたゲーム内の概算。生活の指標はゲーム上の表現です。
             </p>
@@ -831,6 +853,16 @@
         前提とプライバシー ↗
       </button>
     </footer>
+    <dialog id="save-import-dialog" aria-labelledby="save-import-title">
+      <div class="dialog-top">
+        <h2 id="save-import-title">セーブを読み込みますか？</h2>
+        <button class="close-button" data-close aria-label="キャンセル">×</button>
+      </div>
+      <p id="save-import-description"></p>
+      <button id="save-import-confirm" class="button primary" type="button">
+        このセーブで続ける
+      </button>
+    </dialog>
     <dialog id="about-dialog">
       <div class="dialog-top">
         <p class="eyebrow">ABOUT THIS EXPERIENCE</p>

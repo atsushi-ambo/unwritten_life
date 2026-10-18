@@ -1,0 +1,88 @@
+{
+  "save": {
+    "version": 2,
+    "dynamicFrom": 0,
+    "worldFrom": 0,
+    "retirementFrom": 0,
+    "profile": {
+      "region": "city",
+      "job": "tech",
+      "priority": "balance",
+      "ai": "sometimes",
+      "gender": "undisclosed",
+      "household": "solo",
+      "companyType": "small",
+      "age": 30,
+      "income": 500,
+      "savings": 633,
+      "monthlyCost": 12,
+      "stocks": 0,
+      "rent": 7,
+      "homeValue": 0,
+      "mortgage": 0,
+      "mortgageYears": 25,
+      "mortgageRate": 1.5,
+      "retirementAge": 65,
+      "pension": 120,
+      "company": "",
+      "municipality": "",
+      "jobDetail": "",
+      "occupation": "",
+      "industry": "",
+      "workModel": "unknown",
+      "housing": "rent",
+      "tone": "realistic",
+      "partner": "unspecified",
+      "childrenWish": "undecided",
+      "careerGoal": "growth",
+      "children": 1,
+      "childStage": "school",
+      "careerNotes": "",
+      "companyFacts": null
+    },
+    "scenario": "steady",
+    "seed": 70,
+    "decisions": [
+      {
+        "id": "startup",
+        "venture": "ai",
+        "name": "合成事業"
+      },
+      "careLeave",
+      {
+        "id": "switch",
+        "target": "toyota",
+        "role": "tech"
+      },
+      "invest"
+    ],
+    "scenes": {}
+  },
+  "expected": {
+    "cash": 0,
+    "salary": 203.73567999315867,
+    "investments": 0,
+    "history": [
+      {
+        "income": 112.05673572975245,
+        "savings": 386.1631191546119,
+        "outcome": "setback"
+      },
+      {
+        "income": 0,
+        "savings": 143.16311915461188,
+        "outcome": "failure"
+      },
+      {
+        "income": 191.67395072410022,
+        "savings": 30.83532170492805,
+        "outcome": "setback"
+      },
+      {
+        "income": 203.73567999315867,
+        "savings": -42.9197517904453,
+        "outcome": "steady"
+      }
+    ]
+  }
+}

@@ -692,6 +692,13 @@ select {
   margin-bottom: 20px;
   font-size: 12px;
 }
+.save-transfer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+}
 .footer {
   border-top: 1px solid var(--line);
   display: flex;

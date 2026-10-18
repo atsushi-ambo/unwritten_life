@@ -59,6 +59,9 @@ const hosted = document.documentElement.dataset.edition === "mobile-cloud";
 let game = null,
   remember = false,
   savedGame = null,
+  corruptSave = null,
+  pendingImportedGame = null,
+  saveImportRevision = 0,
   noticeTimer,
   companySources = [],
   apiToken = "",
@@ -70,6 +73,7 @@ let game = null,
   careerSources = [],
   careerResearchRevision = 0,
   companyResearchRevision = 0,
+  companyURLResearchRevision = 0,
   modelListRevision = 0;
 let generationStarted = 0,
   generationTimer;
@@ -187,16 +191,24 @@ async function api(path, body) {
   return data;
 }
 function readStoredGame() {
+  let raw = null;
+  corruptSave = null;
+  $("corrupt-save-banner").hidden = true;
   try {
-    const raw = localStorage.getItem(saveKey);
+    raw = localStorage.getItem(saveKey);
     savedGame = raw ? decodeSave(raw) : null;
     $("resume-banner").hidden = !savedGame;
-    if (localStorage.getItem("unwritten-life:v1"))
-      $("legacy-banner").hidden = false;
   } catch {
     savedGame = null;
+    corruptSave = raw;
     $("resume-banner").hidden = true;
+    $("corrupt-save-banner").hidden = !corruptSave;
     toast("保存データを読めませんでした。元データは保持しています。");
+  }
+  try {
+    $("legacy-banner").hidden = !localStorage.getItem("unwritten-life:v1");
+  } catch {
+    $("legacy-banner").hidden = true;
   }
 }
 function removeSave() {
@@ -204,10 +216,12 @@ function removeSave() {
     localStorage.removeItem(saveKey);
     localStorage.removeItem("unwritten-life:v1");
     savedGame = null;
+    corruptSave = null;
     remember = false;
     $("remember").checked = false;
     $("resume-banner").hidden = true;
     $("legacy-banner").hidden = true;
+    $("corrupt-save-banner").hidden = true;
     if (game) persist();
     toast("この端末の保存を削除しました。");
   } catch {
@@ -282,9 +296,9 @@ function moveToStory() {
     $("event-card").scrollIntoView({ block: "start", behavior: "instant" });
   $("chapter-title").focus({ preventScroll: true });
 }
-function commitChoice(decision) {
+function commitChoice(decision, years = Number($("year-step").value)) {
   try {
-    const journey = advanceYears(game, decision, Number($("year-step").value));
+    const journey = advanceYears(game, decision, years);
     game = journey.game;
     lastJourney = journey;
     revision++;
@@ -559,6 +573,7 @@ function renderGame() {
         game.dynamicFrom,
         game.worldFrom,
         game.retirementFrom,
+        game.careLeaveSalaryFrom,
       );
       showGame(true);
     });
@@ -989,6 +1004,7 @@ $("undo-button").addEventListener("click", () => {
     game.dynamicFrom,
     game.worldFrom,
     game.retirementFrom,
+    game.careLeaveSalaryFrom,
   );
   revision++;
   renderGame();
@@ -1138,6 +1154,7 @@ for (const id of [
   "company-url",
 ])
   $(id).addEventListener("input", () => {
+    companyURLResearchRevision++;
     $("company-confirmed").checked = false;
     $("research-status").textContent =
       "会社情報を変更しました。内容を確認し、「物語に反映する」をチェックしてください。";
@@ -1176,14 +1193,19 @@ $("company-name").addEventListener("keydown", (event) => {
 });
 $("research-button").addEventListener("click", async () => {
   const button = $("research-button"),
-    current = ++companyResearchRevision;
+    current = ++companyURLResearchRevision,
+    requestedURL = $("company-url").value;
   button.disabled = true;
   $("research-status").textContent = "指定した公開ページを取得しています。";
   try {
     const { facts } = await api("/api/company", {
-      url: $("company-url").value,
+      url: requestedURL,
     });
-    if (current !== companyResearchRevision) return;
+    if (
+      current !== companyURLResearchRevision ||
+      requestedURL !== $("company-url").value
+    )
+      return;
     $("company-summary").value = facts.summary;
     companySources = facts.sources;
     $("company-sources").replaceChildren();
@@ -1201,7 +1223,11 @@ $("research-button").addEventListener("click", async () => {
     $("research-status").textContent =
       "本文を取得しました。内容と会社の一致を確認し、必要に応じて編集してください。";
   } catch (error) {
-    $("research-status").textContent = error.message;
+    if (
+      current === companyURLResearchRevision &&
+      requestedURL === $("company-url").value
+    )
+      $("research-status").textContent = error.message;
   } finally {
     button.disabled = false;
   }
@@ -1337,7 +1363,7 @@ function takeCareerDecision(decision) {
   if (generating || !availableChoices(game).includes(decisionId(decision)))
     throw new Error("今の状態では選べません。");
   $("career-dialog").close();
-  commitChoice(decision);
+  commitChoice(decision, 1);
 }
 function renderCareerOffers() {
   const container = $("career-offers");
@@ -1593,6 +1619,7 @@ function setupNameSearch(career = false) {
     button.disabled = true;
     button.textContent = "調べています…";
     if (!career) {
+      companyURLResearchRevision++;
       $("company-research-panel").hidden = false;
       $("company-research-panel").open = true;
     }
@@ -1608,7 +1635,14 @@ function setupNameSearch(career = false) {
     async function load(candidate) {
       if (!current() || loading) return;
       loading = true;
-      for (const el of list.querySelectorAll("button")) el.disabled = true;
+      const candidateButtons = [...list.querySelectorAll("button")],
+        researchRevision = career ? 0 : ++companyURLResearchRevision,
+        requestedURL = $(prefix + "-url").value;
+      const canApply = () => current() && (career || (
+        researchRevision === companyURLResearchRevision &&
+        requestedURL === $(prefix + "-url").value
+      ));
+      for (const el of candidateButtons) el.disabled = true;
       message.textContent = `${candidate.name}の公開ページを取得しています…`;
       try {
         let facts,
@@ -1630,7 +1664,7 @@ function setupNameSearch(career = false) {
             ],
           };
         } else ({ facts } = await api("/api/company", { url: candidate.url }));
-        if (!current()) return;
+        if (!canApply()) return;
         // Identity was explicitly accepted. For built-in evidence the full
         // summary/source was already shown on the candidate card.
         name.value = requestedName = candidate.name;
@@ -1665,12 +1699,11 @@ function setupNameSearch(career = false) {
             : "公式サイトの本文を取得しました。取得元と内容を確認し、下の「物語に反映する」をチェックしてください。";
         if (!career) updateBudget();
       } catch (error) {
-        if (current())
+        if (canApply())
           message.textContent = `${error.message} URLを指定する方法も使えます。`;
       } finally {
         loading = false;
-        if (current())
-          for (const el of list.querySelectorAll("button")) el.disabled = false;
+        for (const el of candidateButtons) el.disabled = false;
       }
     }
     try {
@@ -1948,18 +1981,100 @@ $("import-scene").addEventListener("click", () => {
         : error.message;
   }
 });
+function downloadSave(raw, filename) {
+  const url = URL.createObjectURL(
+      new Blob([raw], { type: "application/json" }),
+    ),
+    a = node("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function exportSave(currentGame) {
+  if (!currentGame) return;
+  try {
+    downloadSave(
+      encodeSave(currentGame),
+      `unwritten-life-save-${new Date().toISOString().slice(0, 10)}.json`,
+    );
+  } catch {
+    toast("セーブを書き出せませんでした。");
+  }
+}
+function finishSaveImport() {
+  if (!pendingImportedGame) return;
+  if (generating) {
+    toast("AIの生成が終わってからセーブを読み込んでください。");
+    return;
+  }
+  if ($("game").hidden) remember = $("remember").checked;
+  game = pendingImportedGame;
+  pendingImportedGame = null;
+  $("save-import-dialog").close();
+  showGame(true);
+  toast("セーブを読み込みました。");
+}
+async function importSaveFile(file) {
+  const current = ++saveImportRevision;
+  pendingImportedGame = null;
+  if (!file) return;
+  try {
+    if (generating)
+      throw new Error("AIの生成が終わってからセーブを読み込んでください。");
+    if (file.size > 1024 * 1024)
+      throw new Error("ファイルが大きすぎます。1 MB以下のセーブを選んでください。");
+    let imported;
+    try {
+      imported = decodeSave(await file.text());
+    } catch {
+      throw new Error(
+        "セーブを読み込めませんでした。書き出したJSONファイルか、データが壊れていないか確認してください。",
+      );
+    }
+    if (current !== saveImportRevision) return;
+    pendingImportedGame = imported;
+    if (game || savedGame) {
+      $("save-import-description").textContent =
+        `${imported.year}年・${imported.age}歳のセーブに置き換えます。現在の物語を残す場合は、先にセーブを書き出してください。`;
+      $("save-import-dialog").showModal();
+    } else finishSaveImport();
+  } catch (error) {
+    if (current === saveImportRevision) toast(error.message);
+  }
+}
+$("export-save").addEventListener("click", () => exportSave(savedGame));
+$("game-export-save").addEventListener("click", () => exportSave(game));
+for (const id of ["import-save", "game-import-save"])
+  $(id).addEventListener("click", () => {
+    if (generating) {
+      toast("AIの生成が終わってからセーブを読み込んでください。");
+      return;
+    }
+    $("import-save-file").click();
+  });
+$("import-save-file").addEventListener("change", async () => {
+  const file = $("import-save-file").files[0];
+  $("import-save-file").value = "";
+  await importSaveFile(file);
+});
+$("save-import-confirm").addEventListener("click", finishSaveImport);
+$("save-import-dialog").addEventListener("close", () => {
+  pendingImportedGame = null;
+});
+$("export-corrupt-save").addEventListener("click", () => {
+  if (!corruptSave) return;
+  try {
+    downloadSave(corruptSave, "unwritten-life-save-recovery.json");
+  } catch {
+    toast("元データを書き出せませんでした。");
+  }
+});
 $("export-legacy").addEventListener("click", () => {
   try {
     const raw = localStorage.getItem("unwritten-life:v1");
     if (!raw) return;
-    const url = URL.createObjectURL(
-        new Blob([raw], { type: "application/json" }),
-      ),
-      a = node("a");
-    a.href = url;
-    a.download = "unwritten-life-v1-backup.json";
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    downloadSave(raw, "unwritten-life-v1-backup.json");
   } catch {
     toast("書き出せませんでした。");
   }

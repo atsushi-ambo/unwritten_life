@@ -258,6 +258,30 @@ test("family care never suppresses business failure; family and work events can 
   assert.equal(cared.history[1].businessOverhead, 0);
 });
 
+test("fallback salaries after business failure do not inherit a care-leave pay correction", () => {
+  const start = advance(createGame({ ...p, children: 1 }, "steady", 70), {
+    id: "startup",
+    venture: "ai",
+    name: "合成事業",
+  });
+  const cared = advance(start, "careLeave"),
+    rested = advance(start, "rest");
+  for (const failed of [cared, rested]) {
+    assert.equal(failed.history.at(-1).outcome.kind, "failure");
+    assert.equal(failed.salary, 0);
+  }
+  for (const decision of [
+    { id: "switch", target: "toyota", role: "tech" },
+    { id: "startup", venture: "studio", name: "合成スタジオ" },
+  ]) {
+    const next = advance(cared, decision),
+      comparison = advance(rested, decision);
+    assert.ok(next.salary > 0);
+    assert.equal(next.salary, comparison.salary);
+    assert.deepEqual(decodeSave(encodeSave(next)), next);
+  }
+});
+
 test("a successful outcome cannot turn an actual income fall into a generated pay rise", () => {
   const g = advance(createGame(p, "steady", 4), "studyDaily");
   assert.ok(g.income < p.income);
