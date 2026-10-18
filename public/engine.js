@@ -851,6 +851,7 @@ export function createGame(
   careLeaveSalaryFrom = 0,
   prepayFrom = 0,
   debtRepayFrom = 0,
+  salaryCapFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -875,7 +876,10 @@ export function createGame(
     prepayFrom > MAX_AGE ||
     !Number.isInteger(debtRepayFrom) ||
     debtRepayFrom < 0 ||
-    debtRepayFrom > MAX_AGE
+    debtRepayFrom > MAX_AGE ||
+    !Number.isInteger(salaryCapFrom) ||
+    salaryCapFrom < 0 ||
+    salaryCapFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -892,6 +896,7 @@ export function createGame(
     careLeaveSalaryFrom,
     prepayFrom,
     debtRepayFrom,
+    salaryCapFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -1316,6 +1321,43 @@ function yearlyOutcome(g, choice, employer) {
 }
 const homePrice = (region) =>
   ({ metro: 4500, city: 3000, rural: 2000 })[region];
+// Annual salary (万円) at which raises clearly level off in a regional city.
+const SALARY_CEILINGS = Object.freeze({
+  tech: 1400,
+  marketing: 1100,
+  office: 1000,
+  creative: 1000,
+  people: 1100,
+  care: 750,
+  physical: 750,
+  independent: 1600,
+  other: 650,
+});
+// Soft ceiling for one employer: raises shrink above half of it and are
+// nearly gone at twice it. Losses are never damped, so variance remains.
+export function salaryCeiling(g, employer = g.employer) {
+  const base =
+    SALARY_CEILINGS[employer.role] *
+    { metro: 1.2, city: 1, rural: 0.85 }[g.region] *
+    ({ large: 1.15, small: 0.9, public: 0.9, self: 1.1 }[employer.companyType] ??
+      1) *
+    (employer.kind === "venture" ? 2 : 1);
+  return Math.round(Math.max(base, g.profile.income * 1.3));
+}
+// Only raises are damped. Each factor below 1 (negative growth, care leave)
+// is applied in full, so a loss or a later restoration never cancels a cut and
+// slips past the damping. The ratio uses full-time pay after care leave.
+function cappedSalary(g, employer, base, factors, transition, restore) {
+  const ratio = (base * restore) / salaryCeiling(g, employer);
+  const damp = ratio <= 0.5 ? 1 : Math.exp(-3 * (ratio - 0.5));
+  const merit = factors.reduce((m, f) => m * Math.max(f, 1), 1),
+    cut = factors.reduce((m, f) => m * Math.min(f, 1), 1);
+  return clamp(
+    base * (1 + (merit - 1) * damp) * cut * transition * restore,
+    0,
+    20000,
+  );
+}
 export function mortgagePayment(balance, rate, years) {
   if (balance <= 0) return 0;
   const r = rate / 100 / 12,
@@ -2465,7 +2507,30 @@ export function advance(g, rawDecision) {
     choice === "startup" ? 0.3 + randomAt(g.seed, i, 22) * 0.55 : 1;
   const salary = retired
     ? 0
-    : clamp(
+    : i >= g.salaryCapFrom
+      ? cappedSalary(
+          g,
+          employer,
+          choice === "startup"
+            ? g.salary || 120
+            : choice === "switch" && typeof decision === "object"
+              ? g.salary || 180
+              : g.salary,
+          [
+            1 + growth,
+            outcome?.salaryFactor ?? 1,
+            familyChange.outcome && outcome !== familyChange.outcome
+              ? familyChange.outcome.salaryFactor
+              : 1,
+          ],
+          transitionIncome,
+          world &&
+            (g.decisions.length < g.careLeaveSalaryFrom || g.salary > 0) &&
+            decisionId(g.decisions.at(-1)) === "careLeave"
+            ? 1 / 0.85
+            : 1,
+        )
+      : clamp(
         (choice === "startup"
           ? g.salary || 120
           : choice === "switch" && typeof decision === "object"
@@ -2763,6 +2828,7 @@ export function replay(
   careLeaveSalaryFrom = 0,
   prepayFrom = 0,
   debtRepayFrom = 0,
+  salaryCapFrom = 0,
 ) {
   if (
     !Array.isArray(decisions) ||
@@ -2783,6 +2849,7 @@ export function replay(
     careLeaveSalaryFrom,
     prepayFrom,
     debtRepayFrom,
+    salaryCapFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -2823,6 +2890,7 @@ export function compareWorlds(g) {
       g.careLeaveSalaryFrom,
       g.prepayFrom,
       g.debtRepayFrom,
+      g.salaryCapFrom,
     ),
   );
 }
@@ -2833,7 +2901,10 @@ export function encodeSave(g) {
     g.prepayFrom > MAX_AGE ||
     !Number.isInteger(g.debtRepayFrom) ||
     g.debtRepayFrom < 0 ||
-    g.debtRepayFrom > MAX_AGE
+    g.debtRepayFrom > MAX_AGE ||
+    !Number.isInteger(g.salaryCapFrom) ||
+    g.salaryCapFrom < 0 ||
+    g.salaryCapFrom > MAX_AGE
   )
     fail();
   const value = JSON.stringify({
@@ -2844,6 +2915,7 @@ export function encodeSave(g) {
     careLeaveSalaryFrom: g.careLeaveSalaryFrom,
     prepayFrom: g.prepayFrom,
     debtRepayFrom: g.debtRepayFrom,
+    salaryCapFrom: g.salaryCapFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
@@ -2878,5 +2950,6 @@ export function decodeSave(value) {
       : d.decisions?.length,
     Object.hasOwn(d, "prepayFrom") ? d.prepayFrom : d.decisions?.length,
     Object.hasOwn(d, "debtRepayFrom") ? d.debtRepayFrom : d.decisions?.length,
+    Object.hasOwn(d, "salaryCapFrom") ? d.salaryCapFrom : d.decisions?.length,
   );
 }

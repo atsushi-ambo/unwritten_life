@@ -641,6 +641,7 @@ function renderGame() {
         game.careLeaveSalaryFrom,
         game.prepayFrom,
         game.debtRepayFrom,
+        game.salaryCapFrom,
       );
       showGame(true);
     });
@@ -1075,6 +1076,7 @@ $("undo-button").addEventListener("click", () => {
     game.careLeaveSalaryFrom,
     game.prepayFrom,
     game.debtRepayFrom,
+    game.salaryCapFrom,
   );
   revision++;
   renderGame();
