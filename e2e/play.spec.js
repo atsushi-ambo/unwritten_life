@@ -12,11 +12,15 @@ test("local play advances, undo restores state, and mobile commands fit without 
   await page.goto("/");
   await page.locator("#demo-button").click();
   await expect(page.locator("#hud-year")).toHaveText("2026年");
+  await expect(page.locator("#chapter-label")).toContainText("あなたのキャリア");
+  await expect(page.locator("#choice-title")).toHaveText("キャリアと暮らし、この一年どうする？");
+  await expect(page.locator(".journal h2")).toHaveText("これまでのキャリアと暮らし。");
   const original = await page.locator(".journey-hud").textContent();
   await expect(page.locator("#choices button")).toHaveCount(4);
   await page.locator("#choices button").first().click();
   await expect(page.locator("#hud-year")).toHaveText("2027年");
   await expect(page.locator("#journey-next")).toBeVisible();
+  await expect(page.locator("#journey-title")).toHaveText("2026年のキャリア記録。");
   await page.locator("#journey-next").click();
   await page.locator("#undo-button").click();
   await expect(page.locator("#hud-year")).toHaveText("2026年");

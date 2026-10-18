@@ -220,7 +220,7 @@ test("age and retirement change income and old-age scenes", () => {
   assert.equal(g.retired, true);
   assert.equal(g.salary, 0);
   assert.equal(g.income, 180);
-  assert.match(eventFor(g).title, /仕事の先/);
+  assert.match(eventFor(g).title, /仕事で得たもの.*その先/u);
   const early = advance(
     createGame({ ...profile, age: 50 }, "steady", 10),
     "retire",

@@ -80,3 +80,17 @@ test("investment episode and action outcome describe allocating money", () => {
   assert.doesNotMatch(record.episode.body, /大切にしたい時間を、選んだ一年/);
   assert.match(record.episode.body, /現金の一部を株式へ配分/);
 });
+
+test("rest, relationships and retirement keep the career throughline without forcing a job change", () => {
+  const start = createGame(profile("balanced", "tech", { age: 50 }), "steady", 42);
+  for (const action of ["rest", "connect", "move", "invest", "retire"]) {
+    const g = advance(start, action);
+    const episode = g.history.at(-1).episode;
+    assert.match(`${episode.body}${episode.nextTitle}${episode.next}`, /仕事|働[くき]|キャリア/u);
+    assert.ok(eventFor(g).options.some((o) => !["switch", "startup"].includes(o.id)));
+    assert.deepEqual(replay(g.profile, g.scenario, g.seed, g.decisions), g);
+  }
+  const retired = advance(start, "retire");
+  assert.match(eventFor(retired).body, /仕事で培った経験やつながり/u);
+  assert.ok(!availableChoices(retired).includes("switch"));
+});
