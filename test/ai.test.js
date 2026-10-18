@@ -265,6 +265,42 @@ test("AI keeps prepay out of already-open old clients and hashes its boundary in
   assert.equal(contexts.length, 4);
 });
 
+test("AI preserves old-client debt rules and separates repayment boundaries in the cache", async () => {
+  let calls = 0;
+  const ai = makeAI({
+    transport: async () => {
+      calls++;
+      return {
+        status: 200,
+        text: JSON.stringify({ message: { content: JSON.stringify(scene) } }),
+      };
+    },
+  });
+  const before = createGame({ ...p, savings: -2000 }, "steady", 42, 0, 0, 0, 0, 0, 110),
+    saved = JSON.parse(encodeSave(advance(before, "rest")));
+  delete saved.debtRepayFrom;
+  const old = await ai.generate(JSON.stringify(saved));
+  assert.equal(old.cached, false);
+  assert.match(old.scene.body, /借入が残っている/);
+  assert.doesNotMatch(old.scene.body, /借入の返済も続いている/);
+  assert.equal((await ai.generate(JSON.stringify({ ...saved, debtRepayFrom: 110 }))).cached, true);
+  for (const debtRepayFrom of [0, 1, 2]) {
+    const explicit = JSON.stringify({ ...saved, debtRepayFrom }),
+      result = await ai.generate(explicit);
+    assert.equal(result.cached, false);
+    assert.equal((await ai.generate(explicit)).cached, true);
+    if (debtRepayFrom === 1) assert.match(result.scene.body, /借入の返済も続いている/);
+  }
+  assert.equal(calls, 4);
+  const accounting = ai.status();
+  for (const debtRepayFrom of [null, -1, 1.5, 111, "0"]) {
+    await assert.rejects(() => ai.generate(JSON.stringify({ ...saved, debtRepayFrom })));
+    assert.equal(ai.status().calls, accounting.calls);
+    assert.equal(ai.status().reservedUSD, accounting.reservedUSD);
+    assert.equal(calls, 4);
+  }
+});
+
 test("local model discovery uses fixed endpoints, filters cloud models, and rejects mistyped selections", async () => {
   const urls = [];
   const ai = makeAI({

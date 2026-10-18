@@ -850,6 +850,7 @@ export function createGame(
   retirementFrom = 0,
   careLeaveSalaryFrom = 0,
   prepayFrom = 0,
+  debtRepayFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -871,7 +872,10 @@ export function createGame(
     careLeaveSalaryFrom > MAX_AGE ||
     !Number.isInteger(prepayFrom) ||
     prepayFrom < 0 ||
-    prepayFrom > MAX_AGE
+    prepayFrom > MAX_AGE ||
+    !Number.isInteger(debtRepayFrom) ||
+    debtRepayFrom < 0 ||
+    debtRepayFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -887,6 +891,7 @@ export function createGame(
     retirementFrom,
     careLeaveSalaryFrom,
     prepayFrom,
+    debtRepayFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -1823,7 +1828,7 @@ export function profileStoryContext(g, { action = null, intention = "" } = {}) {
           ? "資産の一部は株式等で持っている。価格が動くお金と、すぐに使える現金を分けて、仕事を変える余地を考える。"
           : "大きく働き方を変える前に、手元の現金で暮らしをどれだけ支えられるか見ておきたい。",
       g.debt > 0
-        ? "借入の返済も続いている。次の選択の費用だけでなく、毎日の支出も含めて考えたい。"
+        ? `${g.decisions.length >= g.debtRepayFrom ? "借入の返済も続いている。" : "借入が残っている。"}次の選択の費用だけでなく、毎日の支出も含めて考えたい。`
         : "収入だけでなく、手元に残る余裕も選択を左右する。今すぐ広げるか、小さく始めるか。",
       "挑戦に使うお金と、暮らしのために残すお金。次の一歩の前に、その配分を見直してみる。",
     ],
@@ -2566,6 +2571,12 @@ export function advance(g, rawDecision) {
     debt -= cash;
     cash = 0;
   }
+  const debtRepayment =
+    g.decisions.length >= g.debtRepayFrom
+      ? Math.min(debt, Math.max(0, cash - livingCost * 6))
+      : 0;
+  cash -= debtRepayment;
+  debt -= debtRepayment;
   const debtInterest = debt * 0.02;
   debt += debtInterest;
   const health = clamp(
@@ -2668,6 +2679,7 @@ export function advance(g, rawDecision) {
     propertyGain,
     principal,
     debtInterest,
+    debtRepayment,
     investmentTransfer,
     homeTransaction,
     liquidation,
@@ -2684,6 +2696,7 @@ export function advance(g, rawDecision) {
       investment: liquidation - investmentTransfer,
       other: bonus - cost,
       borrowing,
+      debtRepayment: -debtRepayment,
       net: cash - g.cash,
     },
     ended,
@@ -2749,6 +2762,7 @@ export function replay(
   retirementFrom = 0,
   careLeaveSalaryFrom = 0,
   prepayFrom = 0,
+  debtRepayFrom = 0,
 ) {
   if (
     !Array.isArray(decisions) ||
@@ -2768,6 +2782,7 @@ export function replay(
     retirementFrom,
     careLeaveSalaryFrom,
     prepayFrom,
+    debtRepayFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -2807,6 +2822,7 @@ export function compareWorlds(g) {
       g.retirementFrom,
       g.careLeaveSalaryFrom,
       g.prepayFrom,
+      g.debtRepayFrom,
     ),
   );
 }
@@ -2814,7 +2830,10 @@ export function encodeSave(g) {
   if (
     !Number.isInteger(g.prepayFrom) ||
     g.prepayFrom < 0 ||
-    g.prepayFrom > MAX_AGE
+    g.prepayFrom > MAX_AGE ||
+    !Number.isInteger(g.debtRepayFrom) ||
+    g.debtRepayFrom < 0 ||
+    g.debtRepayFrom > MAX_AGE
   )
     fail();
   const value = JSON.stringify({
@@ -2824,6 +2843,7 @@ export function encodeSave(g) {
     retirementFrom: g.retirementFrom,
     careLeaveSalaryFrom: g.careLeaveSalaryFrom,
     prepayFrom: g.prepayFrom,
+    debtRepayFrom: g.debtRepayFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
@@ -2857,5 +2877,6 @@ export function decodeSave(value) {
       ? d.careLeaveSalaryFrom
       : d.decisions?.length,
     Object.hasOwn(d, "prepayFrom") ? d.prepayFrom : d.decisions?.length,
+    Object.hasOwn(d, "debtRepayFrom") ? d.debtRepayFrom : d.decisions?.length,
   );
 }

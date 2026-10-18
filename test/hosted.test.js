@@ -481,3 +481,41 @@ test("hosted generation keeps prepayment out of saves from clients opened before
   );
   assert.equal(old.status, 502);
 });
+
+test("hosted generation preserves old-client debt rules and rejects invalid boundaries before reservation", async (t) => {
+  const { db, sql } = database(t);
+  let calls = 0;
+  const api = makeHostedAPI({
+    db, origin, apiKey: "synthetic-key", now: () => 1000,
+    fetchAI: async () => {
+      calls++;
+      return Response.json({ choices: [{ message: { content: JSON.stringify(validScene) } }] });
+    },
+  });
+  const auth = await session(api),
+    before = createGame({ ...profile, savings: -2000 }, "steady", 42, 0, 0, 0, 0, 0, 110),
+    saved = JSON.parse(encodeSave(advance(before, "rest")));
+  for (const debtRepayFrom of [null, -1, 1.5, 111, "0"]) {
+    const invalid = await api.scene(request(auth, {
+      save: JSON.stringify({ ...saved, debtRepayFrom }),
+    }), user);
+    assert.equal(invalid.status, 400);
+    assert.equal(calls, 0);
+    assert.equal(sql.prepare("SELECT count(*) AS n FROM ai_attempts").get().n, 0);
+    assert.equal(sql.prepare("SELECT count(*) AS n FROM ai_budget").get().n, 0);
+  }
+  delete saved.debtRepayFrom;
+  for (const debtRepayFrom of [undefined, 110, 1]) {
+    const response = await api.scene(request(auth, {
+      save: JSON.stringify({ ...saved, ...(debtRepayFrom === undefined ? {} : { debtRepayFrom }) }),
+    }), user);
+    assert.equal(response.status, 200);
+    const { scene } = await response.json();
+    if (debtRepayFrom === 1) assert.match(scene.body, /借入の返済も続いている/);
+    else {
+      assert.match(scene.body, /借入が残っている/);
+      assert.doesNotMatch(scene.body, /借入の返済も続いている/);
+    }
+  }
+  assert.equal(calls, 3);
+});
