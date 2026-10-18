@@ -293,7 +293,7 @@ test("successful hosted request uses fixed standard endpoint/model, returns a va
     fetchAI: async (url, options) => {
       calls++;
       assert.equal(url, "https://api.openai.com/v1/chat/completions");
-      assert.equal(options.redirect, "error");
+      assert.equal(options.redirect, "manual");
       assert.equal(
         options.headers.Authorization,
         "Bearer synthetic-secret-key",
@@ -369,7 +369,7 @@ test("durable reservation refuses duplicate/concurrent/cap-exceeding work and su
   );
   await assert.rejects(() => reserveHosted(db, randomUUID(), 1000, 900000));
 });
-test("invalid, oversized and failed upstream responses consume one reservation, hide upstream secrets, and never retry", async (t) => {
+test("redirected, invalid, oversized and failed upstream responses consume one reservation, hide upstream secrets, and never retry", async (t) => {
   const { db, sql } = database(t);
   for (const reply of [
     () =>
@@ -388,6 +388,10 @@ test("invalid, oversized and failed upstream responses consume one reservation, 
         ],
       }),
     () => new Response("synthetic-secret-error", { status: 429 }),
+    () => new Response("synthetic-secret-error", {
+      status: 307,
+      headers: { Location: "https://other.example/collect" },
+    }),
     () => new Response("x".repeat(128001)),
     () => {
       throw Error("synthetic-secret-error");
@@ -398,7 +402,9 @@ test("invalid, oversized and failed upstream responses consume one reservation, 
       db,
       origin,
       apiKey: "synthetic-key",
-      fetchAI: async () => {
+      fetchAI: async (url, options) => {
+        assert.equal(url, "https://api.openai.com/v1/chat/completions");
+        assert.equal(options.redirect, "manual");
         calls++;
         return reply();
       },
@@ -409,5 +415,5 @@ test("invalid, oversized and failed upstream responses consume one reservation, 
     assert.doesNotMatch(await response.text(), /synthetic-secret-error/);
     assert.equal(calls, 1);
   }
-  assert.equal(sql.prepare("SELECT calls FROM ai_budget").get().calls, 5);
+  assert.equal(sql.prepare("SELECT calls FROM ai_budget").get().calls, 6);
 });
