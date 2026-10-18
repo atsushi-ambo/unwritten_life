@@ -308,6 +308,68 @@ function commitChoice(decision, years = Number($("year-step").value)) {
     toast(error.message);
   }
 }
+function appendBudget(parent, h, collapsed = false) {
+  if (!h.budget) return;
+  const box = node(collapsed ? "details" : "div", undefined, "budget-window"),
+    signed = (value) => {
+      const rounded = Math.round(value) || 0;
+      return `${rounded === 0 ? "±" : rounded > 0 ? "+" : "−"}${nf.format(Math.abs(rounded))}`;
+    };
+  box.append(
+    node(
+      collapsed ? "summary" : "p",
+      "家計の内訳（現金・万円）",
+      "budget-title",
+    ),
+  );
+  const list = node("dl", undefined, "budget-list");
+  for (const [key, label] of [
+    ["income", "労働収入（手取り）"],
+    ["pension", "年金等（手取り）"],
+    ["living", "生活費・子育て等"],
+    ["housing", "住居費・購入費（ローン除く）"],
+    ["loanInterest", "ローン利息"],
+    ["loanPrincipal", "ローン元金（繰り上げ含む）"],
+    ["investment", "株式等の購入・売却"],
+    ["other", "行動・事業費等と臨時収入"],
+    ["borrowing", "不足分の借入"],
+    ["net", "現金の増減"],
+  ]) {
+    if (h.budget[key] === 0 && key !== "net") continue;
+    const row = node("div", undefined, key === "net" ? "budget-net" : "");
+    row.append(node("dt", label), node("dd", signed(h.budget[key])));
+    list.append(row);
+  }
+  box.append(
+    list,
+    node(
+      "p",
+      "表示は四捨五入。評価損益と借入利息は現金の増減に含みません。",
+      "field-note",
+    ),
+  );
+  if (h.investmentGain || h.propertyGain)
+    box.append(
+      node(
+        "p",
+        `評価損益：株式等 ${signed(h.investmentGain)}万円 / 住宅 ${signed(h.propertyGain)}万円`,
+        "field-note",
+      ),
+    );
+  if (h.debtInterest)
+    box.append(
+      node("p", `借入利息（残高へ加算）：${signed(-h.debtInterest)}万円`, "field-note"),
+    );
+  if (h.prepayment !== undefined)
+    box.append(
+      node(
+        "p",
+        `元金返済のうち繰り上げ ${nf.format(Math.round(h.prepayment))}万円`,
+        "field-note",
+      ),
+    );
+  parent.append(box);
+}
 function showJourney(journey) {
   const first = journey.entries[0],
     last = journey.entries.at(-1);
@@ -336,6 +398,7 @@ function showJourney(journey) {
       ),
     );
     previousIncome = h.income;
+    appendBudget(row, h);
     list.append(row);
   }
   $("journey-next").textContent = game.ended
@@ -505,6 +568,7 @@ function renderGame() {
       );
     }
     resultCard.append(changes);
+    appendBudget(resultCard, h);
     if (h.familyOutcome && h.familyOutcome !== h.outcome)
       resultCard.append(
         node(
@@ -574,6 +638,7 @@ function renderGame() {
         game.worldFrom,
         game.retirementFrom,
         game.careLeaveSalaryFrom,
+        game.prepayFrom,
       );
       showGame(true);
     });
@@ -703,6 +768,7 @@ function renderGame() {
         node("p", h.episode.body),
       );
     }
+    appendBudget(text, h, true);
     row.append(year, text, node("span", h.choiceLabel, "history-choice"));
     history.append(row);
   }
@@ -1005,6 +1071,7 @@ $("undo-button").addEventListener("click", () => {
     game.worldFrom,
     game.retirementFrom,
     game.careLeaveSalaryFrom,
+    game.prepayFrom,
   );
   revision++;
   renderGame();

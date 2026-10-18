@@ -441,3 +441,43 @@ test("redirected, invalid, oversized and failed upstream responses consume one r
   }
   assert.equal(sql.prepare("SELECT calls FROM ai_budget").get().calls, 6);
 });
+test("hosted generation keeps prepayment out of saves from clients opened before it existed", async (t) => {
+  const { db } = database(t);
+  const scene = {
+    ...validScene,
+    options: ["prepay", "rest", "learn"].map((id) => ({
+      id,
+      label: id,
+      hint: "暮らしのお金を見直す",
+    })),
+  };
+  const api = makeHostedAPI({
+    db,
+    origin,
+    apiKey: "synthetic-key",
+    fetchAI: async () =>
+      Response.json({
+        choices: [{ message: { content: JSON.stringify(scene) } }],
+      }),
+  });
+  const auth = await session(api);
+  const owner = createGame({
+    ...profile,
+    savings: 1500,
+    housing: "own",
+    homeValue: 3000,
+    mortgage: 2000,
+    mortgageYears: 25,
+    mortgageRate: 2,
+  });
+  const current = await api.scene(request(auth, { save: encodeSave(owner) }), user);
+  assert.equal(current.status, 200);
+  assert.equal((await current.json()).scene.options[0].id, "prepay");
+  const legacy = JSON.parse(encodeSave(owner));
+  delete legacy.prepayFrom;
+  const old = await api.scene(
+    request(auth, { save: JSON.stringify(legacy) }),
+    user,
+  );
+  assert.equal(old.status, 502);
+});

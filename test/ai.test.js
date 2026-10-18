@@ -231,6 +231,40 @@ test("AI preserves pre-fix care-leave histories for open clients and separates s
   assert.equal(calls, 3);
 });
 
+test("AI keeps prepay out of already-open old clients and hashes its boundary in the cache key", async () => {
+  const contexts = [], ai = makeAI({
+    transport: async (_url, options) => {
+      const payload = JSON.parse(options.body);
+      contexts.push(JSON.parse(payload.messages[1].content));
+      return {
+        status: 200,
+        text: JSON.stringify({ message: { content: JSON.stringify(scene) } }),
+      };
+    },
+  });
+  const save = JSON.parse(encodeSave(createGame({
+    ...p, savings: 1000, housing: "own", homeValue: 3000,
+    mortgage: 2000, mortgageYears: 25, mortgageRate: 2,
+  })));
+  delete save.prepayFrom;
+  assert.equal((await ai.generate(JSON.stringify(save))).cached, false);
+  assert.equal(contexts[0].allowedActions.some((a) => a.id === "prepay"), false);
+  assert.equal((await ai.generate(JSON.stringify({ ...save, prepayFrom: 110 }))).cached, true);
+  for (const prepayFrom of [0, 1, 2]) {
+    const explicit = JSON.stringify({ ...save, prepayFrom });
+    assert.equal((await ai.generate(explicit)).cached, false);
+    assert.equal((await ai.generate(explicit)).cached, true);
+  }
+  assert.equal(contexts.length, 4);
+  assert.equal(contexts[1].allowedActions.some((a) => a.id === "prepay"), true);
+  assert.equal(contexts[2].allowedActions.some((a) => a.id === "prepay"), false);
+  const before = ai.status();
+  await assert.rejects(() => ai.generate(JSON.stringify({ ...save, prepayFrom: null })));
+  assert.equal(ai.status().calls, before.calls);
+  assert.equal(ai.status().reservedUSD, before.reservedUSD);
+  assert.equal(contexts.length, 4);
+});
+
 test("local model discovery uses fixed endpoints, filters cloud models, and rejects mistyped selections", async () => {
   const urls = [];
   const ai = makeAI({

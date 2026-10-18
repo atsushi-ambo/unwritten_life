@@ -2054,6 +2054,42 @@ progress::-moz-progress-bar { background: #42745a; }
 .history-row { border-top: 2px dashed var(--line); }
 .history-row .history-year { font: 700 19px Menlo, Consolas, monospace; }
 .history-row p { font-size: 12px; line-height: 1.9; }
+.budget-window {
+  min-width: 0;
+  margin-top: 16px;
+  padding: 12px;
+  border: 3px double var(--ink);
+  background: var(--white);
+  box-shadow: 2px 2px 0 #203b4326;
+  overflow-wrap: anywhere;
+}
+.budget-window .budget-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+.budget-window summary { cursor: pointer; }
+.history-row > div { min-width: 0; }
+.budget-list { margin: 10px 0 0; font-size: 12px; }
+.budget-list > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 4px 0;
+}
+.budget-list dd {
+  margin: 0;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.budget-list .budget-net {
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+  padding-top: 8px;
+  font-weight: 700;
+}
+.budget-window .field-note { margin: 8px 0 0; font-size: 11px; }
 .history-choice { font-size: 12px; }
 .pill { border: 2px solid var(--green); background: #e3ebcf; font-size: 11px; }
 .game-controls > span, .model-notes, .sidebar-note { font-size: 12px; }
