@@ -333,9 +333,10 @@ function appendBudget(parent, h, collapsed = false) {
     ["investment", "株式等の購入・売却"],
     ["other", "行動・事業費等と臨時収入"],
     ["borrowing", "不足分の借入"],
+    ["debtRepayment", "借入の返済"],
     ["net", "現金の増減"],
   ]) {
-    if (h.budget[key] === 0 && key !== "net") continue;
+    if (!h.budget[key] && key !== "net") continue;
     const row = node("div", undefined, key === "net" ? "budget-net" : "");
     row.append(node("dt", label), node("dd", signed(h.budget[key])));
     list.append(row);
@@ -639,6 +640,7 @@ function renderGame() {
         game.retirementFrom,
         game.careLeaveSalaryFrom,
         game.prepayFrom,
+        game.debtRepayFrom,
       );
       showGame(true);
     });
@@ -1072,6 +1074,7 @@ $("undo-button").addEventListener("click", () => {
     game.retirementFrom,
     game.careLeaveSalaryFrom,
     game.prepayFrom,
+    game.debtRepayFrom,
   );
   revision++;
   renderGame();

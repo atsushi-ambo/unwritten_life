@@ -5,7 +5,7 @@ import { createContext, runInContext } from "node:vm";
 import {
   createGame, advance, advanceYears, availableChoices, suggestedChoices,
   eventFor, amortizeYear, encodeSave, decodeSave, replay, compareWorlds,
-  applyScene, validateGeneratedScene, MAX_AGE, CHOICES,
+  applyScene, validateGeneratedScene, profileStoryContext, MAX_AGE, CHOICES,
 } from "../public/engine.js";
 import { storyRequest, sceneSchema } from "../public/story.js";
 
@@ -29,6 +29,7 @@ function checkBudget(before, next) {
   assert.equal(b.net, next.cash - before.cash);
   close(b.income + b.pension, h.disposable);
   close(b.loanPrincipal, -h.principal - (h.prepayment ?? 0));
+  close(b.debtRepayment, -h.debtRepayment);
   close(b.investment, h.liquidation - h.investmentTransfer);
   close(b.other, h.bonus - h.businessSetup - h.businessOverhead -
     (h.outcome?.extraCost ?? 0) -
@@ -38,7 +39,7 @@ function checkBudget(before, next) {
 function replayAt(g, length, scenes = {}) {
   return replay(g.profile, g.scenario, g.seed, g.decisions.slice(0, length),
     scenes, false, g.dynamicFrom, g.worldFrom, g.retirementFrom,
-    g.careLeaveSalaryFrom, g.prepayFrom);
+    g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom);
 }
 const scene = {
   title: "住まいと手元の備えを考える",
@@ -89,6 +90,105 @@ test("yearly budgets reconcile rent, mortgage, family, pensions and financial tr
             (1 + g.history.at(-1).world.shock.costs) + g.history.at(-1).familyCost);
       }
     }
+  }
+});
+
+test("shortfall borrowing is repaid from later surpluses before interest with a six-month buffer", () => {
+  for (const seed of [0, 42, 2026]) {
+    let g = createGame({
+      ...profile, savings: 0, monthlyCost: 30, rent: 5, children: 1,
+    }, "steady", seed), borrowed = false, repaid = false;
+    for (let i = 0; i < 10; i++) {
+      const before = g;
+      g = advance(g, i === 0 ? "careLeave" : "rest");
+      const h = g.history.at(-1), b = checkBudget(before, g),
+        available = before.cash + h.disposable - h.expenses + h.bonus +
+          h.liquidation + b.borrowing;
+      close(h.debtRepayment, Math.min(before.debt + b.borrowing,
+        Math.max(0, available - g.livingCost * 6)));
+      close(h.debtInterest, (before.debt + b.borrowing - h.debtRepayment) * 0.02);
+      close(g.debt, before.debt + b.borrowing - h.debtRepayment + h.debtInterest);
+      assert.ok(g.debt >= 0);
+      assert.ok(!(b.borrowing > 0 && h.debtRepayment > 0));
+      if (b.borrowing > 0) borrowed = true;
+      if (h.debtRepayment > 0) {
+        repaid = true;
+        assert.ok(g.cash >= g.livingCost * 6 - 1e-8);
+        assert.ok(g.debt < before.debt);
+        const unpaid = advance({ ...before, debtRepayFrom: 110 }, "rest");
+        assert.equal(g.mortgage, unpaid.mortgage);
+        close(g.savings - unpaid.savings, h.debtRepayment * 0.02);
+      }
+    }
+    assert.ok(borrowed && repaid);
+    assert.equal(g.debt, 0);
+    assert.deepEqual(decodeSave(encodeSave(g)), g);
+    assert.deepEqual(replayAt(g, g.decisions.length), g);
+  }
+  for (const debt of [10, 2000]) {
+    const before = createGame({ ...profile, savings: -debt }),
+      next = advance(before, "rest");
+    assert.ok(next.history[0].debtRepayment > 0);
+    assert.ok(next.cash >= next.livingCost * 6);
+    assert.ok(next.debt >= 0);
+    if (debt === 10) assert.equal(next.debt, 0);
+    else close(next.cash, next.livingCost * 6);
+    checkBudget(before, next);
+  }
+});
+
+test("debt repayment migration preserves old histories and starts at the next decision", () => {
+  let old = createGame({ ...profile, savings: -2000 }, "steady", 42, 0, 0, 0, 0, 0, 110);
+  for (let i = 0; i < 3; i++) {
+    const before = old;
+    old = advance(old, "rest");
+    assert.equal(old.history.at(-1).debtRepayment, 0);
+    assert.equal(old.debt, before.debt + before.debt * 0.02);
+  }
+  assert.ok(old.cash > old.livingCost * 6);
+  const saved = JSON.parse(encodeSave(old));
+  delete saved.debtRepayFrom;
+  // Persisted numeric state is ignored; the old decisions must be replayed.
+  saved.debt = 0;
+  const migrated = decodeSave(JSON.stringify(saved));
+  assert.equal(migrated.debtRepayFrom, 3);
+  assert.deepEqual(migrated, { ...old, debtRepayFrom: 3 });
+  assert.deepEqual(decodeSave(encodeSave(migrated)), migrated);
+  for (let i = 0; i <= 3; i++)
+    assert.deepEqual(replayAt(migrated, i).history, replayAt(old, i).history);
+  const currentScene = {
+    ...scene,
+    options: scene.options.map((o) => o.id === "prepay"
+      ? { ...o, id: "invest", decision: { id: "invest", intent: "資産の配分を考える" } } : o),
+  }, current = applyScene(migrated, validateGeneratedScene(currentScene, migrated)),
+    next = advance(current, "rest"),
+    undone = replayAt(next, 3, current.scenes);
+  assert.ok(next.history.at(-1).debtRepayment > 0);
+  assert.deepEqual(next.history.slice(0, 3), old.history);
+  assert.deepEqual(decodeSave(encodeSave(current)), current);
+  assert.deepEqual(decodeSave(encodeSave(next)), next);
+  assert.deepEqual(undone, current);
+  assert.deepEqual(advance(undone, "rest"), next);
+  for (const world of compareWorlds(next)) assert.equal(world.debtRepayFrom, 3);
+  const finance = (g) => profileStoryContext(g).threads.find((t) => t.id === "finances");
+  assert.match(finance(old).lines[1], /借入が残っている/);
+  assert.doesNotMatch(finance(old).lines[1], /返済も続いている/);
+  assert.match(finance(migrated).lines[1], /借入の返済も続いている/);
+});
+
+test("debt repayment boundaries are validated by create, replay, encode and decode", () => {
+  const g = createGame(profile), saved = JSON.parse(encodeSave(g));
+  assert.equal(g.debtRepayFrom, 0);
+  assert.equal(saved.debtRepayFrom, 0);
+  for (const debtRepayFrom of [null, -1, 1.5, MAX_AGE + 1, "0", NaN]) {
+    assert.throws(() => createGame(profile, "steady", 42, 0, 0, 0, 0, 0, debtRepayFrom));
+    assert.throws(() => replay(profile, "steady", 42, [], {}, false, 0, 0, 0, 0, 0, debtRepayFrom));
+    assert.throws(() => encodeSave({ ...g, debtRepayFrom }));
+    assert.throws(() => decodeSave(JSON.stringify({ ...saved, debtRepayFrom })));
+  }
+  for (const debtRepayFrom of [0, 1, MAX_AGE]) {
+    const bounded = createGame(profile, "steady", 42, 0, 0, 0, 0, 0, debtRepayFrom);
+    assert.deepEqual(decodeSave(encodeSave(bounded)), bounded);
   }
 });
 
@@ -280,6 +380,35 @@ test("the UI undo handler preserves the migrated boundary when undoing prepaymen
   assert.deepEqual(advance(context.game, "prepay"), paid);
 });
 
+test("UI undo and retry preserve the debt repayment boundary", () => {
+  const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+  let g = createGame({ ...profile, savings: -2000 }, "steady", 42, 0, 0, 0, 0, 0, 3);
+  for (let i = 0; i < 3; i++) g = advance(g, "rest");
+  const paid = advance(g, "rest"), button = {},
+    context = createContext({
+      game: paid, generating: false, lastJourney: {}, revision: 0, replay, createGame,
+      $: () => ({ addEventListener(_type, handler) { button.click = handler; } }),
+      again: { addEventListener(_type, handler) { button.retry = handler; } },
+      renderGame() {}, moveToStory() {}, showGame() {},
+    });
+  assert.ok(paid.history.at(-1).debtRepayment > 0);
+  runInContext(app.slice(app.indexOf('$("undo-button").addEventListener'),
+    app.indexOf('$("compare-button").addEventListener')), context);
+  button.click();
+  assert.deepEqual(context.game, g);
+  assert.deepEqual(advance(context.game, "rest"), paid);
+  runInContext(app.slice(app.indexOf('again.addEventListener("click"'),
+    app.indexOf('compare.addEventListener("click"')), context);
+  button.retry();
+  assert.equal(context.game.debtRepayFrom, 3);
+  assert.equal(context.game.decisions.length, 0);
+  for (let i = 0; i < 3; i++) {
+    context.game = advance(context.game, "rest");
+    assert.equal(context.game.history.at(-1).debtRepayment, 0);
+  }
+  assert.deepEqual(context.game, g);
+});
+
 test("year results and history show signed budgets safely and legacy entries without them still render", () => {
   const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
   const node = (tag, textContent = "", className = "") => ({
@@ -309,6 +438,14 @@ test("year results and history show signed budgets safely and legacy entries wit
   assert.match(text(parent), /ローン利息.*−/);
   assert.match(text(parent), /繰り上げ/);
   assert.match(text(parent), /評価損益/);
+  assert.doesNotMatch(text(parent), /借入の返済/);
+  const repayment = node("article");
+  context.parent = repayment;
+  context.h = advance(createGame({ ...profile, savings: -2000 }), "rest").history[0];
+  runInContext("appendBudget(parent, h)", context);
+  assert.match(text(repayment), /借入の返済.*−/);
+  assert.doesNotMatch(text(repayment), /不足分の借入/);
+  context.parent = parent;
   const { budget, ...legacy } = h;
   context.h = legacy;
   runInContext("appendBudget(parent, h)", context);
