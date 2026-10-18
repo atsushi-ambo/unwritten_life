@@ -5,6 +5,7 @@ import { publicAddress, destination, requestText } from "../lib/network.mjs";
 import { createGame, encodeSave, advance } from "../public/engine.js";
 import { storyRequest } from "../public/story.js";
 import http from "node:http";
+import { readFileSync } from "node:fs";
 const p = {
   age: 30,
   region: "city",
@@ -199,6 +200,35 @@ test("AI receives the chosen company and business context, and different employe
   assert.equal(contexts[2].career.kind, "venture");
   assert.equal(contexts[2].currentEmployer, "合成事業");
   assert.equal(contexts[2].companyEvidence, null);
+});
+
+test("AI preserves pre-fix care-leave histories for open clients and separates salary-rule cache entries", async () => {
+  const { save } = JSON.parse(readFileSync(new URL("./fixtures/care-leave-save.json", import.meta.url)));
+  let calls = 0;
+  const ai = makeAI({
+    transport: async () => {
+      calls++;
+      return {
+        status: 200,
+        text: JSON.stringify({ message: { content: JSON.stringify(scene) } }),
+      };
+    },
+  });
+  const legacy = await ai.generate(JSON.stringify(save));
+  assert.equal(legacy.cached, false);
+  // The already-open old client keeps the old salary rule for future turns.
+  assert.equal((await ai.generate(JSON.stringify({ ...save, careLeaveSalaryFrom: 110 }))).cached, true);
+  for (const careLeaveSalaryFrom of [4, 5]) {
+    const explicit = JSON.stringify({ ...save, careLeaveSalaryFrom });
+    assert.equal((await ai.generate(explicit)).cached, false);
+    assert.equal((await ai.generate(explicit)).cached, true);
+  }
+  assert.equal(calls, 3);
+  const before = ai.status();
+  await assert.rejects(() => ai.generate(JSON.stringify({ ...save, careLeaveSalaryFrom: null })));
+  assert.equal(ai.status().calls, before.calls);
+  assert.equal(ai.status().reservedUSD, before.reservedUSD);
+  assert.equal(calls, 3);
 });
 
 test("local model discovery uses fixed endpoints, filters cloud models, and rejects mistyped selections", async () => {

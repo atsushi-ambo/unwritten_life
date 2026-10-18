@@ -113,6 +113,30 @@ test("hosted status advertises detailed profile and choice capabilities only to 
   assert.equal(denied.status, 401);
   assert.equal((await denied.json()).profileRevision, undefined);
 });
+
+test("hosted generation decodes pre-fix care-leave histories and rejects invalid migration markers before reservation", async (t) => {
+  const { db, sql } = database(t);
+  const { save } = JSON.parse(readFileSync(new URL("./fixtures/care-leave-save.json", import.meta.url)));
+  let calls = 0;
+  const api = makeHostedAPI({
+    db, origin, apiKey: "synthetic-key", now: () => 1000,
+    fetchAI: async () => {
+      calls++;
+      return Response.json({ choices: [{ message: { content: JSON.stringify(validScene) } }] });
+    },
+  });
+  const auth = await session(api);
+  const invalid = await api.scene(request(auth, {
+    save: JSON.stringify({ ...save, careLeaveSalaryFrom: null }),
+  }), user);
+  assert.equal(invalid.status, 400);
+  assert.equal(calls, 0);
+  assert.equal(sql.prepare("SELECT count(*) AS n FROM ai_attempts").get().n, 0);
+  const response = await api.scene(request(auth, { save: JSON.stringify(save) }), user);
+  assert.equal(response.status, 200);
+  assert.equal(calls, 1);
+  assert.equal((await response.json()).turn, String(save.decisions.length));
+});
 test("hosted generation validates identity, CSRF, origin, consent and input before any reservation or network", async (t) => {
   const { db, sql } = database(t);
   let calls = 0;

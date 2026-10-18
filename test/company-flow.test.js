@@ -30,7 +30,10 @@ async function harness({ standalone = false, api } = {}) {
         this.children = items;
       },
       addEventListener(type, fn) {
-        this.listeners[type] = fn;
+        const previous = this.listeners[type];
+        this.listeners[type] = previous
+          ? (event) => { previous(event); return fn(event); }
+          : fn;
       },
       querySelectorAll(tag) {
         return this.children.flatMap((c) => [
@@ -54,6 +57,7 @@ async function harness({ standalone = false, api } = {}) {
     hosted: false,
     profileLevel: "standard",
     companyResearchRevision: 0,
+    companyURLResearchRevision: 0,
     careerResearchRevision: 0,
     companySources: [],
     careerSources: [],
@@ -66,6 +70,7 @@ async function harness({ standalone = false, api } = {}) {
       el.replaceChildren(...sources.map((s) => node("a", s.url))),
     renderCareer() {},
     updateBudget() {},
+    document: { querySelector: $ },
   });
   const code = await readFile(
     new URL("../public/app.js", import.meta.url),
@@ -79,6 +84,13 @@ async function harness({ standalone = false, api } = {}) {
     context,
   );
   runInContext("setupNameSearch(); setupNameSearch(true);", context);
+  runInContext(
+    code.slice(
+      code.indexOf('for (const id of [\n  "company-summary"'),
+      code.indexOf("function resetCareerResearch()"),
+    ),
+    context,
+  );
   return { $, context };
 }
 
@@ -233,5 +245,113 @@ test("a failed page fetch keeps the candidate actionable for a retry", async () 
   assert.match($("research-status").textContent, /接続に失敗/);
   assert.equal(accept.disabled, false);
   await accept.listeners.click();
+  assert.equal($("company-summary").value, "再取得した本文");
+});
+
+for (const edited of ["company-url", "company-summary"]) {
+  test(`editing ${edited} rejects a delayed direct research response`, async () => {
+    let release, requested;
+    const { $, context } = await harness({
+      api: async (_path, body) => {
+        requested = body.url;
+        return new Promise((resolve) => { release = resolve; });
+      },
+    });
+    $("company-url").value = "https://a.example.com";
+    const loading = $("research-button").listeners.click();
+    assert.equal(requested, "https://a.example.com");
+    $(edited).value = edited === "company-url"
+      ? "https://b.example.com"
+      : "自分で確認して編集した本文";
+    $(edited).listeners.input();
+    const message = $("research-status").textContent;
+    release({ facts: { summary: "Aの本文", sources: [{ url: requested }] } });
+    await loading;
+    assert.equal($("company-summary").value,
+      edited === "company-summary" ? "自分で確認して編集した本文" : "");
+    assert.equal($("research-status").textContent, message);
+    assert.equal(context.companySources.length, 0);
+    assert.equal($("company-confirmed").checked, false);
+    assert.equal($("research-button").disabled, false);
+  });
+}
+
+test("direct research checks the requested URL even without an input event, and applies matching responses", async () => {
+  let release;
+  const { $, context } = await harness({
+    api: async () => new Promise((resolve) => { release = resolve; }),
+  });
+  $("company-url").value = "https://a.example.com";
+  const stale = $("research-button").listeners.click();
+  $("company-url").value = "https://b.example.com";
+  release({ facts: { summary: "Aの本文", sources: [] } });
+  await stale;
+  assert.equal($("company-summary").value, "");
+  const matching = $("research-button").listeners.click();
+  release({ facts: { summary: "Bの本文", sources: [{ url: "https://b.example.com" }] } });
+  await matching;
+  assert.equal($("company-summary").value, "Bの本文");
+  assert.equal(context.companySources[0].url, $("company-url").value);
+});
+
+test("editing the URL also invalidates a delayed accepted company candidate", async () => {
+  let release;
+  const { $, context } = await harness({
+    api: async (path) => path.endsWith("search")
+      ? { candidates: [{ name: "合成企業", url: "https://a.example.com", description: "会社", known: false }] }
+      : new Promise((resolve) => { release = resolve; }),
+  });
+  $("company-name").value = "合成";
+  await $("company-search").listeners.click();
+  const candidate = $("company-candidates").querySelectorAll("button")[0];
+  const loading = candidate.listeners.click();
+  assert.equal(candidate.disabled, true);
+  $("company-url").value = "https://b.example.com";
+  $("company-url").listeners.input();
+  release({ facts: { summary: "Aの本文", sources: [] } });
+  await loading;
+  assert.equal($("company-url").value, "https://b.example.com");
+  assert.equal($("company-summary").value, "");
+  assert.equal(context.companySources.length, 0);
+  assert.equal(candidate.disabled, false);
+  const retry = candidate.listeners.click();
+  release({ facts: { summary: "選び直したAの本文", sources: [] } });
+  await retry;
+  assert.equal($("company-summary").value, "選び直したAの本文");
+});
+
+for (const edited of ["company-summary", "company-sector"]) {
+  test(`editing ${edited} keeps already-displayed company candidates selectable`, async () => {
+    const { $ } = await harness({ standalone: true });
+    $("company-name").value = "キンドリルジャパン株式会社";
+    await $("company-search").listeners.click();
+    $(edited).value = edited === "company-summary" ? "編集中の本文" : "tech";
+    $(edited).listeners.input();
+    await $("company-candidates").querySelectorAll("button")[0].listeners.click();
+    assert.match($("company-summary").value, /ITインフラ/);
+    assert.equal($("company-confirmed").checked, true);
+  });
+}
+
+test("editing during a candidate body fetch preserves the edit and re-enables the candidate for retry", async () => {
+  let release;
+  const { $ } = await harness({
+    api: async (path) => path.endsWith("search")
+      ? { candidates: [{ name: "合成企業", url: "https://a.example.com", description: "会社", known: false }] }
+      : new Promise((resolve) => { release = resolve; }),
+  });
+  $("company-name").value = "合成";
+  await $("company-search").listeners.click();
+  const candidate = $("company-candidates").querySelectorAll("button")[0];
+  const loading = candidate.listeners.click();
+  $("company-summary").value = "編集中の本文";
+  $("company-summary").listeners.input();
+  release({ facts: { summary: "古い取得結果", sources: [] } });
+  await loading;
+  assert.equal($("company-summary").value, "編集中の本文");
+  assert.equal(candidate.disabled, false);
+  const retry = candidate.listeners.click();
+  release({ facts: { summary: "再取得した本文", sources: [] } });
+  await retry;
   assert.equal($("company-summary").value, "再取得した本文");
 });

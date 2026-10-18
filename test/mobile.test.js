@@ -58,6 +58,12 @@ test("mobile build contains only public assets, opts out of network calls, and k
   assert.match(html, /data-edition="mobile"/);
   assert.match(html, /connect-src https:\/\/www\.wikidata\.org\/w\/api\.php;/);
   assert.match(html, /API課金は発生しません/);
+  for (const id of [
+    "export-save", "game-export-save", "import-save", "game-import-save",
+    "import-save-file", "save-import-dialog", "export-corrupt-save",
+  ]) assert.ok(html.includes(`id="${id}"`), id);
+  assert.match(html, /accept="application\/json"/);
+  assert.doesNotMatch(html, /\son(?:click|change)=|<script[^>]*>\s*[^<\s]/i);
   const scriptURL = new URL(
     html.match(/<script[^>]+src="([^"]+)"/)[1],
     "https://example.test",

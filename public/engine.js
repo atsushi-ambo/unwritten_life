@@ -838,6 +838,7 @@ export function createGame(
   dynamicFrom = 0,
   worldFrom = 0,
   retirementFrom = 0,
+  careLeaveSalaryFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -853,7 +854,10 @@ export function createGame(
     worldFrom > MAX_AGE ||
     !Number.isInteger(retirementFrom) ||
     retirementFrom < 0 ||
-    retirementFrom > MAX_AGE
+    retirementFrom > MAX_AGE ||
+    !Number.isInteger(careLeaveSalaryFrom) ||
+    careLeaveSalaryFrom < 0 ||
+    careLeaveSalaryFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -867,6 +871,7 @@ export function createGame(
     dynamicFrom,
     worldFrom,
     retirementFrom,
+    careLeaveSalaryFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -1286,7 +1291,11 @@ export function mortgagePayment(balance, rate, years) {
   if (balance <= 0) return 0;
   const r = rate / 100 / 12,
     n = Math.max(1, years * 12);
-  return r === 0 ? balance / n : (balance * r) / (1 - (1 + r) ** -n);
+  // Keep ordinary-rate arithmetic identical when replaying existing saves.
+  if (r >= 1e-9) return (balance * r) / (1 - (1 + r) ** -n);
+  return r < Number.EPSILON
+    ? balance / n
+    : (balance * r) / -Math.expm1(-n * Math.log1p(r));
 }
 export function amortizeYear(balance, rate, years) {
   const monthly = mortgagePayment(balance, rate, years);
@@ -2325,7 +2334,7 @@ export function advanceYears(game, decision, years = 1) {
       break;
     }
     if (
-      next.retired !== before.retired ||
+      isRetiredAt(next) !== isRetiredAt(before) ||
       ["failure", "closure"].includes(next.history.at(-1).outcome?.kind)
     ) {
       stopReason = "働き方の節目です。ここからの方針を選び直せます。";
@@ -2435,7 +2444,9 @@ export function advance(g, rawDecision) {
           (familyChange.outcome && outcome !== familyChange.outcome
             ? familyChange.outcome.salaryFactor
             : 1) *
-          (world && decisionId(g.decisions.at(-1)) === "careLeave"
+          (world &&
+          (g.decisions.length < g.careLeaveSalaryFrom || g.salary > 0) &&
+          decisionId(g.decisions.at(-1)) === "careLeave"
             ? 1 / 0.85
             : 1),
         0,
@@ -2667,6 +2678,7 @@ export function replay(
   dynamicFrom = 0,
   worldFrom = 0,
   retirementFrom = 0,
+  careLeaveSalaryFrom = 0,
 ) {
   if (
     !Array.isArray(decisions) ||
@@ -2684,6 +2696,7 @@ export function replay(
     dynamicFrom,
     worldFrom,
     retirementFrom,
+    careLeaveSalaryFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -2721,6 +2734,7 @@ export function compareWorlds(g) {
       g.dynamicFrom,
       g.worldFrom,
       g.retirementFrom,
+      g.careLeaveSalaryFrom,
     ),
   );
 }
@@ -2730,6 +2744,7 @@ export function encodeSave(g) {
     dynamicFrom: g.dynamicFrom,
     worldFrom: g.worldFrom,
     retirementFrom: g.retirementFrom,
+    careLeaveSalaryFrom: g.careLeaveSalaryFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
@@ -2759,5 +2774,8 @@ export function decodeSave(value) {
     Object.hasOwn(d, "retirementFrom")
       ? d.retirementFrom
       : d.decisions?.length + 1,
+    Object.hasOwn(d, "careLeaveSalaryFrom")
+      ? d.careLeaveSalaryFrom
+      : d.decisions?.length,
   );
 }

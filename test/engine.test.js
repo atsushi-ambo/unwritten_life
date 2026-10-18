@@ -99,6 +99,85 @@ test("mortgage monthly amortization handles zero interest and a complete payoff"
   assert.ok(fixed.balance < 1000);
   assert.equal(amortizeYear(0, 2, 25).payment, 0);
 });
+test("tiny positive mortgage rates stay finite and repay only the scheduled principal", () => {
+  for (const rate of [1e-14, 1e-10, 0]) {
+    const monthly = mortgagePayment(1200, rate, 25),
+      loan = amortizeYear(1200, rate, 25);
+    assert.ok(Number.isFinite(monthly));
+    assert.ok(Math.abs(monthly - 4) < 1e-8);
+    assert.ok(Math.abs(loan.balance - 1152) < 1e-7);
+    assert.ok(Math.abs(loan.principal - 48) < 1e-7);
+    assert.ok(Math.abs(loan.payment - loan.interest - loan.principal) < 1e-8);
+  }
+  const base = createGame({
+    ...profile, housing: "own", homeValue: 3000,
+    mortgage: 1200, mortgageRate: 1e-14, mortgageYears: 25,
+  }, "steady", 42);
+  const next = advance(base, "rest");
+  assert.ok(Math.abs(next.mortgage - 1152) < 1e-7);
+  assert.deepEqual(decodeSave(encodeSave(next)), next);
+});
+test("ordinary mortgage rates retain exactly the original payment arithmetic for saved histories", () => {
+  for (const rate of [1.2e-6, 0.01, 0.1, 1.5, 2, 15]) {
+    for (const years of [1, 25, 40]) {
+      const r = rate / 100 / 12, n = years * 12;
+      assert.equal(mortgagePayment(1500, rate, years),
+        (1500 * r) / (1 - (1 + r) ** -n));
+    }
+  }
+});
+
+test("pre-fix care-leave histories keep their salary, cash and recorded investment when migrated", () => {
+  const { save, expected } = JSON.parse(readFileSync(
+    new URL("./fixtures/care-leave-save.json", import.meta.url),
+  ));
+  assert.equal(Object.hasOwn(save, "careLeaveSalaryFrom"), false);
+  const restored = decodeSave(JSON.stringify(save));
+  assert.equal(restored.careLeaveSalaryFrom, save.decisions.length);
+  assert.equal(restored.cash, expected.cash);
+  assert.equal(restored.salary, expected.salary);
+  assert.equal(restored.investments, expected.investments);
+  assert.deepEqual(restored.history.map((h) => ({
+    income: h.income, savings: h.savings, outcome: h.outcome.kind,
+  })), expected.history);
+  assert.deepEqual(decodeSave(encodeSave(restored)), restored);
+  assert.deepEqual(replay(restored.profile, restored.scenario, restored.seed,
+    restored.decisions, restored.scenes, false, restored.dynamicFrom,
+    restored.worldFrom, restored.retirementFrom, restored.careLeaveSalaryFrom), restored);
+  const beforeInvestment = replay(restored.profile, restored.scenario, restored.seed,
+    restored.decisions.slice(0, -1), {}, false, restored.dynamicFrom,
+    restored.worldFrom, restored.retirementFrom, restored.careLeaveSalaryFrom);
+  assert.ok(beforeInvestment.cash > 30);
+  assert.deepEqual(advance(beforeInvestment, "invest"), restored);
+  const currentMath = replay(restored.profile, restored.scenario, restored.seed,
+    restored.decisions.slice(0, -1));
+  assert.ok(currentMath.cash < 30);
+  assert.throws(() => decodeSave(JSON.stringify({ ...save, careLeaveSalaryFrom: 0 })));
+  for (const other of compareWorlds(restored))
+    assert.equal(other.careLeaveSalaryFrom, restored.careLeaveSalaryFrom);
+  assert.deepEqual(decodeSave(encodeSave(advance(restored, "rest"))), advance(restored, "rest"));
+});
+
+test("care-leave salary migration markers are bounded integers and activate only at the boundary", () => {
+  const before = createGame({ ...profile, children: 1 }, "steady", 70),
+    save = JSON.parse(encodeSave(before));
+  assert.equal(before.careLeaveSalaryFrom, 0);
+  assert.equal(save.careLeaveSalaryFrom, 0);
+  for (const careLeaveSalaryFrom of [null, -1, 0.5, "2", MAX_AGE + 1]) {
+    assert.throws(() => decodeSave(JSON.stringify({ ...save, careLeaveSalaryFrom })));
+    assert.throws(() => createGame(before.profile, "steady", 70, 0, 0, 0, careLeaveSalaryFrom));
+  }
+  let g = createGame(before.profile, "steady", 70, 0, 0, 0, 3);
+  for (const d of [{ id: "startup", venture: "ai", name: "合成事業" }, "careLeave"])
+    g = advance(g, d);
+  assert.equal(g.salary, 0);
+  const decision = { id: "switch", target: "toyota", role: "tech" };
+  const oldMath = advance(g, decision);
+  const fixedMath = advance({ ...g, careLeaveSalaryFrom: 2 }, decision);
+  assert.ok(Math.abs(oldMath.salary * 0.85 - fixedMath.salary) < 1e-10);
+  assert.deepEqual(decodeSave(encodeSave(oldMath)), oldMath);
+  assert.deepEqual(decodeSave(encodeSave(fixedMath)), fixedMath);
+});
 test("all careers and worlds finish a bounded lifetime with finite balances", () => {
   for (const job of Object.keys(JOBS))
     for (const scenario of Object.keys(SCENARIOS))
@@ -226,8 +305,9 @@ test("pre-change retirement saves preserve boundary work history and the current
   for (const { id, save, expected } of fixtures) {
     assert.ok(!Object.hasOwn(save, "retirementFrom"));
     const restored = decodeSave(JSON.stringify(save));
-    const { retirementFrom, ...state } = restored;
+    const { retirementFrom, careLeaveSalaryFrom, ...state } = restored;
     assert.equal(retirementFrom, save.decisions.length + 1);
+    assert.equal(careLeaveSalaryFrom, save.decisions.length);
     assert.deepEqual(JSON.parse(JSON.stringify(state)), expected, id);
     assert.deepEqual(decodeSave(encodeSave(restored)), restored, id);
     assert.deepEqual(
@@ -241,6 +321,7 @@ test("pre-change retirement saves preserve boundary work history and the current
         restored.dynamicFrom,
         restored.worldFrom,
         restored.retirementFrom,
+        restored.careLeaveSalaryFrom,
       ),
       restored,
     );
