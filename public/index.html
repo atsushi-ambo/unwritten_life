@@ -721,8 +721,9 @@
           <div><span>心と体のゆとり</span><strong id="hud-health"></strong></div>
         </div>
         <div class="game-grid">
-          <aside class="life-sidebar">
+          <aside class="life-sidebar" aria-label="キャリアのステータス">
             <p class="eyebrow">STATUS / あなたの現在地</p>
+            <section id="career-map" class="career-map" aria-label="キャリアマップ"></section>
             <div id="stats"></div>
             <div class="ai-meter">
               <span>この世界のAI普及 <b id="ai-stage"></b></span
@@ -823,10 +824,10 @@
             ></div>
             <div id="event-card" class="event-card"></div>
             <div class="choice-heading">
-              <h2 id="choice-title">キャリアと暮らし、この一年どうする？</h2>
-              <span>ひとつ、選んでみよう。</span>
+              <h2 id="choice-title">コマンド / 今年のキャリアと暮らし</h2>
+              <span id="command-help">↑↓で移動 · Enterで決定</span>
             </div>
-            <div id="choices" class="choices"></div>
+            <div id="choices" class="choices" role="group" aria-labelledby="choice-title" aria-describedby="command-help"></div>
             <div id="career-actions" class="career-actions"></div>
             <div class="game-controls">
               <button id="undo-button" class="text-button">
@@ -852,7 +853,10 @@
               <p class="eyebrow">YOUR CAREER LOG</p>
               <h2>これまでのキャリアと暮らし。</h2>
             </div>
+            <button id="history-favorites-only" class="button secondary small" type="button" aria-pressed="false">★ お気に入りだけ</button>
           </div>
+          <p class="field-note">☆で残したい年に印を。このプレイ中だけのお気に入りです。再開・読み込み・新しいゲームでリセットします。</p>
+          <p id="history-filter-status" class="field-note" role="status"></p>
           <div id="history"></div>
         </section>
       </section>
@@ -865,6 +869,21 @@
         前提とプライバシー ↗
       </button>
     </footer>
+    <dialog id="reflection-dialog" aria-labelledby="reflection-title" aria-describedby="reflection-question reflection-note">
+      <div class="dialog-top">
+        <p class="eyebrow">CAREER CHECKPOINT / ひと息つこう</p>
+        <button type="button" class="close-button" data-close aria-label="今は書かずに進む">×</button>
+      </div>
+      <h2 id="reflection-title"></h2>
+      <p id="reflection-question"></p>
+      <form id="reflection-form">
+        <label for="reflection-line" class="field-label">いまの気持ちを一行（任意・80文字まで）</label>
+        <input id="reflection-line" name="reflection" type="text" maxlength="80" autocomplete="off" aria-describedby="reflection-note" />
+        <p id="reflection-note" class="field-note">セーブに残る自分用の記録です。AIには送りません。空欄やEscでも進めます。</p>
+        <p id="reflection-error" class="error" role="alert"></p>
+        <button type="submit" class="button primary">この一行を残して進む →</button>
+      </form>
+    </dialog>
     <dialog id="save-import-dialog" aria-labelledby="save-import-title">
       <div class="dialog-top">
         <h2 id="save-import-title">セーブを読み込みますか？</h2>

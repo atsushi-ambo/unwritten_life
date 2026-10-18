@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createContext, runInContext } from "node:vm";
-import { createGame, applyScene, sceneKey, validateGeneratedScene } from "../public/engine.js";
+import { createGame, advance, recordCareerReflection, encodeSave, isRetiredAt, applyScene, sceneKey, validateGeneratedScene } from "../public/engine.js";
 import { groundScene } from "../public/story.js";
 
 const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
@@ -24,6 +24,39 @@ function loadHandler(context, start, end) {
   assert.ok(from >= 0 && to > from);
   runInContext(app.slice(from, to), context);
 }
+
+test("direct life and career requests omit private reflections and preserve the local record", async () => {
+  const initial = createGame({
+    age: 29, region: "city", job: "tech", ai: "daily", priority: "balance",
+    gender: "undisclosed", household: "solo", companyType: "small",
+  });
+  const game = recordCareerReflection(advance(initial, "rest"), "age-30", "PRIVATE_REFLECTION");
+  for (const mode of ["life", "career"]) {
+    const $ = elements();
+    const aiState = { provider: "ollama", cloud: false };
+    let requests = 0;
+    const context = createContext({
+      $, game, aiState, isRetiredAt, encodeSave, generating: false, revision: 1,
+      needsCareerServerUpdate: () => false, needsChoiceServerUpdate: () => false,
+      performance: { now: () => 0 }, setInterval: () => 0, clearInterval() {},
+      connectionKey: () => "synthetic", document: { querySelectorAll: () => [] },
+      renderAI() {}, renderGame() {}, renderCareerOffers() {}, renderAITiming() {}, toast() {}, status: async () => {},
+      api: async (path, body) => {
+        requests++;
+        assert.equal(path, "/api/scene");
+        assert.equal(body.mode, mode);
+        assert.deepEqual(JSON.parse(body.save).reflections, {});
+        assert.doesNotMatch(JSON.stringify(body), /PRIVATE_REFLECTION/);
+        throw Error("Synthetic provider failure");
+      },
+    });
+    if (mode === "life") loadHandler(context, "async function generateScene()", "function openComparison()");
+    else loadHandler(context, "async function generateCareerChoices()", '$("career-generate").addEventListener');
+    await runInContext(mode === "life" ? "generateScene()" : "generateCareerChoices()", context);
+    assert.equal(requests, 1);
+    assert.equal(context.game.reflections["age-30"], "PRIVATE_REFLECTION");
+  }
+});
 
 test("saving AI connection settings clears life and career cloud consent", async () => {
   const $ = elements(), updatedAI = { provider: "custom", model: "synthetic" };

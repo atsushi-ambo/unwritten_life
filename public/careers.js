@@ -1,5 +1,119 @@
 // Public business descriptions are dated evidence. Simulation coefficients live
 // in engine.js and are game assumptions, never company pay or hiring estimates.
+
+// Presentation only: one tile for each completed annual record. A tile describes
+// the year's main activity, not an inferred employment contract or achievement.
+export const CAREER_STATES = Object.freeze({
+  employed: { label: "仕事", icon: "■" },
+  change: { label: "転職", icon: "↗" },
+  learning: { label: "学び", icon: "+" },
+  venture: { label: "事業", icon: "◆" },
+  rest: { label: "休養・ケア・求職", icon: "~" },
+  retired: { label: "退職後", icon: "○" },
+});
+export function careerMap(game) {
+  let retired = game.profile.age >= game.profile.retirementAge;
+  let working = !["student", "notWorking"].includes(game.profile.occupation);
+  return game.history.map((record) => {
+    retired ||= record.choice === "retire" || record.age >= game.profile.retirementAge;
+    if (["switch", "startup", "opportunity"].includes(record.choice)) working = true;
+    const state = retired ? "retired"
+      : record.choice === "switch" ? "change"
+        : ["learn", "studyDaily", "demonstrate"].includes(record.choice) ? "learning"
+          : ["rest", "careLeave", "recover"].includes(record.choice) || record.employer?.kind === "seeking" ? "rest"
+            : record.employer?.kind === "venture" ? "venture"
+              : !working ? (game.profile.occupation === "student" ? "learning" : "rest")
+                : "employed";
+    return {
+      year: record.year, age: record.age, choice: record.choiceLabel, state,
+      ...CAREER_STATES[state],
+    };
+  });
+}
+
+export const CAREER_QUESTIONS = Object.freeze({
+  "age-30": "これからの仕事で、大切にしたいことは？",
+  "age-40": "積み重ねた経験を、次は何に使いたい？",
+  "age-50": "この先も続けたい仕事や、人とのつながりは？",
+  "age-60": "働く時間と、自分の時間。これからどう過ごしたい？",
+  retirement: "仕事に一区切り。これからの暮らしに持っていきたいものは？",
+});
+// Milestones refer to arrival at a year, unlike map tiles (completed years).
+// Starting at a milestone does not interrupt setup. Legacy saves have no backlog
+// of questions: the UI only asks for the milestone at the current step.
+export function careerMilestones(game) {
+  const start = game.profile.age, length = game.decisions.length;
+  const milestones = [30, 40, 50, 60]
+    .filter((age) => age > start && age <= start + length)
+    .map((age) => ({ id: `age-${age}`, age, step: age - start }));
+  if (start < game.profile.retirementAge) {
+    const explicit = game.history.findIndex((h) => h.choice === "retire" || h.age >= game.profile.retirementAge);
+    const automatic = Math.max(game.profile.retirementAge - start, game.retirementFrom ?? 0);
+    const step = Math.min(explicit < 0 ? Infinity : explicit + 1, automatic);
+    if (step > 0 && step <= length) {
+      // Retirement and a decade in the same year share one pause.
+      const sameYear = milestones.findIndex((m) => m.step === step);
+      if (sameYear >= 0) milestones.splice(sameYear, 1);
+      milestones.push({ id: "retirement", age: start + step, step });
+    }
+  }
+  return milestones.sort((a, b) => a.step - b.step)
+    .map((m) => ({ ...m, year: game.year - length + m.step, question: CAREER_QUESTIONS[m.id] }));
+}
+export function pendingCareerReflection(game) {
+  return careerMilestones(game).find((m) => m.step === game.decisions.length &&
+    !Object.hasOwn(game.reflections ?? {}, m.id)) ?? null;
+}
+
+export function careerRecord(game) {
+  const map = careerMap(game), tenures = [];
+  const yearsByState = Object.fromEntries(Object.keys(CAREER_STATES).map((key) => [key, 0]));
+  for (const [i, h] of game.history.entries()) {
+    const state = map[i].state;
+    yearsByState[state]++;
+    const nonworking = h.employer?.kind === "initial" && ["student", "notWorking"].includes(game.profile.occupation);
+    const employer = state === "retired" ? "退職後の暮らし"
+      : nonworking ? (game.profile.occupation === "student" ? "学びを中心に過ごす" : "仕事を離れて過ごす")
+        : h.employer?.name ?? "勤務先の記録なし";
+    const role = state === "retired" || nonworking || h.employer?.kind === "seeking" ? null : h.employer?.role ?? null;
+    const kind = state === "retired" ? "retired" : nonworking ? "nonworking" : h.employer?.kind ?? "unknown";
+    const last = tenures.at(-1);
+    if (last && last.employer === employer && last.role === role && last.kind === kind) {
+      last.to = h.year;
+      last.years++;
+    } else tenures.push({ from: h.year, to: h.year, years: 1, employer, role, kind });
+  }
+  const turningPoints = new Set(["switch", "startup", "opportunity", "retire", "closeBusiness", "pivot", "expand", "demonstrate", "negotiate", "careLeave"]);
+  const decisions = game.history.filter((h, i) => i === 0 || turningPoints.has(h.choice))
+    .map((h) => ({ year: h.year, age: h.age, label: h.choiceLabel }));
+  const reflections = careerMilestones(game).filter((m) => game.reflections?.[m.id])
+    .map((m) => ({ ...m, text: game.reflections[m.id] }));
+  return { map, tenures, yearsByState, decisions, reflections };
+}
+export function careerRecordText(game, roles = {}) {
+  const record = careerRecord(game);
+  const lines = [
+    "Unwritten Life / 職務経歴書", "この世界で歩んだ道",
+    `${game.profile.age}歳から${game.age}歳まで・${game.decisions.length}年間`,
+    "ゲーム内の架空の経歴です。実際の職務経歴を証明するものではありません。",
+    "", "勤務先と役割",
+    ...record.tenures.map((t) => `${t.from}〜${t.to}年（${t.years}年） ${t.employer}${t.role ? " / " + (roles[t.role]?.label ?? t.role) : ""}`),
+    "", "一年の主な活動（重複なし）",
+    ...Object.entries(record.yearsByState).map(([key, years]) => `${CAREER_STATES[key].label}：${years}年`),
+    "", "選んだ転機",
+    ...record.decisions.map((d) => `${d.year}年・${d.age}歳 ${d.label}`),
+    "", "節目の一行",
+    ...(record.reflections.length ? record.reflections.map((r) => `${r.year}年・${r.age}歳${r.id === "retirement" ? "（退職）" : ""} ${r.text}`) : ["記録なし"]),
+    "", "キャリアマップ（1マスが1年）",
+  ];
+  for (let i = 0; i < record.map.length; i += 10) {
+    const row = record.map.slice(i, i + 10);
+    lines.push(`${row[0].year}〜${row.at(-1).year}年（${row[0].age}〜${row.at(-1).age}歳） ${row.map((t) => t.icon).join(" ")}`);
+  }
+  lines.push(Object.values(CAREER_STATES).map((s) => `${s.icon} ${s.label}`).join(" / "));
+  return lines.join("\n");
+}
+
 export const EMPLOYERS = Object.freeze({
   microsoft: {
     name: "Microsoft",

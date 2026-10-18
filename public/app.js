@@ -24,6 +24,7 @@ import {
   decodeSave,
   applyScene,
   validateGeneratedScene,
+  recordCareerReflection,
 } from "./engine.js";
 import {
   EMPLOYERS,
@@ -35,6 +36,12 @@ import {
   browserDirectoryText,
   OCCUPATIONS,
   PROFILE_INDUSTRIES,
+  CAREER_STATES,
+  careerMap,
+  careerMilestones,
+  pendingCareerReflection,
+  careerRecord,
+  careerRecordText,
 } from "./careers.js";
 import {
   worldAt,
@@ -49,6 +56,9 @@ import {
 import { storyRequest, groundScene } from "./story.js";
 let knowledgeCatalog = KNOWLEDGE;
 let lastJourney = null;
+let activeReflection = null;
+let favoriteYears = new Set();
+let favoritesOnly = false;
 let profileLevel = "quick";
 const $ = (id) => document.getElementById(id),
   saveKey = "unwritten-life:v2",
@@ -264,15 +274,17 @@ function readProfile() {
 }
 function showGame(focus = false) {
   lastJourney = null;
+  favoriteYears = new Set();
+  favoritesOnly = false;
   revision++;
   $("setup").hidden = true;
   $("game").hidden = false;
   renderGame();
-  void maybeGenerateScene();
   if (focus) {
     window.scrollTo({ top: 0, behavior: "instant" });
     $("chapter-title").focus({ preventScroll: true });
   }
+  if (!showReflection()) void maybeGenerateScene();
 }
 function stat(label, value, unit, delta, metric) {
   const el = node("div", undefined, "stat"),
@@ -291,6 +303,147 @@ function stat(label, value, unit, delta, metric) {
   if (delta) el.append(node("div", delta, "stat-delta"));
   return el;
 }
+function renderCareerMap(container) {
+  const tiles = careerMap(game);
+  container.replaceChildren(
+    node("h3", "キャリアマップ"),
+    node("p", `過ごした${tiles.length}年 · 1マスが1年`, "field-note"),
+  );
+  if (!tiles.length) {
+    container.append(node("p", "最初の一年から、道が続きます。", "field-note"));
+    return;
+  }
+  const grid = node("ol", undefined, "career-map-grid");
+  grid.setAttribute("aria-label", "一年ごとのキャリアの歩み");
+  for (const tile of tiles) {
+    const cell = node("li", undefined, `career-tile state-${tile.state}`);
+    const icon = node("span", tile.icon);
+    icon.setAttribute("role", "img");
+    icon.setAttribute("aria-label", `${tile.year}年・${tile.age}歳：${tile.label}。選択：${tile.choice}`);
+    cell.title = icon.getAttribute("aria-label");
+    cell.append(icon);
+    if (tile.age % 10 === 0) {
+      const age = node("small", `${tile.age}歳`, "map-age");
+      age.setAttribute("aria-hidden", "true");
+      cell.append(age);
+    }
+    grid.append(cell);
+  }
+  const legend = node("ul", undefined, "career-map-legend");
+  for (const [key, state] of Object.entries(CAREER_STATES)) {
+    const item = node("li");
+    const icon = node("span", state.icon, `state-${key}`);
+    icon.setAttribute("aria-hidden", "true");
+    item.append(icon, document.createTextNode(state.label));
+    legend.append(item);
+  }
+  container.append(grid, legend);
+}
+function renderCareerResume() {
+  const record = careerRecord(game);
+  const card = node("section", undefined, "career-resume");
+  card.id = "ending-resume";
+  card.setAttribute("aria-labelledby", "resume-title");
+  const title = node("h3", "職務経歴書 / この世界で歩んだ道");
+  title.id = "resume-title";
+  card.append(title, node("p", `${game.profile.age}歳から${game.age}歳まで・${game.decisions.length}年間`, "resume-period"),
+    node("p", "ゲーム内の架空の経歴です。実際の職務経歴を証明するものではありません。", "field-note"),
+    node("h4", "勤務先と役割"));
+  const timeline = node("ol", undefined, "resume-timeline");
+  for (const t of record.tenures) {
+    const row = node("li");
+    row.append(node("small", `${t.from}〜${t.to}年 · ${t.years}年`), node("b", t.employer));
+    if (t.role) row.append(node("span", JOBS[t.role]?.label ?? t.role));
+    timeline.append(row);
+  }
+  const totals = node("dl", undefined, "resume-totals");
+  for (const [key, years] of Object.entries(record.yearsByState)) {
+    const row = node("div");
+    row.append(node("dt", CAREER_STATES[key].label), node("dd", `${years}年`));
+    totals.append(row);
+  }
+  const decisions = node("ul", undefined, "resume-decisions");
+  for (const d of record.decisions) decisions.append(node("li", `${d.year}年・${d.age}歳 ${d.label}`));
+  card.append(timeline, node("h4", "一年の主な活動"),
+    node("p", "各年を主な活動で分類しています。学びや休養の年も、勤務先との在籍期間には含まれます。", "field-note"),
+    totals, node("h4", "選んだ転機"), decisions);
+  const map = node("section", undefined, "career-map ending-map");
+  map.id = "ending-map";
+  map.setAttribute("aria-label", "生涯のキャリアマップ");
+  renderCareerMap(map);
+  const reflections = node("section", undefined, "career-reflections");
+  reflections.append(node("h4", "節目の一行"));
+  for (const r of record.reflections) {
+    const line = node("blockquote");
+    line.append(node("p", r.text), node("small", `${r.year}年・${r.age}歳${r.id === "retirement" ? "・退職の節目" : ""}`));
+    reflections.append(line);
+  }
+  if (!record.reflections.length) reflections.append(node("p", "一行の記録はありません。", "field-note"));
+  const copy = node("button", "テキストをコピー", "button primary");
+  copy.type = "button";
+  copy.id = "copy-resume";
+  const status = node("p", "", "field-note");
+  status.id = "resume-copy-status";
+  status.setAttribute("role", "status");
+  const fallback = node("textarea");
+  fallback.id = "resume-copy-fallback";
+  fallback.readOnly = true;
+  fallback.hidden = true;
+  fallback.rows = 8;
+  fallback.setAttribute("aria-label", "コピー用の職務経歴書テキスト");
+  const text = careerRecordText(game, JOBS);
+  copy.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      fallback.hidden = true;
+      status.textContent = "コピーしました。";
+    } catch {
+      fallback.hidden = false;
+      fallback.value = text;
+      fallback.focus();
+      fallback.select();
+      status.textContent = "コピーできませんでした。下のテキストを選択してコピーできます。";
+    }
+  });
+  card.append(map, reflections, copy, status, fallback);
+  return card;
+}
+function renderHistory() {
+  const history = $("history");
+  history.replaceChildren();
+  $("history-favorites-only").setAttribute("aria-pressed", String(favoritesOnly));
+  const entries = [...game.history].reverse().filter((h) => !favoritesOnly || favoriteYears.has(h.year));
+  $("history-filter-status").textContent = `${favoritesOnly ? "お気に入り" : "すべての記録"} ${entries.length}件 / ★ ${favoriteYears.size}件`;
+  if (!entries.length)
+    history.append(node("p", favoritesOnly ? "お気に入りの記録はまだありません。すべての記録で☆を選べます。" : "最初の一ページは、これから。", "empty-history"));
+  for (const h of entries) {
+    const row = node("article", undefined, "history-row"),
+      year = node("div", String(h.year), "history-year"),
+      text = node("div"),
+      favorite = node("button", favoriteYears.has(h.year) ? "★" : "☆", "history-favorite");
+    favorite.type = "button";
+    favorite.dataset.year = h.year;
+    favorite.setAttribute("aria-label", `${h.year}年の記録をお気に入り`);
+    favorite.setAttribute("aria-pressed", String(favoriteYears.has(h.year)));
+    favorite.addEventListener("click", () => {
+      const index = [...history.querySelectorAll(".history-favorite")].indexOf(favorite);
+      if (favoriteYears.has(h.year)) favoriteYears.delete(h.year);
+      else favoriteYears.add(h.year);
+      renderHistory();
+      const next = history.querySelector(`button[data-year="${h.year}"]`) ?? history.querySelectorAll(".history-favorite")[Math.max(0, index - 1)];
+      (next ?? $("history-favorites-only")).focus({ preventScroll: true });
+    });
+    year.append(node("small", `${h.age}歳`), favorite);
+    text.append(node("h3", h.episode?.title ?? h.title), node("p", h.episode?.body ?? h.note));
+    appendBudget(text, h, true);
+    row.append(year, text, node("span", h.choiceLabel, "history-choice"));
+    history.append(row);
+  }
+}
+$("history-favorites-only").addEventListener("click", () => {
+  favoritesOnly = !favoritesOnly;
+  renderHistory();
+});
 function moveToStory() {
   if (window.matchMedia("(max-width: 640px)").matches)
     $("event-card").scrollIntoView({ block: "start", behavior: "instant" });
@@ -298,7 +451,7 @@ function moveToStory() {
 }
 function commitChoice(decision, years = Number($("year-step").value)) {
   try {
-    const journey = advanceYears(game, decision, years);
+    const journey = advanceYears(game, decision, years, { pauseAtMilestones: true });
     game = journey.game;
     lastJourney = journey;
     revision++;
@@ -308,6 +461,17 @@ function commitChoice(decision, years = Number($("year-step").value)) {
     toast(error.message);
   }
 }
+$("choices").addEventListener("keydown", (event) => {
+  if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+  const buttons = [...$("choices").querySelectorAll("button:not(:disabled)")];
+  const index = buttons.indexOf(document.activeElement);
+  if (index < 0 || event.altKey || event.ctrlKey || event.metaKey) return;
+  event.preventDefault();
+  const next = event.key === "Home" ? 0
+    : event.key === "End" ? buttons.length - 1
+      : (index + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length;
+  buttons[next].focus();
+});
 function appendBudget(parent, h, collapsed = false) {
   if (!h.budget) return;
   const box = node(collapsed ? "details" : "div", undefined, "budget-window"),
@@ -409,13 +573,52 @@ function showJourney(journey) {
 }
 $("journey-next").addEventListener("click", () => {
   $("journey-dialog").close();
+});
+$("journey-dialog").addEventListener("close", () => {
+  if (!showReflection()) {
+    moveToStory();
+    void maybeGenerateScene();
+  }
+});
+function showReflection() {
+  const milestone = game && pendingCareerReflection(game);
+  if (!milestone) return false;
+  if ($("reflection-dialog").open) return true;
+  activeReflection = { ...milestone, revision };
+  $("reflection-title").textContent = `${milestone.age}歳、${milestone.id === "retirement" ? "仕事の区切りに" : "キャリアの途中で"}。`;
+  $("reflection-question").textContent = milestone.question;
+  $("reflection-line").value = "";
+  $("reflection-error").textContent = "";
+  $("reflection-dialog").showModal();
+  $("reflection-line").focus();
+  return true;
+}
+function finishReflection(text) {
+  if (!activeReflection || activeReflection.revision !== revision) return;
+  try {
+    game = recordCareerReflection(game, activeReflection.id, text);
+  } catch (error) {
+    $("reflection-error").textContent = error.message;
+    return;
+  }
+  activeReflection = null;
+  $("reflection-dialog").close();
+  renderGame();
   moveToStory();
   void maybeGenerateScene();
+}
+$("reflection-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  finishReflection($("reflection-line").value);
+});
+$("reflection-dialog").addEventListener("close", () => {
+  if (activeReflection) finishReflection("");
 });
 $("journey-review").addEventListener("click", () => {
   if (lastJourney) showJourney(lastJourney);
 });
 function renderGame() {
+  renderCareerMap($("career-map"));
   $("journey-review").hidden = !lastJourney;
   const complete = game.ended,
     initial = createGame(game.profile, game.scenario, game.seed),
@@ -627,6 +830,7 @@ function renderGame() {
         "insight",
       ),
     );
+    card.append(renderCareerResume());
     const actions = node("div", undefined, "ending-actions"),
       again = node("button", "同じ条件で、選びなおす ↗", "button primary"),
       compare = node("button", "別のAIの未来と比べる", "button secondary");
@@ -734,10 +938,13 @@ function renderGame() {
           ),
         );
       button.append(
+        node("span", "▶", "command-cursor"),
         node("span", c.icon, "choice-symbol"),
         copy,
         node("span", "↗", "choice-arrow"),
       );
+      button.querySelector(".command-cursor").setAttribute("aria-hidden", "true");
+      button.querySelector(".choice-symbol").setAttribute("aria-hidden", "true");
       button.addEventListener("click", () => {
         if (!button.isConnected || game.ended || generating) return;
         if (option.decision) {
@@ -755,26 +962,7 @@ function renderGame() {
   }
   $("choice-title").parentElement.hidden = complete;
   $("undo-button").disabled = game.decisions.length === 0 || generating;
-  const history = $("history");
-  history.replaceChildren();
-  if (!game.history.length)
-    history.append(node("p", "最初の一ページは、これから。", "empty-history"));
-  for (const h of [...game.history].reverse()) {
-    const row = node("article", undefined, "history-row"),
-      year = node("span", String(h.year), "history-year"),
-      text = node("div");
-    year.append(node("small", `${h.age}歳`));
-    text.append(node("h3", h.title), node("p", h.note));
-    if (h.episode) {
-      text.replaceChildren(
-        node("h3", h.episode.title),
-        node("p", h.episode.body),
-      );
-    }
-    appendBudget(text, h, true);
-    row.append(year, text, node("span", h.choiceLabel, "history-choice"));
-    history.append(row);
-  }
+  renderHistory();
   $("context-preview").textContent = JSON.stringify(
     storyRequest(game, { catalog: knowledgeCatalog }).context,
     null,
@@ -867,6 +1055,7 @@ async function maybeGenerateScene() {
     !game ||
     game.ended ||
     generating ||
+    pendingCareerReflection(game) ||
     !autoLocal() ||
     eventFor(game).generated
   )
@@ -901,7 +1090,7 @@ async function generateScene() {
   $("undo-button").disabled = true;
   try {
     const result = await api("/api/scene", {
-      save: encodeSave(game),
+      save: encodeSave({ ...game, reflections: {} }),
       cloudConsent: $("cloud-consent").checked,
       choiceVersion: 1,
       mode: "life",
@@ -1059,6 +1248,7 @@ $("back-setup").addEventListener("click", () => {
 $("undo-button").addEventListener("click", () => {
   if (!game.decisions.length || generating) return;
   lastJourney = null;
+  const reflections = game.reflections;
   const length = game.decisions.length - 1,
     scenes = Object.fromEntries(
       Object.entries(game.scenes).filter(([k]) => Number(k) <= length),
@@ -1078,6 +1268,9 @@ $("undo-button").addEventListener("click", () => {
     game.debtRepayFrom,
     game.salaryCapFrom,
   );
+  const reached = new Set(careerMilestones(game).map((m) => m.id));
+  game.reflections = Object.fromEntries(Object.entries(reflections).filter(([id]) => reached.has(id)));
+  favoriteYears = new Set([...favoriteYears].filter((year) => year < game.year));
   revision++;
   renderGame();
   moveToStory();
@@ -1408,7 +1601,7 @@ async function generateCareerChoices() {
   renderCareerOffers();
   try {
     const result = await api("/api/scene", {
-      save: encodeSave(game),
+      save: encodeSave({ ...game, reflections: {} }),
       cloudConsent: $("career-consent").checked,
       choiceVersion: 1,
       mode: "career",
