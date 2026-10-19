@@ -23,11 +23,13 @@ function harness(game) {
     addEventListener(key, handler) { this.handlers[key] = handler; }
     focus() { focused = this; }
     select() { this.selected = true; }
+    setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; }
     get textContent() { return this.text + this.children.map((c) => c.textContent).join(""); }
     set textContent(value) { this.text = value; this.children = []; }
     all() { return this.children.flatMap((c) => [c, ...c.all()]); }
     querySelectorAll(selector) {
-      return this.all().filter((c) => selector === "button:not(:disabled)" ? c.tag === "button" && !c.disabled
+      return this.all().filter((c) => selector === "button" ? c.tag === "button"
+        : selector === "button:not(:disabled)" ? c.tag === "button" && !c.disabled
         : selector.startsWith(".") ? c.className.split(" ").includes(selector.slice(1))
           : selector.startsWith("#") ? c.id === selector.slice(1)
             : c.tag === "button" && String(c.dataset.year) === selector.match(/data-year="(\d+)"/)?.[1]);
@@ -66,7 +68,60 @@ test("map labels, resume copy and selectable fallback use the actual UI handlers
   assert.equal(fallback.readOnly, true);
   assert.equal(fallback.value, h.copied);
   assert.equal(fallback.selected, true);
+  assert.equal(fallback.selectionStart, 0);
+  assert.equal(fallback.selectionEnd, fallback.value.length);
   assert.equal(h.focused, fallback);
+  runInContext("delete navigator.clipboard", h.context);
+  await card.querySelector("#copy-resume").handlers.click();
+  assert.equal(fallback.hidden, false);
+  assert.equal(fallback.value, h.copied);
+});
+
+test("map years reveal their labels on tap and keyboard focus without hover", () => {
+  const game = advance(advance(createGame(profile), "rest"), "studyDaily");
+  const h = harness(game), container = h.node("section");
+  h.context.container = container;
+  runInContext("renderCareerMap(container)", h.context);
+  const buttons = container.querySelectorAll("button"), detail = container.querySelector(".career-map-detail");
+  buttons[0].handlers.click();
+  assert.equal(detail.textContent, buttons[0].getAttribute("aria-label"));
+  assert.equal(buttons[0].getAttribute("aria-pressed"), "true");
+  buttons[1].handlers.focus();
+  assert.equal(detail.textContent, buttons[1].getAttribute("aria-label"));
+  assert.equal(buttons[0].getAttribute("aria-pressed"), "false");
+  assert.equal(buttons[1].getAttribute("aria-pressed"), "true");
+});
+
+test("command cursor follows touch even when Safari leaves keyboard focus elsewhere", () => {
+  const h = harness(createGame(profile)), buttons = [h.node("button"), h.node("button")];
+  h.$("choices").append(...buttons);
+  runInContext(app.slice(app.indexOf("function selectCommand("), app.indexOf("function appendBudget(")), h.context);
+  h.$("choices").handlers.pointerdown({ target: { closest: () => buttons[1] } });
+  assert.equal(buttons[0].dataset.active, "false");
+  assert.equal(buttons[1].dataset.active, "true");
+  h.$("choices").handlers.focusin({ target: { closest: () => buttons[0] } });
+  assert.equal(buttons[0].dataset.active, "true");
+  assert.equal(buttons[1].dataset.active, "false");
+});
+
+test("checkpoint follows the visible keyboard viewport and keeps room below the input", () => {
+  const input = { getBoundingClientRect: () => ({ top: 250, bottom: 294 }) };
+  const dialog = { open: true, style: {}, scrollTop: 0 };
+  const viewport = { height: 300, offsetTop: 30 };
+  const context = createContext({
+    $: (id) => id === "reflection-dialog" ? dialog : input,
+    window: { visualViewport: viewport, matchMedia: () => ({ matches: true }) },
+    document: { activeElement: input },
+  });
+  runInContext(app.slice(app.indexOf("function syncReflectionViewport()"), app.indexOf("function finishReflection(")), context);
+  runInContext("syncReflectionViewport()", context);
+  assert.equal(dialog.style.top, "max(42px, env(safe-area-inset-top))");
+  assert.equal(dialog.style.maxHeight, "calc(276px - env(safe-area-inset-top) - env(safe-area-inset-bottom))");
+  assert.equal(dialog.scrollTop, 56);
+  dialog.open = false;
+  viewport.height = 800;
+  runInContext("syncReflectionViewport()", context);
+  assert.equal(dialog.style.maxHeight, "calc(276px - env(safe-area-inset-top) - env(safe-area-inset-bottom))");
 });
 
 test("favorites filter a newest-first log without changing a save, and preserve usable focus", () => {

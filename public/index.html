@@ -2,7 +2,7 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta
       name="description"
       content="その転職の、ずっと先の未来まで。2026年のあなたの職歴から始まる、AI時代のキャリアと人生のシミュレーションゲーム。"
@@ -52,7 +52,7 @@
                 架空の人物で試す →
               </button>
             </div>
-            <p class="privacy-line">
+            <p class="privacy-line" id="edition-privacy">
               <span>◈</span> AIの接続先は自分で選べます · ローカルAI・サブスク・API
             </p>
           </div>
@@ -905,7 +905,7 @@
       <p>
         2026年の自分の職歴から始める、キャリアと人生のシミュレーションゲームです。転職、学び直し、起業、休養、転居、住居購入、資産配分などを選ぶと、その後の年収・暮らし・出来事が変わります。退職後も進み、架空の人生の最期で物語を振り返ります。
       </p>
-      <p>
+      <p id="about-ai-copy">
         「この場面をAIで生成」で、現在の状態と過去の選択を使う個別の場面を作れます。Ollama・LM
         Studio・OpenAI・OpenRouter・互換API、PC版ではCodex CLI・Claude
         Code（サブスク）に接続でき、ChatGPTやOpenCodeなどへ手動で依頼して返答を取り込むこともできます。接続しなくても遊べます。
@@ -931,10 +931,10 @@
         加齢・ゆとり・技術のシナリオから、独自の終了確率を設定しています。最長110歳で終了するゲーム上の境界です。性別から収入や寿命を決めません。健康指標は診断ではありません。
       </p>
       <h3>入力とAIの接続先</h3>
-      <p>
+      <p id="privacy-ai-copy">
         初期設定はPC内のOllama。クラウドAIへ送る場合は画面で接続先と内容を確認して選択します。APIキーはローカルサーバーのメモリにのみ保持し、セーブやGitには含めません。アプリを終了すると消えます。端末保存は任意で、共有ブラウザからは見られる可能性があります。
       </p>
-      <p>
+      <p id="privacy-research-copy">
         会社情報の取得では指定した公開ページだけにアクセスします。本文は未確認の資料として扱い、内容と会社の一致を利用者が確認します。AIや外部ページにPCの操作・ファイル・送信先を決める権限はありません。
       </p>
       <h3>参考と詳しい説明</h3>
@@ -952,7 +952,7 @@
         <p class="eyebrow">BRING YOUR OWN AI</p>
         <button class="close-button" data-close aria-label="閉じる">×</button>
       </div>
-      <h2>好きなAIを、つなぐ。</h2>
+      <h2 id="ai-dialog-title">好きなAIを、つなぐ。</h2>
       <p id="ai-required-note" class="notice-box" hidden>
         このゲームは、あなたの入力から毎年の場面と選択肢をAIで作ります。はじめる前に、使うAIを1つ接続してください。
       </p>

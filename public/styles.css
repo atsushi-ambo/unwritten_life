@@ -50,7 +50,7 @@
 .journey-dialog {
   width: min(680px, calc(100vw - 28px));
   max-height: 88dvh;
-  padding: 26px;
+  padding: max(26px, env(safe-area-inset-top)) max(26px, env(safe-area-inset-right)) max(26px, env(safe-area-inset-bottom)) max(26px, env(safe-area-inset-left));
   border: 1px solid var(--line);
   border-radius: 20px;
   background: var(--paper);
@@ -82,7 +82,7 @@
   position: sticky;
   bottom: -26px;
   background: var(--paper);
-  padding: 16px 0 4px;
+  padding: 16px 0 max(4px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
 }
 .journey-footer button {
@@ -115,7 +115,7 @@
     font-size: 10px;
   }
   .journey-dialog {
-    padding: 20px;
+    padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
   }
   .journey-year {
     padding: 14px;
@@ -130,6 +130,8 @@ html {
 }
 body {
   margin: 0;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
   background: var(--paper);
   color: var(--ink);
   font: 14px/1.8 var(--sans);
@@ -174,7 +176,7 @@ summary:focus-visible {
 .wrap {
   max-width: 1224px;
   margin: 0 auto;
-  padding: 0 48px;
+  padding: 0 max(48px, env(safe-area-inset-right)) 0 max(48px, env(safe-area-inset-left));
 }
 .header {
   display: flex;
@@ -729,7 +731,7 @@ dialog {
   width: calc(100% - 32px);
   max-height: 85vh;
   border-radius: 12px;
-  padding: 32px 38px;
+  padding: max(32px, env(safe-area-inset-top)) max(38px, env(safe-area-inset-right)) max(32px, env(safe-area-inset-bottom)) max(38px, env(safe-area-inset-left));
   box-shadow: 0 20px 100px #162a3444;
 }
 dialog::backdrop {
@@ -1092,12 +1094,12 @@ progress::-moz-progress-bar {
 }
 #notice:not(:empty) {
   position: fixed;
-  bottom: 24px;
+  bottom: max(24px, env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
   background: var(--ink);
   color: var(--white);
-  padding: 12px 20px;
+  padding: 12px max(20px, env(safe-area-inset-right)) 12px max(20px, env(safe-area-inset-left));
   border-radius: 5px;
   font-size: 12px;
   z-index: 20;
@@ -1125,8 +1127,8 @@ progress::-moz-progress-bar {
 }
 @media (max-width: 960px) {
   .wrap {
-    padding-left: 28px;
-    padding-right: 28px;
+    padding-left: max(28px, env(safe-area-inset-left));
+    padding-right: max(28px, env(safe-area-inset-right));
   }
   .hero {
     gap: 25px;
@@ -1788,7 +1790,7 @@ textarea:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 20px;
-  padding: 12px 24px;
+  padding: 12px max(24px, env(safe-area-inset-right)) 12px max(24px, env(safe-area-inset-left));
   background: var(--green);
   color: var(--white);
   font-size: 12px;
@@ -2071,7 +2073,7 @@ progress::-moz-progress-bar { background: #42745a; }
 .choice:hover, .choice:focus-visible { background: #e3ebcf; border-color: var(--green); }
 .choice::before { content: none; }
 .command-cursor { position: absolute; left: 8px; top: 18px; color: var(--accent); visibility: hidden; }
-.choice:hover .command-cursor, .choice:focus .command-cursor { visibility: visible; }
+.choice[data-active="true"] .command-cursor { visibility: visible; }
 .choice:focus-visible { outline-offset: -3px; }
 .choice b { font-size: 14px; font-weight: 700; line-height: 1.65; }
 .choice small { font-size: 12px; line-height: 1.8; }
@@ -2123,6 +2125,19 @@ progress::-moz-progress-bar { background: #42745a; }
   place-items: center;
   min-width: 0;
 }
+.career-tile-button {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.career-tile-button[aria-pressed="true"] { outline: 3px solid var(--ink); outline-offset: 2px; }
+.career-map-detail { overflow-wrap: anywhere; }
 .map-age { position: absolute; top: -17px; left: 0; font: 10px/1.3 var(--sans); white-space: nowrap; color: var(--ink); }
 .career-tile:nth-child(10n) .map-age { left: auto; right: 0; }
 .career-map-legend {
@@ -2166,6 +2181,7 @@ progress::-moz-progress-bar { background: #42745a; }
 .career-reflections blockquote { margin: 14px 0; padding-left: 14px; border-left: 3px solid var(--green); overflow-wrap: anywhere; }
 .career-reflections blockquote p { margin: 4px 0; }
 .career-resume #copy-resume { white-space: normal; max-width: 100%; }
+#resume-copy-fallback { width: 100%; min-width: 0; font-size: 16px; user-select: text; -webkit-user-select: text; }
 #reflection-form .button { margin-top: 12px; max-width: 100%; white-space: normal; }
 .year-result h2 { font-weight: 700; }
 .history-row { border-top: 2px dashed var(--line); }
@@ -2232,7 +2248,10 @@ dialog p, dialog li { font-size: 14px; }
 .close-button { border: 2px solid var(--ink); border-radius: 0; min-width: 44px; min-height: 44px; }
 #notice:not(:empty) { border: 4px double #fff7dd; border-radius: 0; background: var(--window); font-size: 13px; }
 @media (max-width: 640px) {
-  .wrap { padding-inline: 16px; }
+  .wrap, .mobile-edition-banner {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
   .header { flex-wrap: wrap; gap: 8px; padding-block: 14px; }
   .header nav { flex-wrap: wrap; gap: 8px 16px; }
   .header .text-button { font-size: 12px; }
@@ -2258,13 +2277,35 @@ dialog p, dialog li { font-size: 14px; }
   .career-resume h3 { font-size: 17px; }
   .choices { grid-template-columns: 1fr; }
   .choice-heading { align-items: flex-start; }
-  .choice-heading span { display: none; }
+  .choice-heading { flex-wrap: wrap; gap: 8px; }
+  .choice-heading #command-help { display: block; font-size: 12px; }
   .choice { padding: 16px 14px 16px 28px; min-height: 84px; }
+  .career-map-grid { grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 24px 8px; }
+  .career-tile { min-height: 46px; font-size: 16px; }
+  .map-age { font-size: 11px; }
+  .career-map-legend, .career-map-detail.field-note { font-size: 12px; }
+  #history-favorites-only, #copy-resume { min-height: 44px; }
   .game h1 { font-size: 25px; }
   .game .section-heading .button, .game-controls .text-button { font-size: 12px; }
   .world-context { padding: 18px; }
   .comparison-grid { grid-template-columns: 1fr; }
-  dialog { padding: 22px 18px; width: calc(100% - 24px); }
+  dialog { padding: max(22px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left)); width: calc(100% - 24px); }
+  #reflection-dialog {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    bottom: auto;
+    margin: 0 auto;
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+  #reflection-dialog .dialog-top { gap: 8px; }
+  #reflection-dialog .eyebrow { font-size: 11px; }
+  #reflection-dialog h2 { font-size: 21px; margin-block: 12px; }
+  #reflection-dialog p { margin-block: 10px; }
+  #reflection-line { width: 100%; min-width: 0; font-size: 16px; min-height: 44px; }
+  #reflection-form .button { position: sticky; bottom: 0; width: 100%; min-height: 44px; }
 }
 
 .notice-box {
