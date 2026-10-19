@@ -4,10 +4,13 @@ import { readFile } from "node:fs/promises";
 import { createContext, runInContext } from "node:vm";
 import { createGame, advance, encodeSave, decodeSave, isRetiredAt, availableChoices, suggestedChoices } from "../public/engine.js";
 import { storyRequest } from "../public/story.js";
+// Play past retirement as under the rules before the career ending.
+const pastRetirement = (profile, scenario = "steady", seed = 2026, ...from) =>
+  createGame(profile, scenario, seed, ...[0, 0, 0, 0, 0, 0, 0, 0, 0].map((d, i) => from[i] ?? d), 110);
 
 test("career comparison and AI career generation share the versioned retirement guard", async () => {
   const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8"),
-    before = createGame({
+    before = pastRetirement({
       age: 64, retirementAge: 65, region: "city", job: "tech",
       ai: "sometimes", priority: "balance", gender: "undisclosed",
       household: "solo", companyType: "unknown",

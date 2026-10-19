@@ -100,8 +100,14 @@ export function careerRecord(game) {
 }
 export function careerRecordText(game, roles = {}, ranks = {}) {
   const record = careerRecord(game);
+  const story = lifeStory(game, ranks);
+  const man = (n) => `${Math.round(n).toLocaleString("ja-JP")}万円`;
   const lines = [
-    "Unwritten Life / 職務経歴書", "この世界で歩んだ道",
+    "Unwritten Life / わたしの履歴書", story.headline,
+    `年収 ${man(story.stats.startIncome)} → ピーク ${man(story.stats.peakIncome)} / 純資産 ${man(story.stats.startNetWorth)} → ${man(story.stats.endNetWorth)}`,
+    `いちばん上の役職 ${ranks[story.stats.peakRank]?.label ?? "記録なし"} / 転職 ${story.stats.moves}回・勤めた会社 ${story.stats.employers}社 / 家族 ${story.stats.partner ? "パートナーあり" : "パートナーなし"}・子ども${story.stats.children}人 / ${story.stats.housing === "own" ? "持ち家" : "賃貸"} / 学びの時間 ${story.stats.studyHours.toLocaleString("ja-JP")}時間`,
+    ...story.chapters.flatMap((c) => ["", `【${c.label}】`, ...c.events.map((e) => `${e.year}年・${e.age}歳 ${e.text}`)]),
+    "", "職務経歴書", "この世界で歩んだ道",
     `${game.profile.age}歳から${game.age}歳まで・${game.decisions.length}年間`,
     "ゲーム内の架空の経歴です。実際の職務経歴を証明するものではありません。",
     "", "勤務先と役割",
@@ -560,5 +566,83 @@ export function makeDirectorySearch({ transport } = {}) {
       }
     }
     return candidates.slice(0, 3);
+  };
+}
+
+// A pop "my resume" for the end of a working life: a few headline numbers and
+// the turning points of each decade of age, including money, family and luck,
+// not only titles. Plain data; the page and the copied text format it.
+export function lifeStory(game, ranks = {}) {
+  const level = (rank) => ranks[rank]?.level ?? 0;
+  const events = [];
+  let partner = game.profile.partner === "partner",
+    children = game.profile.children,
+    rank = game.profile.rank ?? "unspecified",
+    peakRank = rank;
+  for (const r of game.history) {
+    const at = { year: r.year, age: r.age };
+    if (r.choice === "switch" && r.employer?.kind !== "seeking")
+      events.push({ ...at, kind: "work", text: `${r.employer.name}へ転職` });
+    if (r.choice === "startup") events.push({ ...at, kind: "work", text: `${r.employer.name}を起業` });
+    if (r.position && r.position.rank !== rank) {
+      if (level(r.position.rank) > level(peakRank)) peakRank = r.position.rank;
+      if (r.choice !== "switch")
+        events.push({ ...at, kind: "rise", text: `${ranks[r.position.rank]?.label ?? r.position.rank}に昇格` });
+      else if (level(r.position.rank) > level(rank))
+        events.push({ ...at, kind: "rise", text: `${ranks[r.position.rank]?.label ?? r.position.rank}として迎えられる` });
+      rank = r.position.rank;
+    }
+    if (["transfer", "internalVenture"].includes(r.choice) && r.outcome?.kind === "success" && r.position?.unit)
+      events.push({ ...at, kind: "work", text: `社内で「${r.position.unit}」へ` });
+    if (r.incident)
+      events.push({ ...at, kind: r.incident.tone === "good" ? "luck" : r.incident.tone === "hard" ? "hardship" : "work", text: r.incident.title });
+    if (r.family?.partner && !partner) events.push({ ...at, kind: "family", text: "パートナーと暮らしはじめる" });
+    if ((r.family?.childAges.length ?? children) > children)
+      events.push({ ...at, kind: "family", text: `子どもを迎える（${r.family.childAges.length}人目）` });
+    partner = r.family?.partner ?? partner;
+    children = r.family?.childAges.length ?? children;
+    if (r.choice === "home") events.push({ ...at, kind: "life", text: "家を買う" });
+    if (r.choice === "move") events.push({ ...at, kind: "life", text: "住む地域を変える" });
+    if (r.careerEnd) events.push({ ...at, kind: "end", text: r.careerEnd.title });
+  }
+  const chapters = [];
+  for (const e of events) {
+    const decade = Math.floor(e.age / 10) * 10;
+    if (chapters.at(-1)?.decade !== decade) chapters.push({ decade, label: `${decade}代`, events: [] });
+    chapters.at(-1).events.push(e);
+  }
+  const incomes = game.history.map((r) => r.income);
+  const end = game.history.at(-1)?.careerEnd;
+  return {
+    startAge: game.profile.age,
+    endAge: game.age,
+    years: game.decisions.length,
+    headline: end
+      ? `${game.age}歳、${end.title}。`
+      : game.ended
+        ? `${game.age}歳、物語が完結した。`
+        : `${game.age}歳、物語はまだ続いている。`,
+    stats: {
+      startIncome: game.profile.income,
+      peakIncome: Math.max(game.profile.income, ...incomes),
+      startNetWorth: game.profile.savings + game.profile.homeValue - game.profile.mortgage,
+      endNetWorth: game.savings,
+      peakRank,
+      moves: game.history.filter((r) => r.choice === "switch").length,
+      // The starting company counts even if the first year was spent moving.
+      employers: new Set([
+        ...(game.profile.company ? [game.profile.company] : []),
+        ...careerRecord(game).tenures
+          .filter((t) => !["retired", "nonworking", "seeking", "venture"].includes(t.kind))
+          .map((t) => t.employer),
+      ]).size,
+      partner: game.family.partner,
+      children: game.family.childAges.length,
+      housing: game.housing,
+      studyHours: game.studyHours,
+      hardships: game.history.filter((r) => r.incident?.tone === "hard").length,
+      luck: game.history.filter((r) => r.incident?.tone === "good").length,
+    },
+    chapters,
   };
 }

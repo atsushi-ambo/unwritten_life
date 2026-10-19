@@ -6,6 +6,9 @@ import { readFileSync } from "node:fs";
 import { makeHostedAPI, reserveHosted, HOSTED_LIMITS } from "../lib/hosted-ai.mjs";
 import { createGame, encodeSave, advance } from "../public/engine.js";
 import { replyFor } from "./fixtures/ai-replies.js";
+// Play past retirement as under the rules before the career ending.
+const pastRetirement = (profile, scenario = "steady", seed = 2026, ...from) =>
+  createGame(profile, scenario, seed, ...[0, 0, 0, 0, 0, 0, 0, 0, 0].map((d, i) => from[i] ?? d), 110);
 
 // Real SQLite executes the same statements as D1; no real keys or network.
 function database(t) {
@@ -282,7 +285,7 @@ test("hosted career generation rejects retirement before reserving a call or cos
     },
   });
   const auth = await session(api),
-    before = createGame({ ...profile, age: 64, retirementAge: 65 }, "steady", 4),
+    before = pastRetirement({ ...profile, age: 64, retirementAge: 65 }, "steady", 4),
     boundary = advance(before, "rest");
   assert.equal(boundary.retired, false);
   for (const game of [

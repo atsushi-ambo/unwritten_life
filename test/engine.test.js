@@ -20,6 +20,9 @@ import {
   decisionId,
   isRetiredAt,
 } from "../public/engine.js";
+// Play past retirement as under the rules before the career ending.
+const pastRetirement = (profile, scenario = "steady", seed = 2026, ...from) =>
+  createGame(profile, scenario, seed, ...[0, 0, 0, 0, 0, 0, 0, 0, 0].map((d, i) => from[i] ?? d), 110);
 const profile = {
   age: 30,
   region: "city",
@@ -144,11 +147,11 @@ test("pre-fix care-leave histories keep their salary, cash and recorded investme
   assert.deepEqual(replay(restored.profile, restored.scenario, restored.seed,
     restored.decisions, restored.scenes, false, restored.dynamicFrom,
     restored.worldFrom, restored.retirementFrom, restored.careLeaveSalaryFrom,
-    restored.prepayFrom, restored.debtRepayFrom, restored.salaryCapFrom, restored.incidentFrom, restored.careerPathFrom), restored);
+    restored.prepayFrom, restored.debtRepayFrom, restored.salaryCapFrom, restored.incidentFrom, restored.careerPathFrom, restored.careerEndFrom), restored);
   const beforeInvestment = replay(restored.profile, restored.scenario, restored.seed,
     restored.decisions.slice(0, -1), {}, false, restored.dynamicFrom,
     restored.worldFrom, restored.retirementFrom, restored.careLeaveSalaryFrom,
-    restored.prepayFrom, restored.debtRepayFrom, restored.salaryCapFrom, restored.incidentFrom, restored.careerPathFrom);
+    restored.prepayFrom, restored.debtRepayFrom, restored.salaryCapFrom, restored.incidentFrom, restored.careerPathFrom, restored.careerEndFrom);
   assert.ok(beforeInvestment.cash > 30);
   assert.deepEqual(advance(beforeInvestment, "invest"), restored);
   const currentMath = replay(restored.profile, restored.scenario, restored.seed,
@@ -214,7 +217,7 @@ test("all careers and worlds finish a bounded lifetime with finite balances", ()
       }
 });
 test("age and retirement change income and old-age scenes", () => {
-  let g = createGame({ ...profile, age: 64, retirementAge: 65 }, "steady", 4);
+  let g = pastRetirement({ ...profile, age: 64, retirementAge: 65 }, "steady", 4);
   g = advance(g, "rest");
   g = advance(g, "rest");
   assert.equal(g.retired, true);
@@ -222,7 +225,7 @@ test("age and retirement change income and old-age scenes", () => {
   assert.equal(g.income, 180);
   assert.match(eventFor(g).title, /仕事で得たもの.*その先/u);
   const early = advance(
-    createGame({ ...profile, age: 50 }, "steady", 10),
+    pastRetirement({ ...profile, age: 50 }, "steady", 10),
     "retire",
   );
   assert.equal(early.income, 0);
@@ -232,7 +235,7 @@ test("work choices stop at the configured retirement age before the retired flag
   const switchJob = { id: "switch", target: "toyota", role: "tech" },
     startup = { id: "startup", venture: "ai", name: "合成事業" };
   for (const retirementAge of [60, 65, 70]) {
-    const before = createGame(
+    const before = pastRetirement(
       {
         ...profile,
         age: retirementAge - 1,
@@ -274,7 +277,7 @@ test("work choices stop at the configured retirement age before the retired flag
     assert.deepEqual(decodeSave(encodeSave(next)), next);
   }
   const early = advance(
-    createGame({ ...profile, age: 50, retirementAge: 70 }, "steady", 4),
+    pastRetirement({ ...profile, age: 50, retirementAge: 70 }, "steady", 4),
     "retire",
   );
   assert.ok(!availableChoices(early).includes("switch"));
@@ -307,7 +310,8 @@ test("pre-change retirement saves preserve boundary work history and the current
   for (const { id, save, expected } of fixtures) {
     assert.ok(!Object.hasOwn(save, "retirementFrom"));
     const restored = decodeSave(JSON.stringify(save));
-    const { retirementFrom, careLeaveSalaryFrom, prepayFrom, debtRepayFrom, salaryCapFrom, incidentFrom, careerPathFrom, position, reflections, careerSeen, ...state } = restored;
+    const { retirementFrom, careLeaveSalaryFrom, prepayFrom, debtRepayFrom, salaryCapFrom, incidentFrom, careerPathFrom, careerEndFrom, position, reflections, careerSeen, ...state } = restored;
+    assert.equal(careerEndFrom, save.decisions.length);
     assert.equal(incidentFrom, save.decisions.length);
     assert.equal(careerPathFrom, save.decisions.length);
     assert.equal(position.rank, "unspecified");
@@ -343,6 +347,7 @@ test("pre-change retirement saves preserve boundary work history and the current
         restored.salaryCapFrom,
         restored.incidentFrom,
         restored.careerPathFrom,
+        restored.careerEndFrom,
       ),
       restored,
     );
@@ -365,7 +370,7 @@ test("pre-change retirement saves preserve boundary work history and the current
   }
 });
 test("retirement migration markers are bounded and cannot override the old retired-state validation", () => {
-  const before = createGame({ ...profile, age: 64, retirementAge: 65 }, "steady", 4),
+  const before = pastRetirement({ ...profile, age: 64, retirementAge: 65 }, "steady", 4),
     boundary = advance(before, "rest"),
     save = JSON.parse(encodeSave(boundary));
   assert.equal(before.retirementFrom, 0);

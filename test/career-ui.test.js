@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createContext, runInContext } from "node:vm";
 import { createGame, advance, recordCareerReflection, encodeSave, JOBS, RANKS } from "../public/engine.js";
-import { careerMap, careerRecord, careerRecordText, CAREER_STATES } from "../public/careers.js";
+import { careerMap, careerRecord, careerRecordText, lifeStory, CAREER_STATES } from "../public/careers.js";
 
 const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 const profile = { age: 29, region: "city", job: "tech", ai: "daily", priority: "balance", gender: "undisclosed", household: "solo", companyType: "small" };
@@ -40,7 +40,8 @@ function harness(game) {
     return elements.get(id);
   };
   const context = createContext({
-    game, node, $, JOBS, RANKS, careerMap, careerRecord, careerRecordText, CAREER_STATES,
+    game, node, $, JOBS, RANKS, careerMap, careerRecord, careerRecordText, lifeStory, CAREER_STATES,
+    money: (n) => String(Math.round(n)), nf: new Intl.NumberFormat("ja-JP"),
     favoriteYears: new Set(), favoritesOnly: false, appendBudget() {},
     document: { createTextNode: (text) => node("#text", text), get activeElement() { return focused; } },
     navigator: { clipboard: { async writeText(text) { if (denied) throw Error("denied"); copied = text; } } },
