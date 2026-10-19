@@ -3,8 +3,12 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { makeHostedAPI, reserveHosted } from "../lib/hosted-ai.mjs";
+import { makeHostedAPI, reserveHosted, HOSTED_LIMITS } from "../lib/hosted-ai.mjs";
 import { createGame, encodeSave, advance } from "../public/engine.js";
+import { replyFor } from "./fixtures/ai-replies.js";
+// Play past retirement as under the rules before the career ending.
+const pastRetirement = (profile, scenario = "steady", seed = 2026, ...from) =>
+  createGame(profile, scenario, seed, ...[0, 0, 0, 0, 0, 0, 0, 0, 0].map((d, i) => from[i] ?? d), 110);
 
 // Real SQLite executes the same statements as D1; no real keys or network.
 function database(t) {
@@ -97,6 +101,7 @@ function request(auth, body = {}, headers = {}) {
       requestId: randomUUID(),
       save: save(),
       cloudConsent: true,
+      choiceVersion: 1,
       ...body,
     }),
   });
@@ -120,9 +125,9 @@ test("hosted generation decodes pre-fix care-leave histories and rejects invalid
   let calls = 0;
   const api = makeHostedAPI({
     db, origin, apiKey: "synthetic-key", now: () => 1000,
-    fetchAI: async () => {
+    fetchAI: async (_url, options) => {
       calls++;
-      return Response.json({ choices: [{ message: { content: JSON.stringify(validScene) } }] });
+      return Response.json({ choices: [{ message: { content: JSON.stringify(replyFor(options)) } }] });
     },
   });
   const auth = await session(api);
@@ -161,8 +166,8 @@ test("hosted generation validates identity, CSRF, origin, consent and input befo
     [{ save: "{}" }, {}, user, 400],
     [{ requestId: "malformed" }, {}, user, 400],
     [{ choiceVersion: 2 }, {}, user, 400],
+    [{ choiceVersion: undefined }, {}, user, 400],
     [{ mode: "shell", choiceVersion: 1 }, {}, user, 400],
-    [{ mode: "career" }, {}, user, 400],
     [{ usdCap: 50 }, {}, user, 400],
     [{ save: "x".repeat(1048577) }, {}, user, 413],
   ])
@@ -247,12 +252,16 @@ test("hosted career generation rejects retirement before reserving a call or cos
   const scene = {
     ...validScene,
     options: [
-      ...["microsoft", "toyota", "nintendo"].map((target) => ({
+      ...["合成商事", "合成ソフト", "合成ロジ"].map((name) => ({
         id: "switch",
-        label: `${target}で経験を生かす`,
+        label: `${name}で経験を生かす`,
         hint: "新しい仕事に慣れる時間を使う",
         reason: "これまでの技術の経験を使う",
-        decision: { id: "switch", target, role: "tech" },
+        decision: {
+          id: "switch", target: "custom", name, role: "tech", companyType: "unknown",
+          candidateKind: "real", workModel: "services", proposal: "経験を生かす架空の役割",
+          intent: "技術の経験を生かす",
+        },
       })),
       {
         id: "focus",
@@ -276,7 +285,7 @@ test("hosted career generation rejects retirement before reserving a call or cos
     },
   });
   const auth = await session(api),
-    before = createGame({ ...profile, age: 64, retirementAge: 65 }, "steady", 4),
+    before = pastRetirement({ ...profile, age: 64, retirementAge: 65 }, "steady", 4),
     boundary = advance(before, "rest");
   assert.equal(boundary.retired, false);
   for (const game of [
@@ -333,7 +342,7 @@ test("successful hosted request uses fixed standard endpoint/model, returns a va
       assert.equal(payload.reasoning_effort, "none");
       assert.equal(payload.tools, undefined);
       return Response.json({
-        choices: [{ message: { content: JSON.stringify(validScene) } }],
+        choices: [{ message: { content: JSON.stringify(replyFor(options)) } }],
       });
     },
   });
@@ -342,7 +351,7 @@ test("successful hosted request uses fixed standard endpoint/model, returns a va
   const response = await api.scene(request(auth, { requestId: id }), user);
   assert.equal(response.status, 200);
   const result = await response.json();
-  assert.equal(result.scene.title, validScene.title);
+  assert.equal(result.scene.title, "学びを仕事へ");
   assert.equal(result.accounting.calls, 1);
   assert.equal(result.accounting.busy, false);
   assert.ok(result.accounting.reservedUSD > 0);
@@ -384,15 +393,17 @@ test("durable reservation refuses duplicate/concurrent/cap-exceeding work and su
   assert.equal(status.ai.calls, 2);
   assert.equal(status.ai.reservedUSD, 0.008);
   assert.equal(status.ai.busy, true);
-  sql.exec("UPDATE ai_budget SET reserved_micro = 99000, lock_until = 0");
+  // The owner's lifetime cap: $5 of reserved cost, or the call limit.
+  assert.equal(HOSTED_LIMITS.usdCap, 5);
+  sql.exec("UPDATE ai_budget SET reserved_micro = 4999000, lock_until = 0");
   await reserveHosted(db, randomUUID(), 1000, 500000);
   await assert.rejects(() => reserveHosted(db, randomUUID(), 1, 700000));
   assert.equal(
     sql.prepare("SELECT reserved_micro FROM ai_budget").get().reserved_micro,
-    100000,
+    5000000,
   );
   sql.exec(
-    "UPDATE ai_budget SET reserved_micro = 0, calls = 100, lock_until = 0",
+    `UPDATE ai_budget SET reserved_micro = 0, calls = ${HOSTED_LIMITS.requestCap}, lock_until = 0`,
   );
   await assert.rejects(() => reserveHosted(db, randomUUID(), 1000, 900000));
 });
@@ -448,10 +459,12 @@ test("hosted generation keeps prepayment out of saves from clients opened before
   const { db } = database(t);
   const scene = {
     ...validScene,
-    options: ["prepay", "rest", "learn"].map((id) => ({
+    options: ["prepay", "rest", "learn", "focus"].map((id) => ({
       id,
       label: id,
       hint: "暮らしのお金を見直す",
+      reason: "住宅ローンのある暮らし",
+      decision: { id, intent: "暮らしのお金を見直す" },
     })),
   };
   const api = makeHostedAPI({
@@ -490,9 +503,9 @@ test("hosted generation preserves old-client debt rules and rejects invalid boun
   let calls = 0;
   const api = makeHostedAPI({
     db, origin, apiKey: "synthetic-key", now: () => 1000,
-    fetchAI: async () => {
+    fetchAI: async (_url, options) => {
       calls++;
-      return Response.json({ choices: [{ message: { content: JSON.stringify(validScene) } }] });
+      return Response.json({ choices: [{ message: { content: JSON.stringify(replyFor(options)) } }] });
     },
   });
   const auth = await session(api),
@@ -528,9 +541,9 @@ test("hosted generation accepts saves without a salary cap boundary and rejects 
   let calls = 0;
   const api = makeHostedAPI({
     db, origin, apiKey: "synthetic-key", now: () => 1000,
-    fetchAI: async () => {
+    fetchAI: async (_url, options) => {
       calls++;
-      return Response.json({ choices: [{ message: { content: JSON.stringify(validScene) } }] });
+      return Response.json({ choices: [{ message: { content: JSON.stringify(replyFor(options)) } }] });
     },
   });
   const auth = await session(api),

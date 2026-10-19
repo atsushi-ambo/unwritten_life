@@ -4,7 +4,9 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { parse, serialize } from "parse5";
 
-export async function buildMobile(output, { cloud = false } = {}) {
+// The phone edition is the owner's private hosted app: OpenAI through the
+// same-origin Worker. There is no offline edition, since play needs the AI.
+export async function buildMobile(output) {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   const target = resolve(output ?? resolve(root, "artifacts/mobile"));
   const protectedPaths = [
@@ -45,7 +47,7 @@ export async function buildMobile(output, { cloud = false } = {}) {
   // All modules share a content revision, including their transitive imports.
   // A deployment must never combine cached JS with a newer HTML contract.
   const revision = createHash("sha256")
-    .update(JSON.stringify([cloud, [...sources]]))
+    .update(JSON.stringify(["mobile-cloud", [...sources]]))
     .digest("hex")
     .slice(0, 16);
   for (const file of files) {
@@ -69,30 +71,27 @@ export async function buildMobile(output, { cloud = false } = {}) {
     for (const child of element.childNodes ?? []) collect(child);
   };
   collect(document);
+  const requireElement = (id) => {
+    const element = elements.get(id);
+    if (!element) throw new Error(`スマホ版の書き換え対象 #${id} が見つかりません。`);
+    return element;
+  };
   const setText = (element, value) => {
     element.childNodes = [{ nodeName: "#text", value, parentNode: element }];
   };
   const copy = {
-    "edition-privacy": cloud
-      ? "キャリアは端末内で進行 · OpenAIは同意して手動生成"
-      : "キャリアは端末内で進行 · 好きなAIと手動交換できます",
-    "about-ai-copy": cloud
-      ? "現在の職歴と過去の選択から、OpenAIでキャリアの場面や4択を手動生成できます。送信内容を確認し、同意して生成します。好きなAIとの手動交換も使えます。AI未接続でも遊べます。"
-      : "端末内でキャリアの場面と選択が続きます。AIを使う場合は、依頼文を好きなAIに渡して返答を取り込む手動交換ができます。接続しなくても遊べます。",
-    "privacy-ai-copy": cloud
-      ? "OpenAIへの送信は同意して生成を押したときだけです。APIキーはサーバー側で管理し、端末へ配布しません。セーブは任意でこのブラウザ内に保存します。節目の一行はAIへ送信しません。共有ブラウザからは保存を見られる可能性があります。"
-      : "ゲームは端末内で進みます。手動交換では、依頼文と送信先を自分で確認してください。セーブは任意でこのブラウザ内に保存します。節目の一行はAIへ渡す依頼文に含めません。共有ブラウザからは保存を見られる可能性があります。",
+    "edition-privacy": "キャリアの場面と選択肢はOpenAIで毎年自動生成 · セーブはこの端末内",
+    "about-ai-copy": "現在の職歴と過去の選択から、OpenAIが毎年のキャリアの場面と4択を自動で作ります。このスマホ版は、あなた専用のOpenAI接続を使います。AIの接続が必要です。",
+    "privacy-ai-copy": "毎年の場面と選択肢をつくるため、プロフィールと選択履歴をOpenAIへ送ります。APIキーはサーバー側で管理し、端末へ配布しません。セーブは任意でこのブラウザ内に保存します。節目の一行はAIへ送信しません。共有ブラウザからは保存を見られる可能性があります。",
     "privacy-research-copy": "会社の候補を検索するときだけ、企業名をWikidataへ送ります。候補は利用者が確認します。外部ページから会社情報を取り込む機能は、この版では使いません。",
     "command-help": "コマンドをタップして決定 · キーボードは↑↓とEnter",
     "reflection-note": "セーブに残る自分用の記録です。AIには送りません。空欄や×でも進めます。",
-    "ai-description": cloud
-      ? "OpenAIでキャリアの場面と選択肢を生成できます。送信内容を確認し、同意を入れて生成ボタンを押してください。累計の見積り上限$0.10・100回まで。自動生成と自動再試行はしません。セーブはこの端末内です。"
-      : "AI未接続でも、各年のキャリアと選択の結果が続きます。AIを使う場合は、依頼文をコピーして好きなAIの返答を取り込めます。",
-    "ai-settings-button": cloud ? "AIの利用について ↗" : "AIの手動交換について ↗",
-    "ai-dialog-title": cloud ? "AIで、次のキャリアを描く。" : "好きなAIと、キャリアを描く。",
+    "ai-description": "このスマホ版は、あなた専用のOpenAI接続で毎年の場面と選択肢を自動で作ります。プロフィールと選択履歴をOpenAIへ送ります。累計の見積り上限$5まで。自動再試行はしません。セーブはこの端末内です。",
+    "ai-settings-button": "AIの利用について ↗",
+    "ai-dialog-title": "AIで、次のキャリアを描く。",
   };
-  for (const [id, value] of Object.entries(copy)) setText(elements.get(id), value);
-  elements.get("ai-form").attrs.push({ name: "hidden", value: "" });
+  for (const [id, value] of Object.entries(copy)) setText(requireElement(id), value);
+  requireElement("ai-form").attrs.push({ name: "hidden", value: "" });
   const hidePC = (element) => {
     if (element.attrs?.some((a) => a.name === "data-pc-only") ||
         ["research-button", "career-research"].includes(element.attrs?.find((a) => a.name === "id")?.value))
@@ -113,11 +112,11 @@ export async function buildMobile(output, { cloud = false } = {}) {
   const html = document.childNodes.find((n) => n.tagName === "html");
   html.attrs.push({
     name: "data-edition",
-    value: cloud ? "mobile-cloud" : "mobile",
+    value: "mobile-cloud",
   });
   const head = html.childNodes.find((n) => n.tagName === "head");
   const csp = parse(
-    `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src ${cloud ? "'self' " : ""}https://www.wikidata.org/w/api.php; object-src 'none'; base-uri 'none'; form-action 'none'">`,
+    `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self' https://www.wikidata.org/w/api.php; object-src 'none'; base-uri 'none'; form-action 'none'">`,
   )
     .childNodes.find((n) => n.tagName === "html")
     .childNodes.find((n) => n.tagName === "head").childNodes[0];
@@ -125,17 +124,17 @@ export async function buildMobile(output, { cloud = false } = {}) {
   head.childNodes.unshift(csp);
   const body = html.childNodes.find((n) => n.tagName === "body");
   const banner = parse(
-    cloud
-      ? '<aside class="mobile-edition-banner"><strong>キャリア体験版 · OpenAIは手動生成</strong><span>AI生成を押したときだけプロフィールと選択履歴をOpenAIへ送ります。見積り累計$0.10・100回まで。セーブはこの端末のブラウザに保存します。</span></aside>'
-      : '<aside class="mobile-edition-banner"><strong>キャリア体験版 · 端末内で遊べます</strong><span>会社の候補を検索するときだけ企業名をWikidataへ送ります。AIは手動交換で使えます。このアプリからのAPI課金は発生しません。</span></aside>',
+    '<aside class="mobile-edition-banner"><strong>スマホ版 · OpenAIで毎年自動生成</strong><span>場面と選択肢をつくるため、プロフィールと選択履歴をOpenAIへ送ります。見積り累計$5まで。セーブはこの端末のブラウザに保存します。</span></aside>',
   )
     .childNodes.find((n) => n.tagName === "html")
     .childNodes.find((n) => n.tagName === "body").childNodes[0];
   banner.parentNode = body;
   body.childNodes.unshift(banner);
+  if (!sources.get("index.html").includes("LOCAL EDITION / 0.3"))
+    throw new Error("スマホ版の書き換え対象 LOCAL EDITION / 0.3 が見つかりません。");
   await writeFile(
     resolve(target, "index.html"),
-    serialize(document).replace("LOCAL EDITION / 0.3", cloud ? "HOSTED CAREER / 0.3" : "MOBILE CAREER / 0.3"),
+    serialize(document).replace("LOCAL EDITION / 0.3", "HOSTED CAREER / 0.3"),
   );
   return { output: target, files: ["index.html", ...files], revision };
 }
@@ -144,11 +143,11 @@ if (
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
   const args = process.argv.slice(2);
-  const cloud = args.includes("--cloud");
-  if (cloud) args.splice(args.indexOf("--cloud"), 1);
+  // --cloud is accepted for older commands; every build is the hosted edition.
+  if (args.includes("--cloud")) args.splice(args.indexOf("--cloud"), 1);
   if (args.length && (args.length !== 2 || args[0] !== "--output"))
     throw new Error(
-      "使い方: npm run build:mobile -- [--cloud] --output 出力先",
+      "使い方: npm run build:mobile -- --output 出力先",
     );
-  console.log(JSON.stringify(await buildMobile(args[1], { cloud })));
+  console.log(JSON.stringify(await buildMobile(args[1])));
 }

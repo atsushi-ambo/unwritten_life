@@ -12,7 +12,7 @@ import {
 
 // Execute the actual UI handler with a minimal DOM adapter. No browser storage,
 // personal profiles, arbitrary page fetches or paid AI requests are involved.
-async function harness({ standalone = false, api } = {}) {
+async function harness({ hosted = false, api, directory } = {}) {
   const elements = new Map();
   function node(tag, text = "") {
     return {
@@ -53,8 +53,7 @@ async function harness({ standalone = false, api } = {}) {
     URL,
     Date,
     Boolean,
-    standalone,
-    hosted: false,
+    hosted,
     profileLevel: "standard",
     companyResearchRevision: 0,
     companyURLResearchRevision: 0,
@@ -63,9 +62,11 @@ async function harness({ standalone = false, api } = {}) {
     careerSources: [],
     api,
     makeDirectorySearch,
-    browserDirectoryText: async () => {
-      throw Error("unexpected network");
-    },
+    browserDirectoryText:
+      directory ??
+      (async () => {
+        throw Error("unexpected network");
+      }),
     sourceLinks: (el, sources) =>
       el.replaceChildren(...sources.map((s) => node("a", s.url))),
     renderCareer() {},
@@ -94,9 +95,27 @@ async function harness({ standalone = false, api } = {}) {
   return { $, context };
 }
 
+// A fixed Wikidata reply for the phone edition, which looks companies up from the browser.
+const kyndryl = async (url) => ({
+  status: 200,
+  text: JSON.stringify(
+    new URL(url).searchParams.get("action") === "wbsearchentities"
+      ? { search: [{ id: "Q1", label: "キンドリルジャパン株式会社" }] }
+      : {
+          entities: {
+            Q1: {
+              labels: { ja: { value: "キンドリルジャパン株式会社" } },
+              descriptions: { ja: { value: "ITインフラのサービスを提供する日本の企業" } },
+              claims: { P856: [{ mainsnak: { datavalue: { value: "https://www.kyndryl.com/jp/ja" } } }] },
+            },
+          },
+        },
+  ),
+});
+
 test("one company candidate waits for acceptance; reviewed information then reaches the story", async () => {
-  const { $, context } = await harness({ standalone: true });
-  $("company-name").value = "キンドリルジャバン";
+  const { $, context } = await harness({ hosted: true, directory: kyndryl });
+  $("company-name").value = "キンドリルジャパン";
   await $("company-search").listeners.click();
   assert.match($("research-status").textContent, /この会社で合っていますか/);
   assert.equal($("company-summary").value, "");
@@ -106,7 +125,11 @@ test("one company candidate waits for acceptance; reviewed information then reac
   await buttons[0].listeners.click();
   assert.equal($("company-name").value, "キンドリルジャパン株式会社");
   assert.match($("company-summary").value, /ITインフラ/);
-  assert.equal($("company-confirmed").checked, true);
+  // Nothing is built in: the player still confirms what the directory says.
+  assert.equal($("company-confirmed").checked, false);
+  assert.match($("research-status").textContent, /Wikidata/);
+  assert.match(context.companySources[0].url, /wikidata\.org\/wiki\/Q1/);
+  $("company-confirmed").checked = true;
   const game = createGame(
     optionalProfileInputs({
       ...profileInputForLevel({}, "standard"),
@@ -163,20 +186,6 @@ test("official body acquisition only follows explicit acceptance and still requi
   assert.equal($("company-summary").value, "合成の公式本文");
   assert.equal($("company-confirmed").checked, false);
   assert.match($("research-status").textContent, /チェック/);
-});
-
-test("PC uses current built-in candidates without depending on an older running server catalog", async () => {
-  const { $ } = await harness({
-    api: async () => {
-      throw Error("old server must not be called");
-    },
-  });
-  $("company-name").value = "キンドリルジャパン株式会社";
-  await $("company-search").listeners.click();
-  assert.match($("research-status").textContent, /この会社で合っていますか/);
-  await $("company-candidates").querySelectorAll("button")[0].listeners.click();
-  assert.equal($("company-confirmed").checked, true);
-  assert.match($("company-summary").value, /ITインフラ/);
 });
 
 test("changing a company invalidates old candidates and delayed page responses", async () => {
@@ -322,14 +331,14 @@ test("editing the URL also invalidates a delayed accepted company candidate", as
 
 for (const edited of ["company-summary", "company-sector"]) {
   test(`editing ${edited} keeps already-displayed company candidates selectable`, async () => {
-    const { $ } = await harness({ standalone: true });
+    const { $ } = await harness({ hosted: true, directory: kyndryl });
     $("company-name").value = "キンドリルジャパン株式会社";
     await $("company-search").listeners.click();
     $(edited).value = edited === "company-summary" ? "編集中の本文" : "tech";
     $(edited).listeners.input();
     await $("company-candidates").querySelectorAll("button")[0].listeners.click();
     assert.match($("company-summary").value, /ITインフラ/);
-    assert.equal($("company-confirmed").checked, true);
+    assert.equal($("company-confirmed").checked, false);
   });
 }
 

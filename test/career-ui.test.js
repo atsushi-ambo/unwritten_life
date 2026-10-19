@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createContext, runInContext } from "node:vm";
-import { createGame, advance, recordCareerReflection, encodeSave, JOBS } from "../public/engine.js";
-import { careerMap, careerRecord, careerRecordText, CAREER_STATES } from "../public/careers.js";
+import { createGame, advance, recordCareerReflection, encodeSave, JOBS, RANKS } from "../public/engine.js";
+import { careerMap, careerRecord, careerRecordText, lifeStory, CAREER_STATES } from "../public/careers.js";
 
 const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 const profile = { age: 29, region: "city", job: "tech", ai: "daily", priority: "balance", gender: "undisclosed", household: "solo", companyType: "small" };
@@ -42,7 +42,8 @@ function harness(game) {
     return elements.get(id);
   };
   const context = createContext({
-    game, node, $, JOBS, careerMap, careerRecord, careerRecordText, CAREER_STATES,
+    game, node, $, JOBS, RANKS, careerMap, careerRecord, careerRecordText, lifeStory, CAREER_STATES,
+    money: (n) => String(Math.round(n)), nf: new Intl.NumberFormat("ja-JP"),
     favoriteYears: new Set(), favoritesOnly: false, appendBudget() {},
     document: { createTextNode: (text) => node("#text", text), get activeElement() { return focused; } },
     navigator: { clipboard: { async writeText(text) { if (denied) throw Error("denied"); copied = text; } } },
@@ -58,7 +59,7 @@ test("map labels, resume copy and selectable fallback use the actual UI handlers
   assert.match(tile.children[0].getAttribute("aria-label"), /2026年・29歳.*選択/);
   assert.ok(card.textContent.includes("自分用の一行"));
   await card.querySelector("#copy-resume").handlers.click();
-  assert.equal(h.copied, careerRecordText(game, JOBS));
+  assert.equal(h.copied, careerRecordText(game, JOBS, RANKS));
   assert.equal(card.querySelector("#resume-copy-status").textContent, "コピーしました。");
   h.denyClipboard();
   await card.querySelector("#copy-resume").handlers.click();

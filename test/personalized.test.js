@@ -12,6 +12,7 @@ import {
 } from "../public/engine.js";
 import { storyRequest, sceneSchema } from "../public/story.js";
 import { makeAI } from "../lib/ai.mjs";
+import { readyAI } from "./fixtures/ai-replies.js";
 import { makeServer } from "../server.mjs";
 const profile = {
   age: 32,
@@ -43,7 +44,7 @@ function lifeScene() {
     insight: "選択の結果はゲームの中の仮定です。",
     options: [
       ordinary("studyDaily", "自社サービスの信頼性を毎日学ぶ"),
-      ordinary("connect", "家族と来年の暮らしを相談する"),
+      ordinary("focus", "今の会社で信頼性の改善を任せてもらう"),
       ordinary("rest", "健康と暮らしのペースを整える"),
       {
         ...ordinary("move", "大都市へ住まいを移す"),
@@ -287,20 +288,20 @@ test("personalized API uses separate caches for life/career, validates exactly f
 });
 test("career AI rejects the retirement boundary before transport or accounting, while legacy clients retain their choice rule", async () => {
   let requests = 0;
-  const ai = makeAI({
-    transport: async (_url, options) => {
-      requests++;
-      const context = JSON.parse(JSON.parse(options.body).messages[1].content);
-      assert.ok(context.allowedActions.some((a) => a.id === "switch"));
-      return {
-        status: 200,
-        text: JSON.stringify({
-          message: { content: JSON.stringify(careerScene()) },
-        }),
-      };
-    },
+  const ai = await readyAI(async (_url, options) => {
+    requests++;
+    const context = JSON.parse(JSON.parse(options.body).messages[1].content);
+    assert.ok(context.allowedActions.some((a) => a.id === "switch"));
+    return {
+      status: 200,
+      text: JSON.stringify({
+        message: { content: JSON.stringify(careerScene()) },
+      }),
+    };
   });
-  const before = createGame({ ...profile, age: 64, retirementAge: 65 }, "steady", 4),
+  // These cases check the retirement guard itself, so the career ending is off.
+  const before = createGame({ ...profile, age: 64, retirementAge: 65 }, "steady", 4,
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 110),
     boundary = advance(before, "rest");
   assert.equal(boundary.age, 65);
   assert.equal(boundary.retired, false);

@@ -6,65 +6,21 @@ import { resolve } from "node:path";
 import { createContext, runInContext } from "node:vm";
 import { parse } from "parse5";
 import { buildMobile } from "../scripts/build-mobile.mjs";
-test("new careers stop AI requests on an older running server without switching providers or stopping the game", async () => {
-  const app = await readFile(
-    new URL("../public/app.js", import.meta.url),
-    "utf8",
-  );
-  const context = createContext({
-    standalone: false,
-    serverCareerOffers: false,
-    game: { profile: { job: "tech" }, decisions: [] },
-  });
-  runInContext(
-    app.slice(
-      app.indexOf("function needsCareerServerUpdate()"),
-      app.indexOf("const generationTimes"),
-    ),
-    context,
-  );
-  assert.equal(
-    Boolean(runInContext("needsCareerServerUpdate()", context)),
-    false,
-  );
-  context.game.decisions = [{ id: "switch", target: "mizuho", role: "tech" }];
-  assert.equal(
-    Boolean(runInContext("needsCareerServerUpdate()", context)),
-    true,
-  );
-  context.serverCareerOffers = true;
-  assert.equal(
-    Boolean(runInContext("needsCareerServerUpdate()", context)),
-    false,
-  );
-  context.serverCareerOffers = false;
-  context.game = { profile: { job: "marketing" }, decisions: [] };
-  assert.equal(
-    Boolean(runInContext("needsCareerServerUpdate()", context)),
-    true,
-  );
-  context.standalone = true;
-  assert.equal(
-    Boolean(runInContext("needsCareerServerUpdate()", context)),
-    false,
-  );
-});
-test("mobile build contains only public assets, opts out of network calls, and keeps normal PC mode unchanged", async (t) => {
+test("phone build contains only public assets and is always the hosted OpenAI edition", async (t) => {
   const dir = await mkdtemp(resolve(tmpdir(), "unwritten-mobile-test-"));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const result = await buildMobile(dir);
   assert.equal(result.files.length, 8);
   assert.deepEqual((await readdir(dir)).sort(), result.files.sort());
   const html = await readFile(resolve(dir, "index.html"), "utf8");
-  checkCareerCopy(html, false);
-  assert.match(html, /data-edition="mobile"/);
+  checkCareerCopy(html);
+  assert.match(html, /data-edition="mobile-cloud"/);
   assert.match(html, /name="careerInterests"/);
-  assert.match(html, /id="career-rule-fallback"/);
+  assert.doesNotMatch(html, /career-rule-fallback|exchange-dialog|value="disabled"/);
   const story = await readFile(resolve(dir, "story.js"), "utf8");
   assert.match(story, /careerInterests: p.careerInterests/);
   assert.match(story, /使う場合も最大1社まで/);
-  assert.match(html, /connect-src https:\/\/www\.wikidata\.org\/w\/api\.php;/);
-  assert.match(html, /API課金は発生しません/);
+  assert.match(html, /connect-src 'self' https:\/\/www\.wikidata\.org\/w\/api\.php;/);
   for (const id of [
     "export-save", "game-export-save", "import-save", "game-import-save",
     "import-save-file", "save-import-dialog", "export-corrupt-save",
@@ -89,42 +45,7 @@ test("mobile build contains only public assets, opts out of network calls, and k
     new URL("../public/index.html", import.meta.url),
     "utf8",
   );
-  assert.doesNotMatch(source, /data-edition="mobile"/);
-  const app = await readFile(resolve(dir, "app.js"), "utf8");
-  let rendered = 0;
-  const context = createContext({
-    standalone: true,
-    aiState: null,
-    renderAI: () => rendered++,
-    fetch: () => {
-      throw Error("must not fetch");
-    },
-  });
-  runInContext(
-    app.slice(
-      app.indexOf("async function status()"),
-      app.indexOf("async function api("),
-    ),
-    context,
-  );
-  runInContext(
-    app.slice(
-      app.indexOf("async function api("),
-      app.indexOf("function readStoredGame("),
-    ),
-    context,
-  );
-  const status = await runInContext("status()", context);
-  assert.equal(status.ai.provider, "disabled");
-  assert.equal(status.ai.cloud, false);
-  assert.equal(rendered, 1);
-  for (const path of ["/api/scene", "/api/ai/config", "/api/company/search"]) {
-    context.testPath = path;
-    await assert.rejects(
-      () => runInContext("api(testPath,{})", context),
-      /スマホ体験版/,
-    );
-  }
+  assert.doesNotMatch(source, /data-edition="mobile/);
   await assert.rejects(
     () => buildMobile(resolve(new URL("../public/", import.meta.url).pathname)),
     /ソース/,
@@ -133,17 +54,17 @@ test("mobile build contains only public assets, opts out of network calls, and k
 test("hosted mobile uses only same-origin scene requests and does not claim that AI is free", async (t) => {
   const dir = await mkdtemp(resolve(tmpdir(), "unwritten-cloud-test-"));
   t.after(() => rm(dir, { recursive: true, force: true }));
-  await buildMobile(dir, { cloud: true });
+  await buildMobile(dir);
   const html = await readFile(resolve(dir, "index.html"), "utf8");
-  checkCareerCopy(html, true);
+  checkCareerCopy(html);
   assert.match(html, /data-edition="mobile-cloud"/);
   assert.match(html, /connect-src 'self'/);
-  assert.match(html, /OpenAIは手動生成/);
+  assert.match(html, /OpenAIで毎年自動生成/);
+  assert.match(html, /\$5/);
   assert.doesNotMatch(html, /API課金は発生しません/);
   const app = await readFile(resolve(dir, "app.js"), "utf8");
   const requests = [];
   const context = createContext({
-    standalone: false,
     hosted: true,
     apiToken: "synthetic-csrf-token",
     crypto: { randomUUID: () => "synthetic-request-id" },
@@ -180,7 +101,22 @@ test("hosted mobile uses only same-origin scene requests and does not claim that
   );
 });
 
-function checkCareerCopy(html, cloud) {
+test("mobile copy rewrites fail with the missing target ID instead of silently skipping it", async () => {
+  const source = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
+  const build = await readFile(new URL("../scripts/build-mobile.mjs", import.meta.url), "utf8");
+  const rewrite = build.slice(build.indexOf("  const document = parse("), build.indexOf("  const versionAssets ="));
+  for (const id of [
+    "edition-privacy", "about-ai-copy", "privacy-ai-copy", "privacy-research-copy",
+    "command-help", "reflection-note", "ai-description", "ai-settings-button", "ai-dialog-title", "ai-form",
+  ]) {
+    const context = createContext({
+      parse, sources: new Map([["index.html", source.replace(`id="${id}"`, "")]]),
+    });
+    assert.throws(() => runInContext(rewrite, context), (error) => error.message.includes(`#${id} が見つかりません`), id);
+  }
+});
+
+function checkCareerCopy(html) {
   const elements = new Map();
   const collect = (element) => {
     const id = element.attrs?.find((a) => a.name === "id")?.value;
@@ -192,12 +128,22 @@ function checkCareerCopy(html, cloud) {
   collect(doc);
   assert.match(html, /<title>Unwritten Life — その転職の、ずっと先の未来まで。<\/title>/);
   assert.match(html, /name="description"\s+content="その転職の、ずっと先の未来まで。/);
-  assert.match(html, new RegExp(`${cloud ? "HOSTED" : "MOBILE"} CAREER / 0.3`));
+  assert.match(html, /HOSTED CAREER \/ 0.3/);
   for (const id of ["about-ai-copy", "privacy-ai-copy", "ai-description", "edition-privacy"]) {
     assert.doesNotMatch(text(elements.get(id)), /Ollama|Codex|Claude|ローカルサーバー|PC内/);
+    assert.doesNotMatch(text(elements.get(id)), /未接続でも|接続しなくても|手動交換|手動生成|生成ボタン|\$0\.10|100回/);
+    assert.match(text(elements.get(id)), /OpenAI/);
   }
   assert.match(text(elements.get("about-ai-copy")), /キャリア/);
+  assert.match(text(elements.get("about-ai-copy")), /自動/);
+  assert.match(text(elements.get("ai-description")), /\$5/);
+  assert.match(text(elements.get("privacy-ai-copy")), /節目の一行はAIへ送信しません/);
+  assert.match(text(elements.get("privacy-research-copy")), /Wikidata/);
+  assert.match(text(elements.get("ai-dialog-title")), /次のキャリア/);
+  assert.match(text(elements.get("ai-settings-button")), /AIの利用/);
   assert.match(text(elements.get("command-help")), /タップ/);
+  assert.match(text(elements.get("reflection-note")), /AIには送りません/);
+  assert.match(html, /name="viewport"[^>]*viewport-fit=cover/);
   for (const id of ["ai-form", "research-button", "career-research"])
     assert.ok(elements.get(id).attrs.some((a) => a.name === "hidden"), id);
   assert.doesNotMatch(html, /unsafe-inline|unsafe-eval/);

@@ -3,6 +3,8 @@ import {
   MAX_AGE,
   SCENARIOS,
   JOBS,
+  RANKS,
+  inCompany,
   REGIONS,
   PRIORITIES,
   CHOICES,
@@ -23,14 +25,12 @@ import {
   encodeSave,
   decodeSave,
   applyScene,
-  validateGeneratedScene,
   recordCareerReflection,
+  recordCareerSeen,
+  careerSeenUntil,
 } from "./engine.js";
 import {
-  EMPLOYERS,
   VENTURES,
-  careerCandidates,
-  careerOffers,
   workContext,
   makeDirectorySearch,
   browserDirectoryText,
@@ -42,6 +42,7 @@ import {
   pendingCareerReflection,
   careerRecord,
   careerRecordText,
+  lifeStory,
 } from "./careers.js";
 import {
   worldAt,
@@ -53,7 +54,7 @@ import {
   knowledgeFor,
   loadKnowledge,
 } from "./world.js";
-import { storyRequest, groundScene } from "./story.js";
+import { storyRequest } from "./story.js";
 let knowledgeCatalog = KNOWLEDGE;
 let lastJourney = null;
 let activeReflection = null;
@@ -64,7 +65,6 @@ const $ = (id) => document.getElementById(id),
   saveKey = "unwritten-life:v2",
   nf = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 0 });
 const money = (n) => nf.format(Math.round(n / 10) * 10);
-const standalone = document.documentElement.dataset.edition === "mobile";
 const hosted = document.documentElement.dataset.edition === "mobile-cloud";
 let game = null,
   remember = false,
@@ -87,43 +87,13 @@ let game = null,
   modelListRevision = 0;
 let generationStarted = 0,
   generationTimer;
-let serverCareerOffers = false;
-let serverProfileDetails = false;
-let serverPersonalizedChoices = false,
-  careerDraft = null,
+let careerDraft = null,
   careerGenerating = false,
-  exchangeMode = "life",
-  exchangeRevision = 0;
-function needsChoiceServerUpdate() {
-  return (
-    !standalone &&
-    aiState &&
-    aiState.provider !== "disabled" &&
-    (!serverPersonalizedChoices ||
-      (game &&
-        [
-          game.profile.municipality,
-          game.profile.occupation,
-          game.profile.industry,
-          game.profile.jobDetail,
-        ].some(Boolean) &&
-        !serverProfileDetails))
-  );
-}
-function needsCareerServerUpdate() {
-  return (
-    !standalone &&
-    !serverCareerOffers &&
-    game &&
-    (game.profile.job === "marketing" ||
-      game.decisions.some(
-        (d) =>
-          typeof d === "object" &&
-          (d.role === "marketing" ||
-            ["nttdata", "mizuho", "chugai"].includes(d.target)),
-      ))
-  );
-}
+  careerError = "",
+  generationError = "",
+  cloudConsented = false,
+  pendingStart = null;
+const aiSettingsKey = "unwritten-life:ai";
 const generationTimes = new Map();
 const connectionKey = (state) =>
   JSON.stringify([state?.provider, state?.baseURL, state?.model]);
@@ -141,43 +111,20 @@ function toast(text) {
   }, 5500);
 }
 async function status() {
-  if (standalone) {
-    aiState = {
-      provider: "disabled",
-      model: "AI未接続",
-      cloud: false,
-      calls: 0,
-      reservedUSD: 0,
-      usdCap: 0,
-      requestCap: 0,
-      baseURL: "",
-      inputRate: 0,
-      outputRate: 0,
-    };
-    renderAI();
-    return { ai: aiState };
-  }
   const res = await fetch("/api/status");
   if (!res.ok)
     throw new Error(
       hosted
-        ? "AIサーバーに接続できません。少し待って再読み込みしてください。AIなしでは続けられます。"
+        ? "AIサーバーに接続できません。少し待って再読み込みしてください。"
         : "ローカルサーバーに接続できません。アプリを起動して再読み込みしてください。",
     );
   const data = await res.json();
-  serverCareerOffers = data.engineRevision === "career-offers-v1";
-  serverPersonalizedChoices = data.choicesRevision === "personalized-four-v1";
-  serverProfileDetails = data.profileRevision === "profile-details-v1";
   apiToken = data.token;
   aiState = data.ai;
   renderAI();
   return data;
 }
 async function api(path, body) {
-  if (standalone)
-    throw new Error(
-      "スマホ体験版ではAI自動接続と企業ページの取得は使えません。ゲームはAIなしで進められます。手動交換は利用できます。",
-    );
   if (!apiToken) await status();
   if (hosted && path !== "/api/scene")
     throw new Error("このスマホ版では接続設定と企業ページの取得は使えません。");
@@ -273,6 +220,20 @@ function readProfile() {
   return p;
 }
 function showGame(focus = false) {
+  if (!aiReady()) {
+    if (hosted) {
+      toast("OpenAIの接続準備ができていません。少し待って再読み込みしてください。");
+      return;
+    }
+    const next = game;
+    pendingStart = () => {
+      game = next;
+      showGame(focus);
+    };
+    void openAISettings(true);
+    return;
+  }
+  generationError = "";
   lastJourney = null;
   favoriteYears = new Set();
   favoritesOnly = false;
@@ -352,6 +313,52 @@ function renderCareerMap(container) {
   }
   container.append(grid, detail, legend);
 }
+// The pop summary at the top of the ending: headline numbers, then the
+// turning points of each decade (work, money, family and luck).
+function renderLifeStory() {
+  const story = lifeStory(game, RANKS);
+  const section = node("section", undefined, "life-story");
+  const title = node("h3", "わたしの履歴書");
+  title.id = "life-story-title";
+  section.setAttribute("aria-labelledby", title.id);
+  section.append(title, node("p", story.headline, "life-story-headline"));
+  const s = story.stats,
+    tiles = node("dl", undefined, "life-story-stats");
+  for (const [label, value, note] of [
+    ["年収", `${money(s.startIncome)}→${money(s.peakIncome)}万円`, "はじめ → ピーク"],
+    ["純資産", `${money(s.startNetWorth)}→${money(s.endNetWorth)}万円`, "はじめ → おわり"],
+    ["いちばん上の役職", RANKS[s.peakRank]?.label ?? "記録なし", ""],
+    ["転職", `${s.moves}回`, `勤めた会社 ${s.employers}社`],
+    ["家族", s.partner ? "パートナーあり" : "パートナーなし", `子ども ${s.children}人`],
+    ["住まい", s.housing === "own" ? "持ち家" : "賃貸", ""],
+    ["学びの時間", `${nf.format(s.studyHours)}時間`, ""],
+    ["思いがけない出来事", `つらい ${s.hardships} · うれしい ${s.luck}`, ""],
+  ]) {
+    const tile = node("div");
+    tile.append(node("dt", label), node("dd", value));
+    if (note) tile.append(node("small", note));
+    tiles.append(tile);
+  }
+  section.append(tiles);
+  const icons = { work: "■", rise: "▲", luck: "★", hardship: "●", family: "♡", life: "⌂", end: "○" };
+  for (const chapter of story.chapters) {
+    const box = node("section", undefined, "life-story-chapter");
+    box.append(node("h4", chapter.label));
+    const list = node("ul");
+    for (const e of chapter.events) {
+      const item = node("li", undefined, `event-${e.kind}`);
+      const icon = node("span", icons[e.kind], "life-story-icon");
+      icon.setAttribute("aria-hidden", "true");
+      item.append(icon, node("small", `${e.year}年・${e.age}歳`), node("span", e.text));
+      list.append(item);
+    }
+    box.append(list);
+    section.append(box);
+  }
+  if (!story.chapters.length)
+    section.append(node("p", "大きな転機のない、穏やかな歩みでした。", "field-note"));
+  return section;
+}
 function renderCareerResume() {
   const record = careerRecord(game);
   const card = node("section", undefined, "career-resume");
@@ -359,14 +366,22 @@ function renderCareerResume() {
   card.setAttribute("aria-labelledby", "resume-title");
   const title = node("h3", "職務経歴書 / この世界で歩んだ道");
   title.id = "resume-title";
-  card.append(title, node("p", `${game.profile.age}歳から${game.age}歳まで・${game.decisions.length}年間`, "resume-period"),
+  card.append(renderLifeStory(), title, node("p", `${game.profile.age}歳から${game.age}歳まで・${game.decisions.length}年間`, "resume-period"),
     node("p", "ゲーム内の架空の経歴です。実際の職務経歴を証明するものではありません。", "field-note"),
     node("h4", "勤務先と役割"));
   const timeline = node("ol", undefined, "resume-timeline");
   for (const t of record.tenures) {
     const row = node("li");
     row.append(node("small", `${t.from}〜${t.to}年 · ${t.years}年`), node("b", t.employer));
-    if (t.role) row.append(node("span", JOBS[t.role]?.label ?? t.role));
+    if (t.role)
+      row.append(
+        node(
+          "span",
+          [JOBS[t.role]?.label ?? t.role, t.rank ? RANKS[t.rank].label : "", t.unit ?? ""]
+            .filter(Boolean)
+            .join(" · "),
+        ),
+      );
     timeline.append(row);
   }
   const totals = node("dl", undefined, "resume-totals");
@@ -404,7 +419,7 @@ function renderCareerResume() {
   fallback.hidden = true;
   fallback.rows = 8;
   fallback.setAttribute("aria-label", "コピー用の職務経歴書テキスト");
-  const text = careerRecordText(game, JOBS);
+  const text = careerRecordText(game, JOBS, RANKS);
   copy.addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(text);
@@ -559,6 +574,22 @@ function appendBudget(parent, h, collapsed = false) {
     );
   parent.append(box);
 }
+// A chance incident is shown apart from the chosen action, with the game's
+// assumed odds, so a hard year reads as luck rather than as the player's fault.
+function incidentNote(h) {
+  if (!h.incident) return null;
+  const percent = (p) => `${(p * 100).toFixed(p < 0.01 ? 1 : 0)}%`;
+  const box = node("div", undefined, `incident-note tone-${h.incident.tone}`);
+  box.append(
+    node("p", `思いがけない出来事：${h.incident.title}`, "incident-title"),
+    node("p", h.incident.body),
+    node(
+      "small",
+      `この年に何か思いがけない出来事が起きる確率は${percent(h.incident.yearChance)}、この出来事そのものは${percent(h.incident.chance)}でした（ゲームの仮定）。`,
+    ),
+  );
+  return box;
+}
 function showJourney(journey) {
   const first = journey.entries[0],
     last = journey.entries.at(-1);
@@ -579,6 +610,8 @@ function showJourney(journey) {
       node("h3", h.episode?.title ?? h.outcome?.title ?? h.title),
       node("p", h.episode?.body ?? h.note),
     );
+    const incident = incidentNote(h);
+    if (incident) row.append(incident);
     const delta = Math.round(h.income) - Math.round(previousIncome);
     row.append(
       node(
@@ -691,6 +724,11 @@ function renderGame() {
           ? "（転職は仮想）"
           : ""),
     game.employer.unverifiedCandidate ? "企業・職務はAI未確認" : "",
+    inCompany(game) && game.position.rank !== "unspecified"
+      ? `${RANKS[game.position.rank].label}${game.position.unit ? `・${game.position.unit}` : ""}`
+      : inCompany(game) && game.position.unit
+        ? game.position.unit
+        : "",
     game.housing === "own" ? "持ち家" : "賃貸等",
     game.retired
       ? "退職後"
@@ -796,6 +834,8 @@ function renderGame() {
       node("h2", h.outcome?.title ?? h.choiceLabel),
       node("p", h.outcome?.body ?? h.note),
     );
+    const incident = incidentNote(h);
+    if (incident) resultCard.append(incident);
     const changes = node("div", undefined, "result-changes");
     for (const [label, key, unit] of [
       ["年収", "income", "万円"],
@@ -855,9 +895,10 @@ function renderGame() {
   choices.replaceChildren();
   $("career-actions").replaceChildren();
   if (complete) {
+    const end = game.history.at(-1)?.careerEnd;
     card.append(
       node("p", "THE STORY OF YOUR WORKING LIFE.", "eyebrow"),
-      node("h2", "働いた年月が、あなたに残したもの。"),
+      node("h2", end ? `${game.age}歳、${end.title}。` : "働いた年月が、あなたに残したもの。"),
     );
     const counts = Object.keys(CHOICES)
       .map((k) => [k, game.decisions.filter((x) => decisionId(x) === k).length])
@@ -869,7 +910,9 @@ function renderGame() {
       ),
       node(
         "p",
-        "この最期はゲーム内の仮定から生まれた物語です。実際の寿命や死因を予測するものではありません。",
+        end
+          ? "キャリアの区切りまでを描くゲームです。この先の暮らしは、ここまでの歩みと手元の資産の上に続いていきます。結果はゲーム内の仮定から生まれた物語です。"
+          : "この最期はゲーム内の仮定から生まれた物語です。実際の寿命や死因を予測するものではありません。",
         "insight",
       ),
     );
@@ -889,20 +932,65 @@ function renderGame() {
         game.prepayFrom,
         game.debtRepayFrom,
         game.salaryCapFrom,
+        game.incidentFrom,
+        game.careerPathFrom,
+        game.careerEndFrom,
       );
       showGame(true);
     });
     compare.addEventListener("click", openComparison);
     actions.append(again, compare);
     card.append(actions);
+  } else if (!eventFor(game).generated) {
+    // Scenes and choices come from the connected AI only. Until it answers,
+    // the year waits; there are no rule-written options to fall back to.
+    card.append(node("p", `AIが考える場面 / ${game.year}`, "eyebrow"));
+    if (generating) {
+      card.append(
+        node("h2", "次の一年を考えています…"),
+        node(
+          "p",
+          "これまでの選択と結果、仕事・家計・家族の条件から、AIが場面と4つの選択肢をつくっています。",
+        ),
+      );
+    } else {
+      const ready = aiReady();
+      card.append(
+        node(
+          "h2",
+          ready ? "場面を作れませんでした" : "AIの接続が必要です",
+        ),
+        node(
+          "p",
+          ready
+            ? generationError ||
+                "AIの返答を待っています。もう一度生成してください。"
+            : "このゲームは毎年の場面と選択肢をAIで作ります。AIを接続すると、この年から続けられます。",
+        ),
+      );
+      const actions = node("div", undefined, "scene-retry");
+      const retry = node(
+        "button",
+        ready ? "もう一度生成する ✳" : "AIを接続する ↗",
+        "button primary small",
+      );
+      retry.type = "button";
+      retry.addEventListener("click", () =>
+        ready ? generateScene() : openAISettings(),
+      );
+      actions.append(retry);
+      if (ready) {
+        const settings = node("button", "AIの接続を変える ↗", "text-button");
+        settings.type = "button";
+        settings.addEventListener("click", () => openAISettings());
+        actions.append(settings);
+      }
+      card.append(actions);
+    }
   } else {
     const event = eventFor(game);
     card.append(
-      node(
-        "p",
-        `${event.generated ? "AIが作った架空の場面" : "あなたの条件を反映した場面"} / ${game.year}`,
-        "eyebrow",
-      ),
+      node("p", `AIが作った架空の場面 / ${game.year}`, "eyebrow"),
       node("h2", event.title),
       node("p", event.body),
       node("p", event.insight, "insight"),
@@ -913,14 +1001,7 @@ function renderGame() {
       const list = node("ul");
       for (const item of event.profileBasis)
         list.append(node("li", `${item.label}：${item.detail}`));
-      basis.append(
-        list,
-        node(
-          "p",
-          "端末内ではメモのキーワードから話題を拾います。経験や能力は推定せず、文章全体の解釈には接続したAIを使います。",
-          "field-note",
-        ),
-      );
+      basis.append(list);
       card.append(basis);
     }
     const options = [...event.options];
@@ -931,10 +1012,7 @@ function renderGame() {
       extraButtons,
     );
     for (const id of availableChoices(game)) {
-      if (
-        availableChoices(game).includes(id) &&
-        !options.some((o) => o.id === id)
-      ) {
+      if (!options.some((o) => o.id === id)) {
         const extraButton = node(
           "button",
           (id === "opportunity"
@@ -968,7 +1046,7 @@ function renderGame() {
         node("b", option.label),
         node(
           "small",
-          `${option.hint}${offer ? ` / 開業費${offer.setup}万円・年間運営費${VENTURES[offer.venture].overhead}万円` : ""}${event.generated ? " / 行動：" + c.label : ""}`,
+          `${option.hint}${offer ? ` / 開業費${offer.setup}万円・年間運営費${VENTURES[offer.venture].overhead}万円` : ""} / 行動：${c.label}`,
         ),
       );
       if (option.reason)
@@ -977,7 +1055,7 @@ function renderGame() {
         copy.append(
           node(
             "small",
-            `候補：${option.decision.name ?? EMPLOYERS[option.decision.target]?.name} / ${JOBS[option.decision.role].label}（架空の転職・AIの候補は未確認）`,
+            `候補：${option.decision.name} / ${JOBS[option.decision.role].label}（架空の転職・AIの候補は未確認）`,
           ),
         );
       button.append(
@@ -1003,7 +1081,7 @@ function renderGame() {
       choices.append(button);
     }
   }
-  $("choice-title").parentElement.hidden = complete;
+  $("choice-title").parentElement.hidden = complete || !eventFor(game).generated;
   $("undo-button").disabled = game.decisions.length === 0 || generating;
   renderHistory();
   $("context-preview").textContent = JSON.stringify(
@@ -1015,51 +1093,39 @@ function renderGame() {
   renderAI();
   persist();
 }
+function aiReady() {
+  return Boolean(aiState?.ready && (!aiState.cloud || hosted || cloudConsented));
+}
 function renderAI() {
   if (!aiState) return;
   const local = !aiState.cloud;
-  $("auto-scene-label").hidden = !local || aiState.provider === "disabled";
+  const ready = aiReady();
   $("year-step").disabled = generating;
   $("ai-status").classList.toggle("is-generating", generating);
   $("event-card").setAttribute("aria-busy", String(generating));
   $("ai-status").textContent = generating
     ? `${local ? "PC内のAI" : "接続したAI"}が、この結果から次の場面と選択肢を考えています…`
-    : aiState.subscription
-      ? `サブスク：${aiState.provider === "codex-cli" ? "Codex CLI" : "Claude Code"} / ${aiState.model} · ${aiState.calls}/${aiState.requestCap}回（起動中）`
-      : `${local ? "PC内" : "クラウド"}：${aiState.provider} / ${aiState.model} · ${aiState.calls}${hosted ? "/" + aiState.requestCap : ""}回 · 見積り予約 $${aiState.reservedUSD.toFixed(4)}${hosted ? " / $" + aiState.usdCap + "（累計）" : ""}`;
-  if (!generating && aiState.provider === "disabled")
-    $("ai-status").textContent =
-      "端末内の物語で進行中。好きなAIで展開を作るボタンから、AIも使えます。";
-  if (needsCareerServerUpdate())
-    $("ai-status").textContent +=
-      " 新しい企業・職種のAI生成は、PC版のサーバーを次に起動した後に使えます。今はAIなしで続けられます。";
-  if (needsChoiceServerUpdate())
-    $("ai-status").textContent +=
-      " 新しいプロフィール別4択は、更新したPCサーバーの次回起動後に使えます。今はAIなし・手動交換で続けられます。";
-  $("cloud-consent-label").hidden = local;
-  $("generate-button").disabled = generating || !game || game.ended;
-  const manualAI =
-    aiState.provider === "disabled" ||
-    needsChoiceServerUpdate() ||
-    needsCareerServerUpdate();
-  $("generate-button").textContent = manualAI
-    ? "好きなAIで展開を作る ↗"
-    : "この場面をAIで生成 ✳";
-  $("exchange-button").hidden = manualAI;
+    : !ready
+      ? "AIが未接続です。「AIの接続」から使うAIを選んでください。"
+      : aiState.subscription
+        ? `サブスク：${aiState.provider === "codex-cli" ? "Codex CLI" : "Claude Code"} / ${aiState.model} · ${aiState.calls}/${aiState.requestCap}回（起動中）`
+        : `${local ? "PC内" : "クラウド"}：${aiState.provider} / ${aiState.model} · ${aiState.calls}/${aiState.requestCap}回 · 見積り予約 $${aiState.reservedUSD.toFixed(4)} / $${aiState.usdCap}${hosted ? "（累計）" : ""}`;
+  $("ai-setup-banner").classList.toggle("is-ready", ready);
+  $("ai-setup-status").textContent = ready
+    ? `✓ AI接続済み：${aiState.subscription ? (aiState.provider === "codex-cli" ? "Codex CLI" : "Claude Code") : aiState.provider} / ${aiState.model}`
+    : hosted
+      ? "OpenAIの接続準備ができていません。少し待って再読み込みしてください。"
+      : "はじめる前に、場面と選択肢をつくるAIを接続してください。";
+  $("ai-setup-button").hidden = hosted;
+  $("ai-setup-button").textContent = ready ? "接続を変える ↗" : "AIを接続する ↗";
   $("career-generate").disabled =
-    generating || !game || game.ended || isRetiredAt(game);
-  $("career-generate").textContent = manualAI
-    ? "好きなAIで4択を作る ↗"
-    : "AIで4択を生成 ✳";
-  $("career-exchange").disabled =
-    generating || !game || game.ended || isRetiredAt(game);
-  $("career-consent-label").hidden = local;
+    generating || !ready || !game || game.ended || isRetiredAt(game);
   $("career-compare-button").disabled =
     generating || !game || game.ended || isRetiredAt(game);
   $("back-setup").disabled = generating;
   $("ai-accounting").textContent = aiState.subscription
     ? `普段のCLIとサブスク枠を共有。この起動中 ${aiState.calls}/${aiState.requestCap}回（失敗も含む）。APIキーでの再試行やモデルの自動切り替えは行いません。`
-    : `${hosted ? "この体験版の累計" : "この起動中"}：${aiState.calls}/${aiState.requestCap}回、見積り予約 $${aiState.reservedUSD.toFixed(4)} / $${aiState.usdCap}。失敗した呼び出しも数えます。${hosted ? " 再読み込みでも上限は戻りません。" : ""}`;
+    : `${hosted ? "このスマホ版の累計" : "この起動中"}：${aiState.calls}/${aiState.requestCap}回、見積り予約 $${aiState.reservedUSD.toFixed(4)} / $${aiState.usdCap}。失敗した呼び出しも数えます。${hosted ? " 再読み込みでも上限は戻りません。" : ""}`;
   renderAITiming();
 }
 function renderAITiming() {
@@ -1072,16 +1138,6 @@ function renderAITiming() {
   el.textContent = generating
     ? `生成中 · 経過${Math.floor((performance.now() - generationStarted) / 1000)}秒。${aiState?.cloud ? "接続先のモデルや混雑で待ち時間が変わります。" : "初回のモデル読み込みや、PCのメモリ・他のアプリで待ち時間が変わります。"}${last}`
     : `文章と実行できる行動の形式を検証して取り込んでいます。内容の正確さや予測精度を保証する検査ではありません。${last}`;
-}
-function autoLocal() {
-  return (
-    $("auto-scene").checked &&
-    aiState &&
-    !aiState.cloud &&
-    !needsCareerServerUpdate() &&
-    !needsChoiceServerUpdate() &&
-    aiState.provider !== "disabled"
-  );
 }
 async function maybeGenerateScene() {
   const current = revision;
@@ -1099,42 +1155,30 @@ async function maybeGenerateScene() {
     game.ended ||
     generating ||
     pendingCareerReflection(game) ||
-    !autoLocal() ||
+    !aiReady() ||
     eventFor(game).generated
   )
     return;
   await generateScene();
 }
-$("auto-scene").addEventListener("change", () => {
-  renderAI();
-  void maybeGenerateScene();
-});
 async function generateScene() {
   if (!game || game.ended || generating) return;
-  if (
-    !aiState ||
-    aiState.provider === "disabled" ||
-    needsCareerServerUpdate() ||
-    needsChoiceServerUpdate()
-  ) {
-    openExchange();
+  if (!aiReady()) {
+    openAISettings();
     return;
   }
   const current = revision;
   const timingKey = connectionKey(aiState);
   generationStarted = performance.now();
   generating = true;
+  generationError = "";
   generationTimer = setInterval(renderAITiming, 1000);
-  renderAI();
-  for (const b of document.querySelectorAll(
-    "#choices button, #career-actions button",
-  ))
-    b.disabled = true;
+  renderGame();
   $("undo-button").disabled = true;
   try {
     const result = await api("/api/scene", {
       save: encodeSave({ ...game, reflections: {} }),
-      cloudConsent: $("cloud-consent").checked,
+      cloudConsent: true,
       choiceVersion: 1,
       mode: "life",
     });
@@ -1148,15 +1192,10 @@ async function generateScene() {
         if (generationTimes.size > 20)
           generationTimes.delete(generationTimes.keys().next().value);
       }
-      renderGame();
-      toast(
-        `場面を生成しました（${result.model}${result.cached ? "・キャッシュ" : ""}）。`,
-      );
     }
   } catch (error) {
-    toast(
-      `AI生成を完了できませんでした。今回は条件に応じた選択肢で続けられます。${error.message}`,
-    );
+    if (current === revision)
+      generationError = `AIで場面を作れませんでした。${error.message}`;
     try {
       await status();
     } catch {}
@@ -1291,7 +1330,8 @@ $("back-setup").addEventListener("click", () => {
 $("undo-button").addEventListener("click", () => {
   if (!game.decisions.length || generating) return;
   lastJourney = null;
-  const reflections = game.reflections;
+  const reflections = game.reflections,
+    seen = game.careerSeen;
   const length = game.decisions.length - 1,
     scenes = Object.fromEntries(
       Object.entries(game.scenes).filter(([k]) => Number(k) <= length),
@@ -1310,16 +1350,19 @@ $("undo-button").addEventListener("click", () => {
     game.prepayFrom,
     game.debtRepayFrom,
     game.salaryCapFrom,
+    game.incidentFrom,
+    game.careerPathFrom,
+    game.careerEndFrom,
   );
   const reached = new Set(careerMilestones(game).map((m) => m.id));
   game.reflections = Object.fromEntries(Object.entries(reflections).filter(([id]) => reached.has(id)));
+  game.careerSeen = careerSeenUntil({ careerSeen: seen }, game.decisions.length);
   favoriteYears = new Set([...favoriteYears].filter((year) => year < game.year));
   revision++;
   renderGame();
   moveToStory();
 });
 $("compare-button").addEventListener("click", openComparison);
-$("generate-button").addEventListener("click", generateScene);
 function updateProfileVisibility() {
   const f = $("profile-form"),
     detailed = profileLevel !== "quick",
@@ -1408,7 +1451,6 @@ function renderKnowledge() {
   catalog.replaceChildren();
   for (const [kind, title] of [
     ["history", "過去の観測・出来事"],
-    ["company", "企業の公開情報のスナップショット"],
     ["game-rule", "ゲーム独自の仮定"],
   ]) {
     catalog.append(node("h4", title));
@@ -1420,7 +1462,7 @@ function renderKnowledge() {
   selected.replaceChildren();
   if (game) {
     const refs = knowledgeFor(game, { catalog: knowledgeCatalog });
-    const entries = [...refs.historical, ...refs.companies, ...refs.rules];
+    const entries = [...refs.historical, ...refs.rules];
     $("knowledge-selected-title").textContent =
       `${game.year}年のあなたに関連する資料 · ${entries.length}件`;
     entries.forEach((r) => selected.append(knowledgeItem(r)));
@@ -1434,7 +1476,7 @@ loadKnowledge().then((loaded) => {
   const counts = (kind) =>
     knowledgeCatalog.filter((r) => r.kind === kind).length;
   $("knowledge-status").textContent =
-    `${loaded.storage === "indexeddb" ? "端末内の知識DBに保存済み" : "端末でDB保存を利用できないため、内蔵資料を使用中"} · 歴史${counts("history")}件 / 企業${counts("company")}件 / ゲームの仮定${counts("game-rule")}件 · ${KNOWLEDGE_REVISION}`;
+    `${loaded.storage === "indexeddb" ? "端末内の知識DBに保存済み" : "端末でDB保存を利用できないため、内蔵資料を使用中"} · 歴史${counts("history")}件 / ゲームの仮定${counts("game-rule")}件 · ${KNOWLEDGE_REVISION}`;
   renderKnowledge();
 });
 $("monthly-cost").addEventListener("input", () => {
@@ -1569,19 +1611,8 @@ function openCareer(mode) {
   $("career-offer-section").hidden = mode !== "switch";
   $("career-form").hidden = mode === "switch";
   $("career-manual-toggle").setAttribute("aria-expanded", "false");
+  if (careerDraft?.revision !== revision) careerError = "";
   renderCareerOffers();
-  $("career-target").replaceChildren();
-  for (const c of careerCandidates(game)) {
-    const o = node(
-      "option",
-      `${c.name}${c.kind === "fictional" ? "（未来の架空企業）" : "（実在企業）"}`,
-    );
-    o.value = c.id;
-    $("career-target").append(o);
-  }
-  const custom = node("option", "ほかの実在企業を入力する");
-  custom.value = "custom";
-  $("career-target").append(custom);
   $("career-role").replaceChildren();
   $("career-sector").replaceChildren();
   const unknown = node("option", "わからない");
@@ -1613,30 +1644,19 @@ function openCareer(mode) {
   $("venture-name").value = "";
   renderCareer();
   $("career-dialog").showModal();
-  if (mode === "switch" && autoLocal() && careerDraft?.revision !== revision)
+  if (mode === "switch" && aiReady() && careerDraft?.revision !== revision)
     void generateCareerChoices();
 }
 async function generateCareerChoices() {
-  if (
-    game &&
-    !game.ended &&
-    !isRetiredAt(game) &&
-    !generating &&
-    (!aiState || aiState.provider === "disabled" || needsChoiceServerUpdate())
-  ) {
-    openExchange("career");
+  if (!game || game.ended || isRetiredAt(game) || generating) return;
+  if (!aiReady()) {
+    $("career-dialog").close();
+    openAISettings();
     return;
   }
-  if (
-    !game ||
-    game.ended ||
-    isRetiredAt(game) ||
-    generating ||
-    needsChoiceServerUpdate()
-  )
-    return;
   const current = revision;
   careerGenerating = true;
+  careerError = "";
   generating = true;
   generationStarted = performance.now();
   generationTimer = setInterval(renderAITiming, 1000);
@@ -1645,15 +1665,24 @@ async function generateCareerChoices() {
   try {
     const result = await api("/api/scene", {
       save: encodeSave({ ...game, reflections: {} }),
-      cloudConsent: $("career-consent").checked,
+      cloudConsent: true,
       choiceVersion: 1,
       mode: "career",
     });
     aiState = result.accounting;
-    if (current === revision)
+    if (current === revision) {
       careerDraft = { revision: current, scene: result.scene };
+      game = recordCareerSeen(
+        game,
+        result.scene.options
+          .filter((o) => o.decision?.id === "switch")
+          .map((o) => o.decision.name),
+      );
+      persist();
+    }
   } catch (error) {
-    toast(`転職4択を生成できませんでした。${error.message}`);
+    if (current === revision)
+      careerError = `転職の4択を作れませんでした。${error.message}`;
     try {
       await status();
     } catch {}
@@ -1666,7 +1695,6 @@ async function generateCareerChoices() {
   }
 }
 $("career-generate").addEventListener("click", generateCareerChoices);
-$("career-exchange").addEventListener("click", () => openExchange("career"));
 function takeCareerDecision(decision) {
   if (generating || !availableChoices(game).includes(decisionId(decision)))
     throw new Error("今の状態では選べません。");
@@ -1676,11 +1704,6 @@ function takeCareerDecision(decision) {
 function renderCareerOffers() {
   const container = $("career-offers");
   container.replaceChildren();
-  const ruleContainer = $("career-rule-offers");
-  ruleContainer.replaceChildren();
-  const fallback = $("career-rule-fallback");
-  fallback.hidden = true;
-  fallback.open = false;
   const currentRevision = revision;
   if (careerMode !== "switch") return;
   const generated =
@@ -1689,23 +1712,17 @@ function renderCareerOffers() {
     ? "AIがプロフィール・仕事の形・直前の結果から、企業と役割を考えています…"
     : generated
       ? "AIが作った4択です。企業名・職務の提案は未確認のゲーム内設定で、実際の求人ではありません。"
-      : "AIで、あなたの経験・関心・暮らしから4つの道を考えられます。AIを使わない場合は、下のルールの仮候補からも選べます。";
-  if (careerGenerating) return;
-  fallback.hidden = Boolean(generated);
-  const offers = generated
-    ? generated.options.map((o) => ({
+      : careerError || "AIが、あなたの経験・関心・暮らしから4つの道を考えます。";
+  if (careerGenerating || !generated) return;
+  const offers = generated.options.map((o) => ({
         label: o.label,
-        company:
-          o.id === "switch"
-            ? (o.decision.name ?? EMPLOYERS[o.decision.target]?.name)
-            : game.employer.name,
+        company: o.id === "switch" ? o.decision.name : game.employer.name,
         kind: o.decision.candidateKind,
         work: o.decision.proposal ?? o.decision.intent ?? o.label,
         reason: o.reason,
         tradeoff: o.hint,
         decision: o.decision,
-      }))
-    : careerOffers(game);
+      }));
   for (const offer of offers) {
     const card = node("article", undefined, "career-offer");
     const button = node("button", undefined, "career-offer-button");
@@ -1731,21 +1748,12 @@ function renderCareerOffers() {
       node("p", offer.reason),
       node("p", offer.tradeoff),
     );
-    if (offer.source) {
-      const link = node(
-        "a",
-        `公式の事業情報 ↗ / 確認 ${offer.source.checkedAt}`,
-      );
-      link.href = offer.source.url;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      details.append(link);
-    } else if (offer.kind === "fictional")
+    if (offer.kind === "fictional")
       card.append(node("small", "この世界で生まれた架空の企業"));
-    else if (generated && offer.kind === "real")
+    else if (offer.kind === "real")
       card.append(node("small", "AIが挙げた候補。実在・事業・職務は未確認"));
     card.append(details);
-    (generated ? container : ruleContainer).append(card);
+    container.append(card);
   }
 }
 $("career-manual-toggle").addEventListener("click", () => {
@@ -1762,13 +1770,11 @@ $("career-compare-button").addEventListener("click", () => {
 function renderCareer() {
   const preview = $("career-preview");
   preview.replaceChildren();
-  $("career-custom").hidden =
-    careerMode !== "switch" || $("career-target").value !== "custom";
   $("career-future").textContent =
     careerMode === "switch"
       ? game.year < 2036
-        ? "2036年になると、この世界で生まれた架空の企業も候補に加わります。"
-        : "未来の架空企業も登場。実在企業の事業情報は2026年時点の資料を使っています。"
+        ? "2036年以降は、この世界で生まれた架空の企業もAIの候補に加わります。"
+        : "AIの候補には、この世界で生まれた架空の企業も含まれます。"
       : "転職すると自分の事業から離れます。退職すると運営と事業収入を止めます。事業売却益は仮定しません。";
   if (careerMode === "startup") {
     const v = VENTURES[$("career-venture").value];
@@ -1776,47 +1782,28 @@ function renderCareer() {
     $("career-cost").textContent =
       `手元現金 ${money(game.cash)}万円 / 初期費用 ${v.setup}万円 ＋ 年間運営費 ${v.overhead}万円。初年の事業収入は今の労働収入の30〜85%を基準に変動（収入ゼロなら年120万円を基準）。以後もAIの需要・競争と経験で上下します。すべてゲームの仮定です。`;
   } else {
-    const c = EMPLOYERS[$("career-target").value];
-    if (c) {
-      preview.append(
-        node(
-          "b",
-          c.kind === "real" ? "確認した公開情報" : "この未来の、架空の設定",
-        ),
-        node("p", c.summary),
-      );
-      if (c.url) {
-        const a = node("a", `公式の出典 ↗ / 確認 ${c.checkedAt}`);
-        a.href = c.url;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        preview.append(a);
-      }
-    } else {
-      preview.append(
-        node("b", "入力した企業への、架空の転職"),
-        node(
-          "p",
-          "会社名だけでは事業内容を判断しません。公開情報を加えると、確認した事業分野もその後に反映します。",
-        ),
-      );
-      for (const s of careerSources) {
-        const a = node("a", `${s.title || s.url} / 取得 ${s.checkedAt}`);
-        a.href = s.url;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        preview.append(a);
-      }
+    preview.append(
+      node("b", "入力した企業への、架空の転職"),
+      node(
+        "p",
+        "会社名だけでは事業内容を判断しません。公開情報を加えると、確認した事業分野もその後に反映します。",
+      ),
+    );
+    for (const s of careerSources) {
+      const a = node("a", `${s.title || s.url} / 取得 ${s.checkedAt}`);
+      a.href = s.url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      preview.append(a);
     }
     $("career-cost").textContent =
       "移行費用30万円。収入は現在の労働収入・経験・職種変更・年ごとの偶然から上下します。会社のタイプと事業分野が、以後のAIの影響を変えます。職種変更時は移行の負担があり、収入ゼロなら仮の年180万円を基準にします。実際の募集や年収データは使っていません。";
   }
 }
-for (const id of ["career-target", "career-venture"])
-  $(id).addEventListener("change", () => {
-    resetCareerResearch();
-    renderCareer();
-  });
+$("career-venture").addEventListener("change", () => {
+  resetCareerResearch();
+  renderCareer();
+});
 for (const id of ["career-name", "career-url"])
   $(id).addEventListener("input", () => {
     resetCareerResearch();
@@ -1870,33 +1857,31 @@ $("career-form").addEventListener("submit", (e) => {
     } else {
       decision = {
         id: "switch",
-        target: $("career-target").value,
+        target: "custom",
         role: $("career-role").value,
       };
-      if (decision.target === "custom") {
-        if (!$("career-name").value.trim())
-          throw new Error("転職先の企業名を入力してください。");
-        const summary = $("career-summary").value.trim();
-        if (
-          summary &&
-          (!$("career-confirmed").checked || !careerSources.length)
-        )
-          throw new Error(
-            "公開ページを取得し、企業と内容の一致を確認してください。資料なしでも企業名だけで進められます。",
-          );
-        Object.assign(decision, {
-          name: $("career-name").value,
-          companyType: $("career-type").value,
-          facts: summary
-            ? {
-                summary,
-                sector: $("career-sector").value,
-                confirmed: true,
-                sources: careerSources,
-              }
-            : null,
-        });
-      }
+      if (!$("career-name").value.trim())
+        throw new Error("転職先の企業名を入力してください。");
+      const summary = $("career-summary").value.trim();
+      if (
+        summary &&
+        (!$("career-confirmed").checked || !careerSources.length)
+      )
+        throw new Error(
+          "公開ページを取得し、企業と内容の一致を確認してください。資料なしでも企業名だけで進められます。",
+        );
+      Object.assign(decision, {
+        name: $("career-name").value,
+        companyType: $("career-type").value,
+        facts: summary
+          ? {
+              summary,
+              sector: $("career-sector").value,
+              confirmed: true,
+              sources: careerSources,
+            }
+          : null,
+      });
     }
     takeCareerDecision(decision);
   } catch (error) {
@@ -1960,33 +1945,28 @@ function setupNameSearch(career = false) {
       for (const el of candidateButtons) el.disabled = true;
       message.textContent = `${candidate.name}の公開ページを取得しています…`;
       try {
-        let facts,
-          directoryOnly = false;
-        if (candidate.known || standalone || hosted) {
-          directoryOnly = !candidate.known;
+        let facts;
+        const directoryOnly = hosted;
+        if (directoryOnly) {
           facts = {
             summary: candidate.description,
             sector: candidate.sector ?? "unknown",
             sources: [
               {
-                url: candidate.known ? candidate.url : candidate.directoryURL,
-                title: candidate.known
-                  ? `${candidate.name} / 公式事業資料（内蔵）`
-                  : `${candidate.name} / Wikidataの会社概要（公式本文は未取得）`,
-                checkedAt:
-                  candidate.checkedAt ?? new Date().toISOString().slice(0, 10),
+                url: candidate.directoryURL,
+                title: `${candidate.name} / Wikidataの会社概要（公式本文は未取得）`,
+                checkedAt: new Date().toISOString().slice(0, 10),
               },
             ],
           };
         } else ({ facts } = await api("/api/company", { url: candidate.url }));
         if (!canApply()) return;
-        // Identity was explicitly accepted. For built-in evidence the full
-        // summary/source was already shown on the candidate card.
+        // Identity was explicitly accepted by the player.
         name.value = requestedName = candidate.name;
         $(prefix + "-url").value = candidate.url;
         $(prefix + "-summary").value = facts.summary;
         $(prefix + "-sector").value = candidate.sector ?? "unknown";
-        $(prefix + "-confirmed").checked = Boolean(candidate.known);
+        $(prefix + "-confirmed").checked = false;
         if (career) {
           careerSources = facts.sources;
           $("career-research-details").open = true;
@@ -2009,9 +1989,7 @@ function setupNameSearch(career = false) {
         list.append(officialLink);
         message.textContent = directoryOnly
           ? "会社を選びました。Wikidataの概要を表示しています（公式本文は未取得）。内容を確認し、下の「物語に反映する」をチェックしてください。"
-          : candidate.known
-            ? `✓ ${candidate.name}の会社情報を物語に反映します。公式資料の確認日：${candidate.checkedAt}。下で編集・解除できます。`
-            : "公式サイトの本文を取得しました。取得元と内容を確認し、下の「物語に反映する」をチェックしてください。";
+          : "公式サイトの本文を取得しました。取得元と内容を確認し、下の「物語に反映する」をチェックしてください。";
         if (!career) updateBudget();
       } catch (error) {
         if (canApply())
@@ -2022,19 +2000,12 @@ function setupNameSearch(career = false) {
       }
     }
     try {
-      // Also use the browser's current built-in catalog on PC. An already
-      // running local server may hold an older imported search catalog.
-      const local = await makeDirectorySearch({ localOnly: true })(
-        requestedName,
-      );
-      const candidates = local.length
-        ? local
-        : standalone || hosted
-          ? await makeDirectorySearch({ transport: browserDirectoryText })(
-              requestedName,
-            )
-          : (await api("/api/company/search", { name: requestedName }))
-              .candidates;
+      const candidates = hosted
+        ? await makeDirectorySearch({ transport: browserDirectoryText })(
+            requestedName,
+          )
+        : (await api("/api/company/search", { name: requestedName }))
+            .candidates;
       if (!current()) return;
       if (!candidates.length) {
         message.textContent =
@@ -2055,19 +2026,9 @@ function setupNameSearch(career = false) {
         link.target = "_blank";
         link.rel = "noopener noreferrer";
         card.append(link);
-        if (c.checkedAt)
-          card.append(
-            node(
-              "p",
-              `公式資料の確認日：${c.checkedAt} / 上の事業情報を使用します。`,
-              "field-note",
-            ),
-          );
         const b = node(
           "button",
-          c.known
-            ? "この会社で合っています。情報を使う"
-            : "この会社で合っています。情報を取得",
+          "この会社で合っています。情報を取得",
           "button secondary small",
         );
         b.type = "button";
@@ -2184,28 +2145,68 @@ const presets = {
   openai: ["https://api.openai.com/v1", "gpt-6-luna", 0.1, 0.5],
   openrouter: ["https://openrouter.ai/api/v1", "openrouter/free", 0, 0],
 };
-$("ai-settings-button").addEventListener("click", async () => {
+function readAISettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(aiSettingsKey) ?? "null");
+    return saved && typeof saved === "object" && !Array.isArray(saved)
+      ? saved
+      : null;
+  } catch {
+    return null;
+  }
+}
+function cloudChoice() {
+  const provider = $("ai-provider").value;
+  if (["ollama", "lmstudio"].includes(provider)) return false;
+  if (provider !== "custom") return true;
+  try {
+    return !["127.0.0.1", "localhost"].includes(
+      new URL($("ai-base-url").value).hostname,
+    );
+  } catch {
+    return true;
+  }
+}
+function renderConsent() {
+  $("ai-consent-label").hidden = !cloudChoice();
+  $("ai-consent").disabled = !cloudChoice();
+}
+async function openAISettings(required = false) {
   try {
     await status();
-    for (const [field, key] of [
-      ["ai-provider", "provider"],
-      ["ai-model", "model"],
-      ["ai-base-url", "baseURL"],
-      ["ai-input-rate", "inputRate"],
-      ["ai-output-rate", "outputRate"],
-      ["ai-usd-cap", "usdCap"],
-      ["ai-request-cap", "requestCap"],
-    ])
-      $(field).value = aiState[key] ?? "";
-    $("ai-base-url").readOnly = aiState.provider !== "custom";
+    $("ai-required-note").hidden = !required;
+    if (!hosted) {
+      const saved = aiState.ready ? null : readAISettings();
+      const source = saved && Object.hasOwn(presets, saved.provider) || saved?.provider === "custom" ? saved : aiState;
+      for (const [field, key] of [
+        ["ai-provider", "provider"],
+        ["ai-model", "model"],
+        ["ai-base-url", "baseURL"],
+        ["ai-input-rate", "inputRate"],
+        ["ai-output-rate", "outputRate"],
+        ["ai-usd-cap", "usdCap"],
+        ["ai-request-cap", "requestCap"],
+      ])
+        $(field).value = source[key] ?? aiState[key] ?? "";
+      $("ai-base-url").readOnly = $("ai-provider").value !== "custom";
+      $("ai-consent").checked = cloudConsented;
+      renderConsent();
+    }
     $("ai-error").textContent = "";
     $("ai-key").value = "";
-    $("ai-dialog").showModal();
-    void refreshModels();
+    if (!$("ai-dialog").open) $("ai-dialog").showModal();
+    if (!hosted) void refreshModels();
   } catch (error) {
+    pendingStart = null;
     toast(error.message);
   }
+}
+$("ai-settings-button").addEventListener("click", () => openAISettings());
+$("ai-setup-button").addEventListener("click", () => openAISettings());
+$("ai-dialog").addEventListener("close", () => {
+  pendingStart = null;
 });
+$("ai-base-url").addEventListener("input", renderConsent);
 $("ai-provider").addEventListener("change", () => {
   const preset = presets[$("ai-provider").value];
   if (preset) {
@@ -2216,13 +2217,30 @@ $("ai-provider").addEventListener("change", () => {
   }
   $("ai-base-url").readOnly = $("ai-provider").value !== "custom";
   $("ai-key").value = "";
+  $("ai-consent").checked = false;
+  renderConsent();
   void refreshModels();
 });
+async function configureAI(settings) {
+  const data = await api("/api/ai/config", settings);
+  aiState = data.ai;
+  cloudConsented = Boolean(aiState.cloud && settings.consent);
+  const { apiKey, ...remembered } = settings;
+  try {
+    localStorage.setItem(aiSettingsKey, JSON.stringify(remembered));
+  } catch {}
+  renderAI();
+  return aiState;
+}
 $("ai-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   $("ai-error").textContent = "";
   try {
-    const data = await api("/api/ai/config", {
+    if (cloudChoice() && !$("ai-consent").checked)
+      throw new Error(
+        "クラウドのAIへ送る内容への同意を入れてください。PC内のAI（Ollama・LM Studio）なら外部へ送りません。",
+      );
+    await configureAI({
       provider: $("ai-provider").value,
       model: ["ollama", "lmstudio"].includes($("ai-provider").value)
         ? $("ai-local-model").value
@@ -2233,71 +2251,50 @@ $("ai-form").addEventListener("submit", async (e) => {
       outputRate: Number($("ai-output-rate").value),
       usdCap: Number($("ai-usd-cap").value),
       requestCap: Number($("ai-request-cap").value),
+      consent: cloudChoice() && $("ai-consent").checked,
     });
     $("ai-key").value = "";
-    aiState = data.ai;
-    $("cloud-consent").checked = false;
-    $("career-consent").checked = false;
-    renderAI();
+    const start = pendingStart;
     $("ai-dialog").close();
-    toast("AIの接続設定を更新しました。");
+    toast("AIを接続しました。");
+    if (start) start();
+    else if (game && !$("game").hidden) {
+      generationError = "";
+      renderGame();
+      void maybeGenerateScene();
+    }
   } catch (error) {
     $("ai-error").textContent = error.message;
   }
 });
-function openExchange(mode = "life") {
-  if (!game || game.ended || (mode === "career" && isRetiredAt(game))) return;
-  exchangeMode = mode;
-  exchangeRevision = revision;
-  const request = storyRequest(game, {
-    personalized: true,
-    mode,
-    catalog: knowledgeCatalog,
-  });
-  $("exchange-prompt").value = request.messages
-    .map((m) => m.content)
-    .join("\n\n");
-  $("exchange-result").value = "";
-  $("exchange-error").textContent = "";
-  $("exchange-dialog").showModal();
-}
-$("exchange-button").addEventListener("click", () => openExchange());
-$("copy-prompt").addEventListener("click", async () => {
+// Local AI and subscription CLIs need no secret, so the last working choice
+// is reconnected on load. API keys are never stored and must be re-entered.
+async function restoreAI() {
+  if (hosted) return;
+  const saved = readAISettings();
+  if (aiState?.ready) {
+    // The running server kept its connection across a page reload; keep the
+    // consent given for that same cloud connection.
+    cloudConsented = Boolean(
+      aiState.cloud && saved?.consent &&
+        saved.provider === aiState.provider && saved.model === aiState.model,
+    );
+    renderAI();
+    return;
+  }
+  if (
+    !saved ||
+    !["ollama", "lmstudio", "codex-cli", "claude-cli"].includes(saved.provider)
+  )
+    return;
   try {
-    await navigator.clipboard.writeText($("exchange-prompt").value);
-    toast("コピーしました。送信先のAIは自分で選んでください。");
+    const { consent, ...settings } = saved;
+    if (["codex-cli", "claude-cli"].includes(saved.provider) && !consent) return;
+    await configureAI({ ...settings, consent });
   } catch {
-    toast("文章を選択してコピーしてください。");
+    renderAI();
   }
-});
-$("import-scene").addEventListener("click", () => {
-  try {
-    const text = $("exchange-result")
-      .value.replace(/^\s*```(?:json)?\s*/i, "")
-      .replace(/\s*```\s*$/, "");
-    if (exchangeRevision !== revision)
-      throw new Error(
-        "ゲームが進んだため、現在の場面で依頼文を作り直してください。",
-      );
-    const validated = validateGeneratedScene(JSON.parse(text), game, {
-      personalized: true,
-      mode: exchangeMode,
-    });
-    const scene = groundScene(validated, game);
-    if (exchangeMode === "career") {
-      careerDraft = { revision, scene };
-      renderCareerOffers();
-    } else game = applyScene(game, scene);
-    renderGame();
-    $("exchange-dialog").close();
-    toast("AIの場面を取り込みました。");
-  } catch (error) {
-    $("exchange-error").textContent =
-      error instanceof SyntaxError
-        ? "JSON形式を確認してください。"
-        : error.message;
-  }
-});
+}
 function downloadSave(raw, filename) {
   const url = URL.createObjectURL(
       new Blob([raw], { type: "application/json" }),
@@ -2396,9 +2393,10 @@ $("export-legacy").addEventListener("click", () => {
     toast("書き出せませんでした。");
   }
 });
-if (standalone || hosted) {
+if (hosted) {
   $("ai-form").hidden = true;
-  $("auto-scene").checked = false;
+  $("ai-description").textContent =
+    "このスマホ版は、あなた専用のOpenAI接続で毎年の場面と選択肢を自動で作ります。プロフィールと選択履歴をOpenAIへ送ります。累計の見積り上限$5まで。自動再試行はしません。セーブはこの端末内です。";
   for (const id of ["research-button", "career-research"])
     if ($(id)) $(id).hidden = true;
   for (const el of document.querySelectorAll("[data-pc-only]"))
@@ -2408,6 +2406,9 @@ window.visualViewport?.addEventListener("resize", syncReflectionViewport);
 window.visualViewport?.addEventListener("scroll", syncReflectionViewport);
 readStoredGame();
 updateBudget();
-status().catch((error) => {
-  $("ai-status").textContent = error.message;
-});
+status()
+  .then(restoreAI)
+  .catch((error) => {
+    $("ai-status").textContent = error.message;
+    $("ai-setup-status").textContent = error.message;
+  });

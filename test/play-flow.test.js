@@ -17,6 +17,9 @@ import {
 } from "../public/careers.js";
 import { parse } from "parse5";
 import { readFile } from "node:fs/promises";
+// Play past retirement as under the rules before the career ending.
+const pastRetirement = (profile, scenario = "steady", seed = 2026, ...from) =>
+  createGame(profile, scenario, seed, ...[0, 0, 0, 0, 0, 0, 0, 0, 0].map((d, i) => from[i] ?? d), 110);
 
 const p = {
   age: 30,
@@ -63,7 +66,8 @@ test("blank optional finances use explicit game defaults while zero stays zero a
 });
 
 test("five years retain five distinct episodes and real yearly outcomes, then restore exactly", () => {
-  const base = createGame(p, "steady", 42);
+  // Chance incidents would pause multi-year play; this case checks the episodes.
+  const base = createGame(p, "steady", 42, 0, 0, 0, 0, 0, 0, 0, 110);
   const result = advanceYears(
     base,
     { id: "studyDaily", intent: "顧客に説明できる設計を毎日学ぶ" },
@@ -91,7 +95,7 @@ test("five years retain five distinct episodes and real yearly outcomes, then re
 });
 
 test("one-time actions and major family/work changes pause multi-year progress for another choice", () => {
-  const base = createGame({ ...p, savings: 2000 }, "steady", 42);
+  const base = pastRetirement({ ...p, savings: 2000 }, "steady", 42);
   const move = advanceYears(
     base,
     { id: "move", region: "metro", intent: "大都市で暮らす" },
@@ -100,7 +104,7 @@ test("one-time actions and major family/work changes pause multi-year progress f
   assert.equal(move.entries.length, 1);
   assert.match(move.stopReason, /一年/);
   const retirement = advanceYears(
-    createGame({ ...p, age: 64 }, "steady", 42),
+    pastRetirement({ ...p, age: 64 }, "steady", 42),
     "rest",
     5,
   );
@@ -108,7 +112,7 @@ test("one-time actions and major family/work changes pause multi-year progress f
   assert.match(retirement.stopReason, /節目/);
   let observedBirth = false;
   for (let seed = 0; seed < 10; seed++) {
-    const family = createGame(
+    const family = pastRetirement(
       { ...p, partner: "partner", childrenWish: "one" },
       "steady",
       seed,
@@ -125,7 +129,9 @@ test("one-time actions and major family/work changes pause multi-year progress f
 });
 
 test("multi-year progress stops at the first retired year and respects the saved migration boundary", () => {
-  const before = createGame({ ...p, age: 64, retirementAge: 65 }, "steady", 42);
+  // These cases check retirement under the earlier rules, where play went on.
+  const before = createGame({ ...p, age: 64, retirementAge: 65 }, "steady", 42,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 110);
   const journey = advanceYears(before, "rest", 5);
   assert.equal(journey.entries.length, 1);
   assert.equal(journey.game.age, 65);
@@ -195,7 +201,7 @@ test("new-game form has three levels, no required financial entries, and company
     assert.ok(nodes.some((n) => attr(n, "id") === id));
 });
 
-test("mobile company lookup reads built-in evidence offline and bounds external requests to an anonymous fixed directory", async (t) => {
+test("phone company lookup has no built-in list and bounds external requests to an anonymous fixed directory", async (t) => {
   let calls = 0;
   const lookup = makeDirectorySearch({
     transport: async () => {
@@ -203,10 +209,9 @@ test("mobile company lookup reads built-in evidence offline and bounds external 
       throw Error("offline");
     },
   });
-  const known = await lookup("NTT DATA");
-  assert.equal(calls, 0);
-  assert.equal(known[0].known, true);
-  assert.match(known[0].description, /ITサービス/);
+  await assert.rejects(() => lookup("NTT DATA"), /offline/);
+  assert.equal(calls, 1);
+  calls = 0;
   const original = globalThis.fetch;
   t.after(() => {
     globalThis.fetch = original;

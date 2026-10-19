@@ -1,5 +1,5 @@
 import {
-  EMPLOYERS,
+  LEGACY_EMPLOYERS,
   VENTURES,
   WORK_MODELS,
   workContext,
@@ -85,7 +85,59 @@ export const PRIORITIES = Object.freeze({
   people: "家族・つながり",
   freedom: "自由・体験",
 });
+// Generic in-company stages, not any real employer's grades or titles. From a
+// lead, a person goes on as a manager or as a specialist.
+export const RANKS = Object.freeze({
+  unspecified: { label: "役職は未入力", level: 0 },
+  staff: { label: "担当", level: 0 },
+  lead: { label: "リーダー", level: 1 },
+  manager: { label: "管理職", level: 2, track: "manager" },
+  specialist: { label: "専門職", level: 2, track: "specialist" },
+  director: { label: "部長級", level: 3, track: "manager" },
+  principal: { label: "上級専門職", level: 3, track: "specialist" },
+});
+export function nextRank(rank, track = "manager") {
+  if (["unspecified", "staff"].includes(rank)) return "lead";
+  if (rank === "lead") return track === "specialist" ? "specialist" : "manager";
+  if (rank === "manager") return "director";
+  if (rank === "specialist") return "principal";
+  return null;
+}
+// Building a career while staying: these and the existing in-company actions.
+export const STAY_ACTIONS = Object.freeze([
+  "focus", "promote", "transfer", "internalVenture", "pilot", "negotiate", "mentor",
+]);
 export const CHOICES = Object.freeze({
+  promote: {
+    label: "昇進・昇格を目指す",
+    hint: "責任を引き受けて評価を求める。通るとは限らない",
+    cost: 0,
+    skill: 3,
+    health: -3,
+    connection: 1,
+    freedom: -2,
+    icon: "▲",
+  },
+  transfer: {
+    label: "社内異動に手を挙げる",
+    hint: "同じ会社で別の仕事へ。慣れるまでは負担もある",
+    cost: 0,
+    skill: 4,
+    health: -1,
+    connection: 2,
+    freedom: 2,
+    icon: "↻",
+  },
+  internalVenture: {
+    label: "社内の新規事業・公募に応募する",
+    hint: "会社に残りながら新しい仕事に挑む。選ばれるとは限らない",
+    cost: 0,
+    skill: 5,
+    health: -2,
+    connection: 2,
+    freedom: 1,
+    icon: "✦",
+  },
   learn: {
     label: "新しい力を身につける",
     hint: "学びとAIの活用に時間を投資",
@@ -407,6 +459,8 @@ export function validateProfile(raw) {
     fail();
   p.workModel = raw.workModel ?? "unknown";
   if (!Object.hasOwn(WORK_MODELS, p.workModel)) fail();
+  p.rank = raw.rank ?? "unspecified";
+  if (typeof p.rank !== "string" || !Object.hasOwn(RANKS, p.rank)) fail();
   p.housing = raw.housing ?? "rent";
   if (!["rent", "own"].includes(p.housing)) fail();
   if (p.housing === "rent" && (p.homeValue || p.mortgage)) fail();
@@ -541,6 +595,7 @@ export function profileInputForLevel(
     childrenWish: "undecided",
     companyType: "unknown",
     workModel: "unknown",
+    rank: "unspecified",
     housing: "rent",
     company: "",
     municipality: "",
@@ -571,6 +626,7 @@ export function profileInputForLevel(
       "company",
       "workModel",
       "companyType",
+      "rank",
       "ai",
       "priority",
       "income",
@@ -589,6 +645,7 @@ export function profileInputForLevel(
     p.company = "";
     p.companyType = "unknown";
     p.workModel = "unknown";
+    p.rank = "unspecified";
     p.industry = "";
     if (p.income === undefined || p.income === "") p.income = 0;
   } else if (p.occupation === "independent") {
@@ -692,6 +749,15 @@ export function validateDecision(raw, g) {
     if (id === "opportunity") return { ...validateDecision(id, g), ...detail };
     if (!detail.intent) fail();
     const result = { id, ...detail };
+    if (["transfer", "internalVenture"].includes(id)) {
+      const unit = str(raw.unit ?? "", 40);
+      if (!unit) fail();
+      result.unit = unit;
+    } else if (raw.unit !== undefined) fail();
+    if (id === "promote" && g.position.rank === "lead") {
+      if (!["manager", "specialist"].includes(raw.track)) fail();
+      result.track = raw.track;
+    } else if (raw.track !== undefined) fail();
     if (id === "move" && raw.region !== undefined) {
       if (!Object.hasOwn(REGIONS, raw.region) || raw.region === g.region)
         fail();
@@ -726,6 +792,16 @@ export function validateDecision(raw, g) {
     )
       fail();
     if (facts && (!facts.confirmed || !facts.sources.length)) fail();
+    // A move can be into a higher stage at another company (an executive
+    // hire, for example), but at most one stage above the current one.
+    let rank;
+    if (raw.rank !== undefined) {
+      if (typeof raw.rank !== "string" || !Object.hasOwn(RANKS, raw.rank)) fail();
+      const current = g.position?.rank ?? "unspecified";
+      if (raw.rank !== current && !["manager", "specialist"].map((t) => nextRank(current, t)).includes(raw.rank))
+        fail();
+      rank = raw.rank;
+    }
     const generated = raw.proposal !== undefined;
     let proposal;
     if (generated) {
@@ -747,6 +823,7 @@ export function validateDecision(raw, g) {
       name,
       companyType: raw.companyType,
       facts,
+      ...(rank ? { rank } : {}),
       ...detail,
       ...(generated
         ? {
@@ -757,9 +834,9 @@ export function validateDecision(raw, g) {
         : {}),
     };
   }
-  if (typeof raw.target !== "string" || !Object.hasOwn(EMPLOYERS, raw.target))
+  if (typeof raw.target !== "string" || !Object.hasOwn(LEGACY_EMPLOYERS, raw.target))
     fail();
-  const c = EMPLOYERS[raw.target];
+  const c = LEGACY_EMPLOYERS[raw.target];
   if (g.year < (c.availableFrom ?? START_YEAR) || g.employer.id === raw.target)
     fail();
   return { id, target: raw.target, role: raw.role, ...detail };
@@ -809,7 +886,7 @@ function nextEmployer(g, decision) {
           }
         : {}),
     };
-  const c = EMPLOYERS[decision.target];
+  const c = LEGACY_EMPLOYERS[decision.target];
   return {
     kind: c.kind,
     id: decision.target,
@@ -856,6 +933,9 @@ export function createGame(
   prepayFrom = 0,
   debtRepayFrom = 0,
   salaryCapFrom = 0,
+  incidentFrom = 0,
+  careerPathFrom = 0,
+  careerEndFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -883,7 +963,16 @@ export function createGame(
     debtRepayFrom > MAX_AGE ||
     !Number.isInteger(salaryCapFrom) ||
     salaryCapFrom < 0 ||
-    salaryCapFrom > MAX_AGE
+    salaryCapFrom > MAX_AGE ||
+    !Number.isInteger(incidentFrom) ||
+    incidentFrom < 0 ||
+    incidentFrom > MAX_AGE ||
+    !Number.isInteger(careerPathFrom) ||
+    careerPathFrom < 0 ||
+    careerPathFrom > MAX_AGE ||
+    !Number.isInteger(careerEndFrom) ||
+    careerEndFrom < 0 ||
+    careerEndFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -901,6 +990,9 @@ export function createGame(
     prepayFrom,
     debtRepayFrom,
     salaryCapFrom,
+    incidentFrom,
+    careerPathFrom,
+    careerEndFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -945,11 +1037,15 @@ export function createGame(
       facts: p.companyFacts,
       summary: p.companyFacts?.confirmed ? p.companyFacts.summary : "",
     },
+    // The stage inside the current employer. Tenure counts from the game start
+    // for the first employer, since earlier years are not entered.
+    position: { rank: p.rank, unit: "", joined: START_YEAR, since: START_YEAR },
     careerMoves: 0,
     ended: false,
     history: [],
     scenes: {},
     reflections: {},
+    careerSeen: {},
   };
 }
 export function technologyAt(g) {
@@ -965,6 +1061,19 @@ export function isRetiredAt(g) {
     g.retired ||
     (g.decisions.length >= (g.retirementFrom ?? 0) &&
       g.age >= g.profile.retirementAge)
+  );
+}
+// Working for an employer (not self-employed, running a business, between
+// jobs, studying or retired), so in-company career steps make sense.
+export function inCompany(g) {
+  return (
+    !isRetiredAt(g) &&
+    !["venture", "seeking"].includes(g.employer.kind) &&
+    g.employer.companyType !== "self" &&
+    !(
+      g.employer.kind === "initial" &&
+      ["student", "notWorking", "independent"].includes(g.profile.occupation)
+    )
   );
 }
 export function availableChoices(g) {
@@ -1005,6 +1114,11 @@ export function availableChoices(g) {
       g.employer.kind === "seeking"
     )
       ids.push("recover");
+  }
+  if (g.decisions.length >= g.careerPathFrom && worldEnabled(g) && inCompany(g)) {
+    if (nextRank(g.position.rank)) ids.push("promote");
+    ids.push("transfer");
+    if (g.skill >= 30) ids.push("internalVenture");
   }
   if (worldEnabled(g)) {
     ids.push("studyDaily");
@@ -1284,7 +1398,167 @@ function narrateVentureYear(g, outcome, money) {
   }
   return { ...outcome, title, body, ...meta };
 }
-function yearlyOutcome(g, choice, employer) {
+// Chance incidents: things that happen to a person regardless of the choice,
+// like a difficult boss in a company that looked good, or a partner's layoff.
+// The engine decides whether one happens, which one, and its mechanical
+// effect, from the seed. The AI only writes the concrete situation.
+// Annual rates are game assumptions, loosely informed by Japanese surveys on
+// workplace harassment and mental-health leave; they are not predictions.
+// `temporary` salary cuts (a leave, treatment) return the following year.
+export const INCIDENTS = Object.freeze({
+  difficultBoss: {
+    kind: "work", tone: "hard", rate: 0.06,
+    title: "上司やチームとの関係がこじれる",
+    body: "仕事の進め方や評価をめぐって、上司やチームとの関係がぎくしゃくした。",
+    effects: { health: -7, freedom: -3 },
+  },
+  harassment: {
+    kind: "work", tone: "hard", rate: 0.02,
+    title: "職場でハラスメントを受ける",
+    body: "職場で、人格を否定するような言動や過大な要求が続いた。",
+    effects: { health: -10, connection: -3 },
+    // A share of cases lead to a mental-health leave of absence.
+    severe: {
+      share: 0.25,
+      title: "ハラスメントで心身を崩し、休職する",
+      body: "職場でのハラスメントが続き、心身の不調から休職することになった。",
+      effects: { health: -20, connection: -3, salaryFactor: 0.7, temporary: true },
+    },
+  },
+  burnout: {
+    kind: "work", tone: "hard", rate: 0.004,
+    title: "心身の不調で休職する",
+    body: "働き続けた疲れが重なり、医師の勧めで一定期間休職することになった。",
+    effects: { health: -15, salaryFactor: 0.7, temporary: true },
+  },
+  layoff: {
+    kind: "work", tone: "hard", rate: 0.004,
+    title: "勤務先の人員整理で職を失う",
+    body: "勤務先が事業を縮小し、人員整理の対象になった。退職金と給付で当面をしのぐ。",
+    effects: { health: -8, layoff: true },
+  },
+  goodTeam: {
+    kind: "work", tone: "good", rate: 0.05,
+    title: "信頼できる上司や仲間に恵まれる",
+    body: "相談しやすい上司や、支え合える仲間と働けるようになった。",
+    effects: { health: 6, skill: 2 },
+  },
+  bigRole: {
+    kind: "work", tone: "good", rate: 0.025,
+    title: "思いがけず大きな役割を任される",
+    body: "これまでの仕事ぶりが目に留まり、想定より大きな役割を任された。",
+    effects: { salaryFactor: 1.1, freedom: -2, skill: 2 },
+  },
+  reorg: {
+    kind: "work", tone: "neutral", rate: 0.03,
+    title: "組織再編で担当が変わる",
+    body: "組織の再編で、担当する仕事や一緒に働く人が大きく変わった。",
+    effects: { skill: 2, freedom: -3 },
+  },
+  partnerJobLoss: {
+    kind: "life", tone: "hard", rate: 0.015,
+    title: "パートナーが職を失う",
+    body: "パートナーの勤め先で人員整理があり、家計と暮らしの見通しが変わった。",
+    effects: { health: -5, extraCost: 80 },
+  },
+  illness: {
+    kind: "life", tone: "hard", rate: 0.012,
+    title: "病気やけがで治療が必要になる",
+    body: "思いがけない病気やけがで、しばらく治療に時間を使うことになった。",
+    effects: { health: -10, extraCost: 30, salaryFactor: 0.9, temporary: true },
+  },
+  parentCare: {
+    kind: "life", tone: "hard", rate: 0.03,
+    title: "親の介護が始まる",
+    body: "親の体調が変わり、通院の付き添いや介護の段取りが暮らしに加わった。",
+    effects: { freedom: -6, connection: 2, extraCost: 40 },
+  },
+  oldFriend: {
+    kind: "life", tone: "good", rate: 0.02,
+    title: "古い友人との再会が転機になる",
+    body: "久しぶりに会った友人との話から、仕事や暮らしの新しい見方を得た。",
+    effects: { connection: 6, freedom: 2 },
+  },
+  windfall: {
+    kind: "life", tone: "good", rate: 0.008,
+    title: "思わぬ臨時収入がある",
+    body: "親族からの相続や思わぬ払い戻しなど、まとまったお金が入った。",
+    effects: { extraCost: -100 },
+  },
+});
+function incidentRates(g, choice, employer) {
+  const working =
+    !g.retired && g.age < g.profile.retirementAge && choice !== "retire" &&
+    !["venture", "seeking"].includes(employer.kind) &&
+    !(employer.kind === "initial" && ["student", "notWorking"].includes(g.profile.occupation));
+  const world = worldAt(g, employer);
+  const moved = choice === "switch";
+  const downturn = world.economy.id === "downturn";
+  const rates = {};
+  if (working) {
+    // A new workplace is a fresh draw of boss and team, good or bad.
+    rates.difficultBoss = INCIDENTS.difficultBoss.rate * (moved ? 2 : 1);
+    rates.harassment = INCIDENTS.harassment.rate * (moved ? 1.5 : 1);
+    rates.burnout =
+      INCIDENTS.burnout.rate * (g.health < 40 ? 2.5 : 1) * (choice === "focus" ? 1.3 : 1);
+    if (!moved)
+      rates.layoff =
+        INCIDENTS.layoff.rate *
+        (world.company.id === "pressure" ? 3 : 1) *
+        (downturn ? 1.5 : 1) *
+        (employer.companyType === "small" ? 1.3 : 1);
+    rates.goodTeam = INCIDENTS.goodTeam.rate * (moved ? 1.5 : 1);
+    if (choice !== "careLeave")
+      rates.bigRole = INCIDENTS.bigRole.rate * clamp(g.skill / 60, 0.3, 1.6);
+    rates.reorg = INCIDENTS.reorg.rate;
+  }
+  if (g.family.partner && g.age < 70)
+    rates.partnerJobLoss = INCIDENTS.partnerJobLoss.rate * (downturn ? 2 : 1);
+  rates.illness =
+    INCIDENTS.illness.rate + (g.age >= 50 ? 0.012 : 0) + (g.age >= 65 ? 0.02 : 0);
+  // Care for a parent begins once; it is not a new event every few years.
+  if (g.age >= 45 && g.age <= 70 && !g.history.some((h) => h.incident?.id === "parentCare"))
+    rates.parentCare = INCIDENTS.parentCare.rate;
+  rates.oldFriend = INCIDENTS.oldFriend.rate;
+  rates.windfall = INCIDENTS.windfall.rate;
+  return rates;
+}
+// At most one incident a year. The roll, the pick and the severity use their
+// own seeded channels, so the same seed and choices give the same life.
+export function incidentAt(g, choice, employer = g.employer) {
+  const i = g.decisions.length;
+  if (i < g.incidentFrom || !worldEnabled(g)) return null;
+  const rates = incidentRates(g, choice, employer);
+  const total = Object.values(rates).reduce((a, b) => a + b, 0);
+  if (randomAt(g.seed, i, 141) >= total) return null;
+  let pick = randomAt(g.seed, i, 142) * total,
+    id = Object.keys(rates).at(-1);
+  for (const [key, rate] of Object.entries(rates)) {
+    if (pick < rate) {
+      id = key;
+      break;
+    }
+    pick -= rate;
+  }
+  const base = INCIDENTS[id];
+  const severe =
+    base.severe && randomAt(g.seed, i, 143) < base.severe.share ? base.severe : null;
+  const working = !g.retired && choice !== "retire";
+  const effects = { ...(severe ?? base).effects };
+  if (!working) delete effects.salaryFactor;
+  return {
+    id,
+    kind: base.kind,
+    tone: base.tone,
+    severe: Boolean(severe),
+    title: (severe ?? base).title,
+    body: (severe ?? base).body,
+    effects,
+    chance: Math.round(rates[id] * (severe ? base.severe.share : base.severe ? 1 - base.severe.share : 1) * 10000) / 10000,
+    yearChance: Math.round(total * 10000) / 10000,
+  };
+}
+function yearlyOutcome(g, choice, employer, decision = null) {
   const i = g.decisions.length;
   if (
     i < g.dynamicFrom ||
@@ -1353,6 +1627,83 @@ function yearlyOutcome(g, choice, employer) {
       extraCost: 0,
     };
   }
+  if (["promote", "transfer", "internalVenture"].includes(choice)) {
+    // The odds are game assumptions: ability, time in the stage, the
+    // employer's situation and relationships, never a real company's rules.
+    const world = worldAt(g, employer),
+      firm = { growing: 1.15, stable: 1, pressure: 0.7 }[world.company.id] ?? 1,
+      inRank = g.year - g.position.since,
+      level = RANKS[g.position.rank].level;
+    const target = nextRank(g.position.rank, decision?.track);
+    // Promotion needs both merit and luck: a seat above must open, and fewer
+    // open the higher it goes, so most people stay long at a middle stage.
+    // A good or difficult boss last year tilts the odds.
+    const lastIncident = g.history.at(-1)?.incident?.id;
+    const backing = ["goodTeam", "bigRole"].includes(lastIncident)
+      ? 1.4
+      : ["difficultBoss", "harassment"].includes(lastIncident)
+        ? 0.5
+        : 1;
+    const seat =
+      choice === "promote" && target
+        ? clamp(
+            { lead: 1, manager: 0.25, specialist: 0.32, director: 0.1, principal: 0.12 }[target] *
+              (target === "lead" ? 1 : { growing: 1.3, stable: 1, pressure: 0.6 }[world.company.id] ?? 1),
+            0,
+            1,
+          )
+        : 1;
+    const seatOpen = randomAt(g.seed, g.decisions.length, 151) < seat;
+    const merit =
+      choice === "promote"
+        ? clamp(
+            ability *
+              (inRank >= [2, 3, 4][level] ? 1 : 0.35) *
+              [1, 0.6, 0.45][level] *
+              backing,
+            0.04,
+            0.7,
+          )
+        : 1;
+    const chance =
+      choice === "promote"
+        ? seat * merit
+        : choice === "transfer"
+          ? clamp(0.45 + g.connection * 0.003 + g.skill * 0.002, 0.3, 0.8)
+          : clamp(ability * 0.7 * firm, 0.15, 0.55);
+    const success = choice === "promote" ? seatOpen && roll < merit : roll < chance;
+    const text = {
+      promote: success
+        ? [`${RANKS[target].label}に昇格した。`, "評価が認められ、任される範囲と責任が広がった。収入とともに、時間や気持ちの負担も変わる。"]
+        : !seatOpen
+          ? ["上の席が空かず、昇格は見送られた。", "評価とは別に、上の役職の席には限りがある。今年は空きがなかった。多くの人がこの段階で長く働き、別の形で力を発揮している。"]
+          : ["昇格は今回は見送られた。", "評価は伸び悩んだ。何が足りなかったかを確かめ、もう一度挑むか、別の道を考えられる。"],
+      transfer: success
+        ? ["希望した仕事へ社内で移った。", "同じ会社の中で新しい役割に就いた。これまでの人間関係を生かしながら、慣れない仕事を覚えていく。"]
+        : ["異動の希望は今回は通らなかった。", "希望は伝わったが、今回は実現しなかった。今の仕事を続けながら次の機会を待てる。"],
+      internalVenture: success
+        ? ["社内の新しい事業に加わった。", "会社に残りながら、新しい事業づくりに関わることになった。手応えも不確かさも大きい。"]
+        : ["社内公募には選ばれなかった。", "選考には通らなかったが、提案をまとめた経験と社内のつながりは残った。"],
+    }[choice];
+    return {
+      kind: success ? "success" : "setback",
+      chance,
+      title: text[0],
+      body: text[1],
+      salaryFactor: success
+        ? choice === "promote"
+          ? [1.1, 1.2, 1.25][RANKS[target].level - 1] ?? 1.1
+          : choice === "internalVenture"
+            ? 1.04
+            : 1
+        : 1,
+      extraCost: 0,
+      ...(success && choice === "promote" ? { promotion: target } : {}),
+      ...(success && choice !== "promote"
+        ? { unit: decision?.unit ?? (choice === "transfer" ? "希望した部署" : "社内の新規事業") }
+        : {}),
+    };
+  }
   if (
     [
       "pilot",
@@ -1365,7 +1716,11 @@ function yearlyOutcome(g, choice, employer) {
       "mentor",
     ].includes(choice)
   ) {
-    const success = roll < ability;
+    const steppingUp =
+      choice === "switch" &&
+      decision?.rank &&
+      RANKS[decision.rank].level > RANKS[g.position?.rank ?? "unspecified"].level;
+    const success = roll < ability * (steppingUp ? 0.75 : 1);
     const titles = {
       pilot: [
         "試した仕組みが、仕事で役立った。",
@@ -1458,7 +1813,11 @@ export function salaryCeiling(g, employer = g.employer) {
     { metro: 1.2, city: 1, rural: 0.85 }[g.region] *
     ({ large: 1.15, small: 0.9, public: 0.9, self: 1.1 }[employer.companyType] ??
       1) *
-    (employer.kind === "venture" ? 2 : 1);
+    (employer.kind === "venture" ? 2 : 1) *
+    // A higher stage raises the ceiling, so a promotion is not damped away.
+    (employer.kind === "venture"
+      ? 1
+      : [1, 1.1, 1.25, 1.45][RANKS[g.position?.rank]?.level ?? 0]);
   return Math.round(Math.max(base, g.profile.income * 1.3));
 }
 // Only raises are damped. Each factor below 1 (negative growth, care leave)
@@ -1598,12 +1957,17 @@ export function validateGeneratedScene(
             "candidateKind",
             "workModel",
             "proposal",
+            "rank",
           ]
         : o.id === "startup"
           ? ["venture", "name"]
           : o.id === "move"
             ? ["region"]
-            : []),
+            : ["transfer", "internalVenture"].includes(o.id)
+              ? ["unit"]
+              : o.id === "promote"
+                ? ["track"]
+                : []),
     ];
     if (
       !decision ||
@@ -1628,7 +1992,7 @@ export function validateGeneratedScene(
       fail();
     if (
       decision.id === "switch" &&
-      employerKey(decision.name ?? EMPLOYERS[decision.target]?.name ?? "") ===
+      employerKey(decision.name ?? LEGACY_EMPLOYERS[decision.target]?.name ?? "") ===
         employerKey(g.employer.name)
     )
       fail();
@@ -1644,13 +2008,23 @@ export function validateGeneratedScene(
     return { ...o, decision };
   });
   const scene = validateScene({ ...raw, options }, g);
+  // While working for an employer, staying and building a career there is
+  // always one of the four paths, next to moving, learning and living.
+  if (
+    mode === "life" &&
+    g.decisions.length >= g.careerPathFrom &&
+    worldEnabled(g) &&
+    inCompany(g) &&
+    !scene.options.some((o) => STAY_ACTIONS.includes(o.id))
+  )
+    fail();
   if (mode === "career") {
     const moves = scene.options.filter((o) => o.id === "switch");
     const stay = scene.options.filter(
       (o) => o.id === (g.employer.kind === "seeking" ? "rest" : "focus"),
     );
     const names = moves.map((o) =>
-      employerKey(o.decision.name ?? EMPLOYERS[o.decision.target]?.name ?? ""),
+      employerKey(o.decision.name ?? LEGACY_EMPLOYERS[o.decision.target]?.name ?? ""),
     );
     const currentName = employerKey(g.employer.name);
     if (
@@ -2152,7 +2526,7 @@ export function eventFor(g) {
     body = `${g.age}歳。${residenceProse(g)}で、${g.housing === "own" ? "持ち家を手入れしながら" : "住まいの費用を払いながら"}暮らしている。給与に代わる収入と、これまでの資産をどう使うか。仕事で培った経験やつながりと、新しい楽しみにも目を向けたい。`;
   } else if (g.employer.kind === "seeking") {
     title = "経験を持って、次の一歩を探す。";
-    body = `事業を終え、暮らしと仕事を組み直している。手元現金は約${Math.round(g.cash)}万円。これまでの経験を別の企業で生かすか、まず生活のペースを整えるか。収入と支出の変化を確かめながら、次の選択を考える。`;
+    body = `${g.employer.lastSalary ? "人員整理で職を離れ、次の仕事を探している" : "事業を終え、暮らしと仕事を組み直している"}。手元現金は約${Math.round(g.cash)}万円。これまでの経験を別の企業で生かすか、まず生活のペースを整えるか。収入と支出の変化を確かめながら、次の選択を考える。`;
   } else if (g.employer.kind === "venture") {
     title = `${company}を、自分の手で育てる。`;
     body = `${company}では、${g.employer.summary}という架空の事業で、${g.year - g.employer.started}年目に入った。顧客を探し、運営費を払いながら、自分の仕事をつくる。${technologyAt(g) > 0.5 ? "AIが広く使われる世界では、効率化だけでなく選ばれる理由も必要になっている。" : "AIを試しながら、任せる部分と自分で担う部分を見極めたい。"}手元の現金は約${Math.round(g.cash)}万円。${
@@ -2555,7 +2929,9 @@ export function advanceYears(game, decision, years = 1, { pauseAtMilestones = fa
     next = advance(next, decision);
     entries.push(next.history.at(-1));
     if (next.ended) {
-      stopReason = "キャリアと人生の物語が完結しました。";
+      stopReason = next.history.at(-1).careerEnd
+        ? "キャリアに区切りがつきました。"
+        : "キャリアと人生の物語が完結しました。";
       break;
     }
     if (
@@ -2570,6 +2946,10 @@ export function advanceYears(game, decision, years = 1, { pauseAtMilestones = fa
       ["failure", "closure"].includes(next.history.at(-1).outcome?.kind)
     ) {
       stopReason = "働き方の節目です。ここからの方針を選び直せます。";
+      break;
+    }
+    if (next.history.at(-1).incident?.tone === "hard" && i < years - 1) {
+      stopReason = "思いがけない出来事がありました。ここからの方針を選び直せます。";
       break;
     }
     if (pauseAtMilestones && careerMilestones(next).some((m) => m.step === next.decisions.length)) {
@@ -2590,7 +2970,12 @@ export function advance(g, rawDecision) {
     choice = decisionId(decision);
   let employer = nextEmployer(g, decision);
   const familyChange = familyTurn(g, choice);
-  const workOutcome = yearlyOutcome(g, choice, employer);
+  const workOutcome = yearlyOutcome(
+    g,
+    choice,
+    employer,
+    typeof decision === "object" ? decision : null,
+  );
   // Family events do not suspend business risk. Both can happen in one year.
   let outcome =
     employer.kind === "venture"
@@ -2607,6 +2992,40 @@ export function advance(g, rawDecision) {
       facts: null,
       summary: "事業を終え、働き方を組み直している",
     };
+  const incident = incidentAt(g, choice, employer);
+  if (incident?.effects.layoff) {
+    // No pay while looking for work; severance and benefits arrive as cash,
+    // and the next job starts from the previous pay rather than from zero.
+    incident.effects.salaryFactor = 0;
+    incident.effects.extraCost = -Math.round(g.salary * 0.76 * 0.6);
+    employer = {
+      kind: "seeking",
+      id: "seeking",
+      name: "次の仕事を探している",
+      role: "other",
+      companyType: "unknown",
+      facts: null,
+      summary: "人員整理で職を離れ、次の仕事を探している",
+      lastSalary: g.salary,
+      lastRole: employer.role,
+    };
+  }
+  // In-company stage. A move keeps the stage reached (people usually join at a
+  // similar level) and starts a new tenure; the old one stays in the history.
+  let position = g.position;
+  if (choice === "switch" && typeof decision === "object")
+    position =
+      decision.rank && decision.rank !== position.rank
+        ? { rank: decision.rank, unit: "", joined: g.year, since: g.year }
+        : { ...position, unit: "", joined: g.year, since: position.since };
+  if (outcome?.promotion)
+    position = { ...position, rank: outcome.promotion, since: g.year };
+  if (outcome?.unit) position = { ...position, unit: outcome.unit };
+  const previousIncident = g.history.at(-1)?.incident;
+  const incidentRestore =
+    previousIncident?.effects.temporary && previousIncident.effects.salaryFactor
+      ? 1 / previousIncident.effects.salaryFactor
+      : 1;
   const c = CHOICES[choice],
     p = g.profile,
     tech = technologyAt(g),
@@ -2648,7 +3067,12 @@ export function advance(g, rawDecision) {
       volatility +
       aiBenefit -
       transitionCost +
-      (choice === "focus" ? 0.023 : 0) +
+      // Aiming for promotion is also a year of committed work.
+      (["focus", "promote"].includes(choice)
+        ? 0.023
+        : ["transfer", "internalVenture"].includes(choice)
+          ? 0.01
+          : 0) +
       (g.health < 30 ? -0.035 : 0),
     -0.12,
     0.12,
@@ -2675,7 +3099,7 @@ export function advance(g, rawDecision) {
           choice === "startup"
             ? g.salary || 120
             : choice === "switch" && typeof decision === "object"
-              ? g.salary || 180
+              ? g.salary || (g.employer.lastSalary ?? 0) * 0.9 || 180
               : g.salary,
           [
             1 + growth,
@@ -2683,19 +3107,20 @@ export function advance(g, rawDecision) {
             familyChange.outcome && outcome !== familyChange.outcome
               ? familyChange.outcome.salaryFactor
               : 1,
+            incident?.effects.salaryFactor ?? 1,
           ],
           transitionIncome,
-          world &&
-            (g.decisions.length < g.careLeaveSalaryFrom || g.salary > 0) &&
-            decisionId(g.decisions.at(-1)) === "careLeave"
+          (world &&
+          (g.decisions.length < g.careLeaveSalaryFrom || g.salary > 0) &&
+          decisionId(g.decisions.at(-1)) === "careLeave"
             ? 1 / 0.85
-            : 1,
+            : 1) * incidentRestore,
         )
       : clamp(
         (choice === "startup"
           ? g.salary || 120
           : choice === "switch" && typeof decision === "object"
-            ? g.salary || 180
+            ? g.salary || (g.employer.lastSalary ?? 0) * 0.9 || 180
             : g.salary) *
           (1 + growth) *
           transitionIncome *
@@ -2703,6 +3128,8 @@ export function advance(g, rawDecision) {
           (familyChange.outcome && outcome !== familyChange.outcome
             ? familyChange.outcome.salaryFactor
             : 1) *
+          (incident?.effects.salaryFactor ?? 1) *
+          incidentRestore *
           (world &&
           (g.decisions.length < g.careLeaveSalaryFrom || g.salary > 0) &&
           decisionId(g.decisions.at(-1)) === "careLeave"
@@ -2716,7 +3143,11 @@ export function advance(g, rawDecision) {
     choice === "startup" ? VENTURES[decision.venture].setup : 0;
   const businessOverhead = venture && !retired ? venture.overhead : 0;
   let cost =
-      c.cost + businessSetup + businessOverhead + (outcome?.extraCost ?? 0),
+      c.cost +
+      businessSetup +
+      businessOverhead +
+      (outcome?.extraCost ?? 0) +
+      (incident?.effects.extraCost ?? 0),
     investmentTransfer = 0,
     homeTransaction = 0;
   if (choice === "invest") {
@@ -2817,18 +3248,28 @@ export function advance(g, rawDecision) {
     });
   const health = clamp(
     g.health +
-      c.health -
+      c.health +
+      (incident?.effects.health ?? 0) -
       (g.age >= 80 ? 2 : g.age >= 65 ? 1.4 : 0.8) +
       (p.priority === "time" ? 0.5 : 0),
   );
   const connection = clamp(
-    g.connection + c.connection - 1 + (p.priority === "people" ? 0.8 : 0),
+    g.connection +
+      c.connection +
+      (incident?.effects.connection ?? 0) -
+      1 +
+      (p.priority === "people" ? 0.8 : 0),
   );
   const freedom = clamp(
-    g.freedom + c.freedom - 0.5 + (p.priority === "freedom" ? 0.8 : 0),
+    g.freedom +
+      c.freedom +
+      (incident?.effects.freedom ?? 0) -
+      0.5 +
+      (p.priority === "freedom" ? 0.8 : 0),
   );
   const skill = clamp(
     g.skill +
+      (incident?.effects.skill ?? 0) +
       c.skill *
         (world && ["learn", "studyDaily"].includes(choice)
           ? 0.7 + randomAt(g.seed, i, 78) * 0.6
@@ -2838,7 +3279,23 @@ export function advance(g, rawDecision) {
   const studyHours =
     g.studyHours +
     (world ? (choice === "studyDaily" ? 365 : choice === "learn" ? 90 : 0) : 0);
-  const ended = randomAt(g.seed, i, 20) < deathChance(g);
+  const died = randomAt(g.seed, i, 20) < deathChance(g);
+  // The story is a working life: it closes in the year work ends, with a
+  // reason that fits how the person worked. Death stays possible before that.
+  const careerEnd =
+    !died &&
+    i >= g.careerEndFrom &&
+    !isRetiredAt(g) &&
+    (choice === "retire" || g.age + 1 >= p.retirementAge)
+      ? employer.kind === "venture"
+        ? { reason: "leaveBusiness", title: `${employer.name}から退き、仕事に区切りをつけた` }
+        : employer.kind !== "seeking" && ["director", "principal"].includes(g.position?.rank)
+          ? { reason: "stepDown", title: `${RANKS[g.position.rank].label}を退任し、仕事に区切りをつけた` }
+          : choice === "retire" && g.age < p.retirementAge
+            ? { reason: "early", title: "早めに仕事から離れ、次の暮らしへ進んだ" }
+            : { reason: "retire", title: "定年を迎え、仕事から退いた" }
+      : null;
+  const ended = died || Boolean(careerEnd);
   const savings = cash + investments + homeValue - mortgage - debt;
   const effects = {
     learn: "学びが蓄積し、AIを生かせる仕事の幅が変わった。",
@@ -2900,9 +3357,14 @@ export function advance(g, rawDecision) {
     familyCost: familyChange.cost,
     familyOutcome: familyChange.outcome,
     studyHours,
-    note: outcome
-      ? `${outcome.title} ${effects[choice] ?? c.label}`
-      : effects[choice],
+    note: incident
+      ? `思いがけない出来事：${incident.title}。${outcome ? `${outcome.title} ${effects[choice] ?? c.label}` : (effects[choice] ?? c.label)}`
+      : outcome
+        ? `${outcome.title} ${effects[choice] ?? c.label}`
+        : effects[choice],
+    ...(incident ? { incident } : {}),
+    ...(careerEnd ? { careerEnd } : {}),
+    ...(i >= g.careerPathFrom ? { position } : {}),
     aiBenefit,
     transitionCost,
     volatility,
@@ -2959,6 +3421,7 @@ export function advance(g, rawDecision) {
             ? 0
             : g.businessSetbacks
         : 0,
+    position,
     careerMoves:
       g.careerMoves + (["switch", "startup"].includes(choice) ? 1 : 0),
     year: g.year + 1,
@@ -3000,6 +3463,9 @@ export function replay(
   prepayFrom = 0,
   debtRepayFrom = 0,
   salaryCapFrom = 0,
+  incidentFrom = 0,
+  careerPathFrom = 0,
+  careerEndFrom = 0,
 ) {
   if (
     !Array.isArray(decisions) ||
@@ -3021,6 +3487,9 @@ export function replay(
     prepayFrom,
     debtRepayFrom,
     salaryCapFrom,
+    incidentFrom,
+    careerPathFrom,
+    careerEndFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -3062,6 +3531,9 @@ export function compareWorlds(g) {
       g.prepayFrom,
       g.debtRepayFrom,
       g.salaryCapFrom,
+      g.incidentFrom,
+      g.careerPathFrom,
+      g.careerEndFrom,
     ),
   );
 }
@@ -3075,7 +3547,16 @@ export function encodeSave(g) {
     g.debtRepayFrom > MAX_AGE ||
     !Number.isInteger(g.salaryCapFrom) ||
     g.salaryCapFrom < 0 ||
-    g.salaryCapFrom > MAX_AGE
+    g.salaryCapFrom > MAX_AGE ||
+    !Number.isInteger(g.incidentFrom) ||
+    g.incidentFrom < 0 ||
+    g.incidentFrom > MAX_AGE ||
+    !Number.isInteger(g.careerPathFrom) ||
+    g.careerPathFrom < 0 ||
+    g.careerPathFrom > MAX_AGE ||
+    !Number.isInteger(g.careerEndFrom) ||
+    g.careerEndFrom < 0 ||
+    g.careerEndFrom > MAX_AGE
   )
     fail();
   const value = JSON.stringify({
@@ -3087,12 +3568,16 @@ export function encodeSave(g) {
     prepayFrom: g.prepayFrom,
     debtRepayFrom: g.debtRepayFrom,
     salaryCapFrom: g.salaryCapFrom,
+    incidentFrom: g.incidentFrom,
+    careerPathFrom: g.careerPathFrom,
+    careerEndFrom: g.careerEndFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
     decisions: g.decisions,
     scenes: g.scenes,
     reflections: validateReflections(Object.hasOwn(g, "reflections") ? g.reflections : {}, g),
+    careerSeen: validateCareerSeen(g.careerSeen ?? {}, g),
   });
   if (value.length > 250000)
     throw new Error("保存データが上限を超えました。元の保存は保持しています。");
@@ -3123,11 +3608,40 @@ export function decodeSave(value) {
     Object.hasOwn(d, "prepayFrom") ? d.prepayFrom : d.decisions?.length,
     Object.hasOwn(d, "debtRepayFrom") ? d.debtRepayFrom : d.decisions?.length,
     Object.hasOwn(d, "salaryCapFrom") ? d.salaryCapFrom : d.decisions?.length,
+    // Saves from before chance incidents keep their recorded years unchanged.
+    Object.hasOwn(d, "incidentFrom") ? d.incidentFrom : d.decisions?.length,
+    // Saves from before the in-company career keep their recorded years.
+    Object.hasOwn(d, "careerPathFrom") ? d.careerPathFrom : d.decisions?.length,
+    // Saves from before the career ending keep their years after retirement.
+    Object.hasOwn(d, "careerEndFrom") ? d.careerEndFrom : d.decisions?.length,
   );
   game.reflections = validateReflections(Object.hasOwn(d, "reflections") ? d.reflections : {}, game);
+  game.careerSeen = validateCareerSeen(d.careerSeen ?? {}, game);
   return game;
 }
 
+// Company names the AI already proposed, keyed by the turn they were shown.
+// Only used to ask for different candidates later; never evidence or a choice.
+const CAREER_SEEN_TURNS = 30;
+function validateCareerSeen(raw, game) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw) || Object.keys(raw).length > CAREER_SEEN_TURNS) fail();
+  const result = {};
+  for (const [turn, names] of Object.entries(raw)) {
+    if (!/^(?:0|[1-9]\d{0,2})$/.test(turn) || Number(turn) > game.decisions.length ||
+      !Array.isArray(names) || names.length > 3 ||
+      names.some((n) => typeof n !== "string" || /[\u2028\u2029]/u.test(n))) fail();
+    result[turn] = names.map((n) => str(n, 60));
+  }
+  return result;
+}
+export function recordCareerSeen(game, names) {
+  const seen = { ...(game.careerSeen ?? {}), [String(game.decisions.length)]: names.slice(0, 3) };
+  const turns = Object.keys(seen).sort((a, b) => Number(a) - Number(b)).slice(-CAREER_SEEN_TURNS);
+  return { ...game, careerSeen: validateCareerSeen(Object.fromEntries(turns.map((t) => [t, seen[t]])), game) };
+}
+export function careerSeenUntil(game, length) {
+  return Object.fromEntries(Object.entries(game.careerSeen ?? {}).filter(([turn]) => Number(turn) <= length));
+}
 function validateReflections(raw, game) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw) || Object.keys(raw).length > 5) fail();
   const allowed = new Set(careerMilestones(game).map((m) => m.id));
