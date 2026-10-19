@@ -4,6 +4,9 @@ import { readFile } from "node:fs/promises";
 import { careerMap, careerMilestones, pendingCareerReflection, careerRecord, careerRecordText } from "../public/careers.js";
 import { createGame, advance, advanceYears, recordCareerReflection, encodeSave, decodeSave } from "../public/engine.js";
 import { storyRequest } from "../public/story.js";
+// Play past retirement as under the rules before the career ending.
+const pastRetirement = (profile, scenario = "steady", seed = 2026, ...from) =>
+  createGame(profile, scenario, seed, ...[0, 0, 0, 0, 0, 0, 0, 0, 0].map((d, i) => from[i] ?? d), 110);
 
 const profile = {
   age: 29, region: "city", job: "tech", income: 500, ai: "sometimes",
@@ -50,13 +53,13 @@ test("milestone pauses happen at arrival, once, and do not change annual calcula
 });
 
 test("retirement has one checkpoint even at a decade or under legacy retirement rules", () => {
-  const g = advance(createGame({ ...profile, age: 59, retirementAge: 60 }), "rest");
+  const g = advance(pastRetirement({ ...profile, age: 59, retirementAge: 60 }), "rest");
   assert.deepEqual(careerMilestones(g).map((m) => m.id), ["retirement"]);
-  const early = advance(createGame({ ...profile, age: 45 }), "retire");
+  const early = advance(pastRetirement({ ...profile, age: 45 }), "retire");
   assert.equal(pendingCareerReflection(early).id, "retirement");
-  const retiredStart = advance(createGame({ ...profile, age: 70, retirementAge: 65 }), "rest");
+  const retiredStart = advance(pastRetirement({ ...profile, age: 70, retirementAge: 65 }), "rest");
   assert.deepEqual(careerMilestones(retiredStart), []);
-  const legacy = createGame({ ...profile, age: 64 }, "steady", 2026, 0, 0, 3);
+  const legacy = pastRetirement({ ...profile, age: 64 }, "steady", 2026, 0, 0, 3);
   assert.equal(pendingCareerReflection(advance(legacy, "rest")), null);
   assert.equal(pendingCareerReflection(advance(advance(legacy, "rest"), "rest")).id, "retirement");
 });
@@ -121,7 +124,7 @@ test("resume groups consecutive employers and roles, counts every year once, and
 });
 
 test("career map respects retirement and nonworking starts, including legacy records", async () => {
-  let game = createGame({ ...profile, age: 64, retirementAge: 65 });
+  let game = pastRetirement({ ...profile, age: 64, retirementAge: 65 });
   game = advance(advance(game, "focus"), "rest");
   assert.deepEqual(careerMap(game).map((t) => t.state), ["employed", "retired"]);
   assert.deepEqual(careerMap(decodeSave(encodeSave(game))), careerMap(game));

@@ -2305,3 +2305,71 @@ dialog p, dialog li { font-size: 14px; }
 .incident-note .incident-title {
   font-weight: 700;
 }
+.life-story {
+  margin: 0 0 28px;
+  padding: 20px;
+  border: 2px solid var(--ink);
+  background: var(--white);
+}
+.life-story-headline {
+  font: 600 20px/1.6 var(--serif);
+  margin: 4px 0 16px;
+}
+.life-story-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin: 0 0 18px;
+}
+.life-story-stats div {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+.life-story-stats dt {
+  font-size: 11px;
+  color: var(--muted);
+}
+.life-story-stats dd {
+  margin: 2px 0 0;
+  font-weight: 700;
+  font-size: 16px;
+}
+.life-story-stats small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.life-story-chapter h4 {
+  margin: 14px 0 6px;
+  color: var(--accent);
+}
+.life-story-chapter ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.life-story-chapter li {
+  display: grid;
+  grid-template-columns: 1.4em 1fr;
+  column-gap: 6px;
+  padding: 5px 0;
+  border-bottom: 1px dashed var(--line);
+}
+.life-story-chapter li small {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 11px;
+}
+.life-story-chapter li > span:last-child {
+  grid-column: 2;
+}
+.life-story-icon {
+  grid-row: span 2;
+}
+.life-story-chapter .event-rise .life-story-icon,
+.life-story-chapter .event-luck .life-story-icon {
+  color: var(--green);
+}
+.life-story-chapter .event-hardship .life-story-icon {
+  color: var(--accent);
+}

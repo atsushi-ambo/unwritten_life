@@ -42,6 +42,7 @@ import {
   pendingCareerReflection,
   careerRecord,
   careerRecordText,
+  lifeStory,
 } from "./careers.js";
 import {
   worldAt,
@@ -299,6 +300,52 @@ function renderCareerMap(container) {
   }
   container.append(grid, legend);
 }
+// The pop summary at the top of the ending: headline numbers, then the
+// turning points of each decade (work, money, family and luck).
+function renderLifeStory() {
+  const story = lifeStory(game, RANKS);
+  const section = node("section", undefined, "life-story");
+  const title = node("h3", "わたしの履歴書");
+  title.id = "life-story-title";
+  section.setAttribute("aria-labelledby", title.id);
+  section.append(title, node("p", story.headline, "life-story-headline"));
+  const s = story.stats,
+    tiles = node("dl", undefined, "life-story-stats");
+  for (const [label, value, note] of [
+    ["年収", `${money(s.startIncome)}→${money(s.peakIncome)}万円`, "はじめ → ピーク"],
+    ["純資産", `${money(s.startNetWorth)}→${money(s.endNetWorth)}万円`, "はじめ → おわり"],
+    ["いちばん上の役職", RANKS[s.peakRank]?.label ?? "記録なし", ""],
+    ["転職", `${s.moves}回`, `勤めた会社 ${s.employers}社`],
+    ["家族", s.partner ? "パートナーあり" : "パートナーなし", `子ども ${s.children}人`],
+    ["住まい", s.housing === "own" ? "持ち家" : "賃貸", ""],
+    ["学びの時間", `${nf.format(s.studyHours)}時間`, ""],
+    ["思いがけない出来事", `つらい ${s.hardships} · うれしい ${s.luck}`, ""],
+  ]) {
+    const tile = node("div");
+    tile.append(node("dt", label), node("dd", value));
+    if (note) tile.append(node("small", note));
+    tiles.append(tile);
+  }
+  section.append(tiles);
+  const icons = { work: "■", rise: "▲", luck: "★", hardship: "●", family: "♡", life: "⌂", end: "○" };
+  for (const chapter of story.chapters) {
+    const box = node("section", undefined, "life-story-chapter");
+    box.append(node("h4", chapter.label));
+    const list = node("ul");
+    for (const e of chapter.events) {
+      const item = node("li", undefined, `event-${e.kind}`);
+      const icon = node("span", icons[e.kind], "life-story-icon");
+      icon.setAttribute("aria-hidden", "true");
+      item.append(icon, node("small", `${e.year}年・${e.age}歳`), node("span", e.text));
+      list.append(item);
+    }
+    box.append(list);
+    section.append(box);
+  }
+  if (!story.chapters.length)
+    section.append(node("p", "大きな転機のない、穏やかな歩みでした。", "field-note"));
+  return section;
+}
 function renderCareerResume() {
   const record = careerRecord(game);
   const card = node("section", undefined, "career-resume");
@@ -306,7 +353,7 @@ function renderCareerResume() {
   card.setAttribute("aria-labelledby", "resume-title");
   const title = node("h3", "職務経歴書 / この世界で歩んだ道");
   title.id = "resume-title";
-  card.append(title, node("p", `${game.profile.age}歳から${game.age}歳まで・${game.decisions.length}年間`, "resume-period"),
+  card.append(renderLifeStory(), title, node("p", `${game.profile.age}歳から${game.age}歳まで・${game.decisions.length}年間`, "resume-period"),
     node("p", "ゲーム内の架空の経歴です。実際の職務経歴を証明するものではありません。", "field-note"),
     node("h4", "勤務先と役割"));
   const timeline = node("ol", undefined, "resume-timeline");
@@ -805,9 +852,10 @@ function renderGame() {
   choices.replaceChildren();
   $("career-actions").replaceChildren();
   if (complete) {
+    const end = game.history.at(-1)?.careerEnd;
     card.append(
       node("p", "THE STORY OF YOUR WORKING LIFE.", "eyebrow"),
-      node("h2", "働いた年月が、あなたに残したもの。"),
+      node("h2", end ? `${game.age}歳、${end.title}。` : "働いた年月が、あなたに残したもの。"),
     );
     const counts = Object.keys(CHOICES)
       .map((k) => [k, game.decisions.filter((x) => decisionId(x) === k).length])
@@ -819,7 +867,9 @@ function renderGame() {
       ),
       node(
         "p",
-        "この最期はゲーム内の仮定から生まれた物語です。実際の寿命や死因を予測するものではありません。",
+        end
+          ? "キャリアの区切りまでを描くゲームです。この先の暮らしは、ここまでの歩みと手元の資産の上に続いていきます。結果はゲーム内の仮定から生まれた物語です。"
+          : "この最期はゲーム内の仮定から生まれた物語です。実際の寿命や死因を予測するものではありません。",
         "insight",
       ),
     );
@@ -841,6 +891,7 @@ function renderGame() {
         game.salaryCapFrom,
         game.incidentFrom,
         game.careerPathFrom,
+        game.careerEndFrom,
       );
       showGame(true);
     });
@@ -1258,6 +1309,7 @@ $("undo-button").addEventListener("click", () => {
     game.salaryCapFrom,
     game.incidentFrom,
     game.careerPathFrom,
+    game.careerEndFrom,
   );
   const reached = new Set(careerMilestones(game).map((m) => m.id));
   game.reflections = Object.fromEntries(Object.entries(reflections).filter(([id]) => reached.has(id)));

@@ -299,7 +299,9 @@ test("career AI rejects the retirement boundary before transport or accounting, 
       }),
     };
   });
-  const before = createGame({ ...profile, age: 64, retirementAge: 65 }, "steady", 4),
+  // These cases check the retirement guard itself, so the career ending is off.
+  const before = createGame({ ...profile, age: 64, retirementAge: 65 }, "steady", 4,
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 110),
     boundary = advance(before, "rest");
   assert.equal(boundary.age, 65);
   assert.equal(boundary.retired, false);

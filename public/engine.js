@@ -935,6 +935,7 @@ export function createGame(
   salaryCapFrom = 0,
   incidentFrom = 0,
   careerPathFrom = 0,
+  careerEndFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -968,7 +969,10 @@ export function createGame(
     incidentFrom > MAX_AGE ||
     !Number.isInteger(careerPathFrom) ||
     careerPathFrom < 0 ||
-    careerPathFrom > MAX_AGE
+    careerPathFrom > MAX_AGE ||
+    !Number.isInteger(careerEndFrom) ||
+    careerEndFrom < 0 ||
+    careerEndFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -988,6 +992,7 @@ export function createGame(
     salaryCapFrom,
     incidentFrom,
     careerPathFrom,
+    careerEndFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -1511,7 +1516,9 @@ function incidentRates(g, choice, employer) {
     rates.partnerJobLoss = INCIDENTS.partnerJobLoss.rate * (downturn ? 2 : 1);
   rates.illness =
     INCIDENTS.illness.rate + (g.age >= 50 ? 0.012 : 0) + (g.age >= 65 ? 0.02 : 0);
-  if (g.age >= 45 && g.age <= 70) rates.parentCare = INCIDENTS.parentCare.rate;
+  // Care for a parent begins once; it is not a new event every few years.
+  if (g.age >= 45 && g.age <= 70 && !g.history.some((h) => h.incident?.id === "parentCare"))
+    rates.parentCare = INCIDENTS.parentCare.rate;
   rates.oldFriend = INCIDENTS.oldFriend.rate;
   rates.windfall = INCIDENTS.windfall.rate;
   return rates;
@@ -2922,7 +2929,9 @@ export function advanceYears(game, decision, years = 1, { pauseAtMilestones = fa
     next = advance(next, decision);
     entries.push(next.history.at(-1));
     if (next.ended) {
-      stopReason = "キャリアと人生の物語が完結しました。";
+      stopReason = next.history.at(-1).careerEnd
+        ? "キャリアに区切りがつきました。"
+        : "キャリアと人生の物語が完結しました。";
       break;
     }
     if (
@@ -3270,7 +3279,23 @@ export function advance(g, rawDecision) {
   const studyHours =
     g.studyHours +
     (world ? (choice === "studyDaily" ? 365 : choice === "learn" ? 90 : 0) : 0);
-  const ended = randomAt(g.seed, i, 20) < deathChance(g);
+  const died = randomAt(g.seed, i, 20) < deathChance(g);
+  // The story is a working life: it closes in the year work ends, with a
+  // reason that fits how the person worked. Death stays possible before that.
+  const careerEnd =
+    !died &&
+    i >= g.careerEndFrom &&
+    !isRetiredAt(g) &&
+    (choice === "retire" || g.age + 1 >= p.retirementAge)
+      ? employer.kind === "venture"
+        ? { reason: "leaveBusiness", title: `${employer.name}から退き、仕事に区切りをつけた` }
+        : employer.kind !== "seeking" && ["director", "principal"].includes(g.position?.rank)
+          ? { reason: "stepDown", title: `${RANKS[g.position.rank].label}を退任し、仕事に区切りをつけた` }
+          : choice === "retire" && g.age < p.retirementAge
+            ? { reason: "early", title: "早めに仕事から離れ、次の暮らしへ進んだ" }
+            : { reason: "retire", title: "定年を迎え、仕事から退いた" }
+      : null;
+  const ended = died || Boolean(careerEnd);
   const savings = cash + investments + homeValue - mortgage - debt;
   const effects = {
     learn: "学びが蓄積し、AIを生かせる仕事の幅が変わった。",
@@ -3338,6 +3363,7 @@ export function advance(g, rawDecision) {
         ? `${outcome.title} ${effects[choice] ?? c.label}`
         : effects[choice],
     ...(incident ? { incident } : {}),
+    ...(careerEnd ? { careerEnd } : {}),
     ...(i >= g.careerPathFrom ? { position } : {}),
     aiBenefit,
     transitionCost,
@@ -3439,6 +3465,7 @@ export function replay(
   salaryCapFrom = 0,
   incidentFrom = 0,
   careerPathFrom = 0,
+  careerEndFrom = 0,
 ) {
   if (
     !Array.isArray(decisions) ||
@@ -3462,6 +3489,7 @@ export function replay(
     salaryCapFrom,
     incidentFrom,
     careerPathFrom,
+    careerEndFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -3505,6 +3533,7 @@ export function compareWorlds(g) {
       g.salaryCapFrom,
       g.incidentFrom,
       g.careerPathFrom,
+      g.careerEndFrom,
     ),
   );
 }
@@ -3524,7 +3553,10 @@ export function encodeSave(g) {
     g.incidentFrom > MAX_AGE ||
     !Number.isInteger(g.careerPathFrom) ||
     g.careerPathFrom < 0 ||
-    g.careerPathFrom > MAX_AGE
+    g.careerPathFrom > MAX_AGE ||
+    !Number.isInteger(g.careerEndFrom) ||
+    g.careerEndFrom < 0 ||
+    g.careerEndFrom > MAX_AGE
   )
     fail();
   const value = JSON.stringify({
@@ -3538,6 +3570,7 @@ export function encodeSave(g) {
     salaryCapFrom: g.salaryCapFrom,
     incidentFrom: g.incidentFrom,
     careerPathFrom: g.careerPathFrom,
+    careerEndFrom: g.careerEndFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
@@ -3579,6 +3612,8 @@ export function decodeSave(value) {
     Object.hasOwn(d, "incidentFrom") ? d.incidentFrom : d.decisions?.length,
     // Saves from before the in-company career keep their recorded years.
     Object.hasOwn(d, "careerPathFrom") ? d.careerPathFrom : d.decisions?.length,
+    // Saves from before the career ending keep their years after retirement.
+    Object.hasOwn(d, "careerEndFrom") ? d.careerEndFrom : d.decisions?.length,
   );
   game.reflections = validateReflections(Object.hasOwn(d, "reflections") ? d.reflections : {}, game);
   game.careerSeen = validateCareerSeen(d.careerSeen ?? {}, game);

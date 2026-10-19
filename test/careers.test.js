@@ -61,7 +61,8 @@ test("companies shown or worked at are passed back so the AI proposes different 
 });
 
 test("the shown-company record is bounded, validated and accepts older saves without it", () => {
-  let g = createGame(profile, "steady", 1);
+  // The career ending is off so the record can grow past retirement age.
+  let g = createGame(profile, "steady", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 110);
   for (let i = 0; i < 40; i++) {
     g = recordCareerSeen(g, [`会社${i}`]);
     g = advance(g, "rest");
