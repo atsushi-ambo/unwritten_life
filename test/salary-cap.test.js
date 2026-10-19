@@ -22,7 +22,7 @@ const capAt = (from) => (profile, scenario, seed) =>
 function replayAt(g, length) {
   return replay(g.profile, g.scenario, g.seed, g.decisions.slice(0, length),
     {}, false, g.dynamicFrom, g.worldFrom, g.retirementFrom,
-    g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom);
+    g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom);
 }
 
 test("long-run salaries level off near a job and region ceiling but keep variance", () => {

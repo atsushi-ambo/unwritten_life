@@ -6,6 +6,7 @@
 export const CAREER_STATES = Object.freeze({
   employed: { label: "仕事", icon: "■" },
   change: { label: "転職", icon: "↗" },
+  promoted: { label: "昇格・社内異動", icon: "▲" },
   learning: { label: "学び", icon: "+" },
   venture: { label: "事業", icon: "◆" },
   rest: { label: "休養・ケア・求職", icon: "~" },
@@ -19,6 +20,7 @@ export function careerMap(game) {
     if (["switch", "startup", "opportunity"].includes(record.choice)) working = true;
     const state = retired ? "retired"
       : record.choice === "switch" ? "change"
+        : ["promote", "transfer", "internalVenture"].includes(record.choice) && record.outcome?.kind === "success" ? "promoted"
         : ["learn", "studyDaily", "demonstrate"].includes(record.choice) ? "learning"
           : ["rest", "careLeave", "recover"].includes(record.choice) || record.employer?.kind === "seeking" ? "rest"
             : record.employer?.kind === "venture" ? "venture"
@@ -77,27 +79,33 @@ export function careerRecord(game) {
         : h.employer?.name ?? "勤務先の記録なし";
     const role = state === "retired" || nonworking || h.employer?.kind === "seeking" ? null : h.employer?.role ?? null;
     const kind = state === "retired" ? "retired" : nonworking ? "nonworking" : h.employer?.kind ?? "unknown";
+    // A stage or unit change inside the same employer starts a new line, so
+    // staying for years still shows how the career moved.
+    const inside = role && h.position && ["initial", "real", "fictional", "legacy"].includes(kind);
+    const rank = inside && h.position.rank !== "unspecified" ? h.position.rank : null;
+    const unit = inside ? h.position.unit || null : null;
     const last = tenures.at(-1);
-    if (last && last.employer === employer && last.role === role && last.kind === kind) {
+    if (last && last.employer === employer && last.role === role && last.kind === kind &&
+      last.rank === rank && last.unit === unit) {
       last.to = h.year;
       last.years++;
-    } else tenures.push({ from: h.year, to: h.year, years: 1, employer, role, kind });
+    } else tenures.push({ from: h.year, to: h.year, years: 1, employer, role, kind, rank, unit });
   }
-  const turningPoints = new Set(["switch", "startup", "opportunity", "retire", "closeBusiness", "pivot", "expand", "demonstrate", "negotiate", "careLeave"]);
+  const turningPoints = new Set(["switch", "startup", "opportunity", "retire", "closeBusiness", "pivot", "expand", "demonstrate", "negotiate", "careLeave", "promote", "transfer", "internalVenture"]);
   const decisions = game.history.filter((h, i) => i === 0 || turningPoints.has(h.choice))
     .map((h) => ({ year: h.year, age: h.age, label: h.choiceLabel }));
   const reflections = careerMilestones(game).filter((m) => game.reflections?.[m.id])
     .map((m) => ({ ...m, text: game.reflections[m.id] }));
   return { map, tenures, yearsByState, decisions, reflections };
 }
-export function careerRecordText(game, roles = {}) {
+export function careerRecordText(game, roles = {}, ranks = {}) {
   const record = careerRecord(game);
   const lines = [
     "Unwritten Life / 職務経歴書", "この世界で歩んだ道",
     `${game.profile.age}歳から${game.age}歳まで・${game.decisions.length}年間`,
     "ゲーム内の架空の経歴です。実際の職務経歴を証明するものではありません。",
     "", "勤務先と役割",
-    ...record.tenures.map((t) => `${t.from}〜${t.to}年（${t.years}年） ${t.employer}${t.role ? " / " + (roles[t.role]?.label ?? t.role) : ""}`),
+    ...record.tenures.map((t) => `${t.from}〜${t.to}年（${t.years}年） ${t.employer}${t.role ? " / " + (roles[t.role]?.label ?? t.role) : ""}${t.rank ? " / " + (ranks[t.rank]?.label ?? t.rank) : ""}${t.unit ? "（" + t.unit + "）" : ""}`),
     "", "一年の主な活動（重複なし）",
     ...Object.entries(record.yearsByState).map(([key, years]) => `${CAREER_STATES[key].label}：${years}年`),
     "", "選んだ転機",

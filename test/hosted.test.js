@@ -456,7 +456,7 @@ test("hosted generation keeps prepayment out of saves from clients opened before
   const { db } = database(t);
   const scene = {
     ...validScene,
-    options: ["prepay", "rest", "learn", "connect"].map((id) => ({
+    options: ["prepay", "rest", "learn", "focus"].map((id) => ({
       id,
       label: id,
       hint: "暮らしのお金を見直す",

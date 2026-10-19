@@ -3,6 +3,8 @@ import {
   MAX_AGE,
   SCENARIOS,
   JOBS,
+  RANKS,
+  inCompany,
   REGIONS,
   PRIORITIES,
   CHOICES,
@@ -311,7 +313,15 @@ function renderCareerResume() {
   for (const t of record.tenures) {
     const row = node("li");
     row.append(node("small", `${t.from}〜${t.to}年 · ${t.years}年`), node("b", t.employer));
-    if (t.role) row.append(node("span", JOBS[t.role]?.label ?? t.role));
+    if (t.role)
+      row.append(
+        node(
+          "span",
+          [JOBS[t.role]?.label ?? t.role, t.rank ? RANKS[t.rank].label : "", t.unit ?? ""]
+            .filter(Boolean)
+            .join(" · "),
+        ),
+      );
     timeline.append(row);
   }
   const totals = node("dl", undefined, "resume-totals");
@@ -349,7 +359,7 @@ function renderCareerResume() {
   fallback.hidden = true;
   fallback.rows = 8;
   fallback.setAttribute("aria-label", "コピー用の職務経歴書テキスト");
-  const text = careerRecordText(game, JOBS);
+  const text = careerRecordText(game, JOBS, RANKS);
   copy.addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(text);
@@ -624,6 +634,11 @@ function renderGame() {
           ? "（転職は仮想）"
           : ""),
     game.employer.unverifiedCandidate ? "企業・職務はAI未確認" : "",
+    inCompany(game) && game.position.rank !== "unspecified"
+      ? `${RANKS[game.position.rank].label}${game.position.unit ? `・${game.position.unit}` : ""}`
+      : inCompany(game) && game.position.unit
+        ? game.position.unit
+        : "",
     game.housing === "own" ? "持ち家" : "賃貸等",
     game.retired
       ? "退職後"
@@ -825,6 +840,7 @@ function renderGame() {
         game.debtRepayFrom,
         game.salaryCapFrom,
         game.incidentFrom,
+        game.careerPathFrom,
       );
       showGame(true);
     });
@@ -1241,6 +1257,7 @@ $("undo-button").addEventListener("click", () => {
     game.debtRepayFrom,
     game.salaryCapFrom,
     game.incidentFrom,
+    game.careerPathFrom,
   );
   const reached = new Set(careerMilestones(game).map((m) => m.id));
   game.reflections = Object.fromEntries(Object.entries(reflections).filter(([id]) => reached.has(id)));

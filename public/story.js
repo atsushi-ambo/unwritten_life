@@ -8,6 +8,10 @@ import {
 } from "./world.js";
 import {
   JOBS,
+  RANKS,
+  STAY_ACTIONS,
+  nextRank,
+  inCompany,
   SCENARIOS,
   REGIONS,
   availableChoices,
@@ -131,6 +135,20 @@ export function storyRequest(
       : null,
     retired: game.retired,
     currentEmployer: game.employer.name,
+    position: inCompany(game)
+      ? {
+          rank: RANKS[game.position.rank].label,
+          unit: game.position.unit || null,
+          yearsAtEmployer: game.year - game.position.joined,
+          yearsInRank: game.year - game.position.since,
+          nextRanks: [
+            ...new Set(
+              ["manager", "specialist"].map((t) => nextRank(game.position.rank, t)).filter(Boolean),
+            ),
+          ].map((r) => RANKS[r].label),
+          note: "社内の段階はゲーム内の一般的な区分で、実際の会社の等級・役職名ではない。在籍年数はゲーム開始または入社から数える。",
+        }
+      : null,
     career: {
       kind: game.employer.kind,
       role: JOBS[game.employer.role].label,
@@ -279,6 +297,9 @@ export function storyRequest(
   }
   system +=
     " すべての場面は本人のキャリアの歩みを軸にする。仕事・専門やスキル・転職候補の比較・現職に残るか移るか・学び直し・副業や小さな試み・起業・仕事からの退職のうち、現在の状態に合う話題を中心に描く。家族・お金・住まいは、その働き方を支えたり選択を迷わせたりする条件として結びつけ、AIで変わる労働市場が経験の生かし方や選択の負担にどう関わるかを描く。退職後は働いた年月に培った経験やつながりと、その先の暮らしを描き、再就職を強制しない。キャリアを軸にすることは転職を強制することではない。実在の求人サイトのブランド名は使わない。";
+  if (context.position && context.allowedActions.some((a) => STAY_ACTIONS.includes(a.id)))
+    system +=
+      " 今の会社で働いている年は、4択の少なくとも1案を、今の会社に残ってキャリアを築く案（focus・promote・transfer・internalVenture・pilot・negotiate・mentorのうち許可されたもの）にする。positionの役職・部署・在籍年数・次の段階を使い、社内での次の一歩（昇格を目指す、別の部署や役割に手を挙げる、社内の新規事業に応募する、今の仕事でAI活用を進める等）を具体的に書く。転職案と並べ、残る道を劣った選択として描かない。promoteで役職がリーダーのときはdecision.trackにmanager（管理職）かspecialist（専門職）を入れる。transferとinternalVentureはdecision.unitに移りたい仕事や部署・事業の名前を40文字以内で入れる。部署名・事業名は一般的な名前にし、勤務先の実際の人事制度・等級名・社内公募の有無・組織の内部事情を作らない。";
   if (context.lastIncident)
     system +=
       " lastIncidentはゲームの乱数で確定した、本人が選んでいない出来事。誰が・どんな職場や家庭の状況で・何がきっかけで・本人がどう受け止めたかは、勤務先・職種・家族・直前の選択に合わせて具体的に自由に描いてよい。ただし出来事の種類と重さ（休職・失職・治療・介護など）は変えず、記録にない別の不幸・病名・診断・加害者の実名を加えない。転職したばかりなら新しい職場で起きたこととして描く。ハラスメントや心身の不調は本人の責任にせず、加害を正当化せず、相談・休む・離れるといった道があることが伝わるように描く。toneがhardなら4択の少なくとも1案はこの出来事への具体的な向き合い方（休む、相談する、職場を離れる、家族を支える等）にする。toneがgoodなら手応えとして描き、成功を保証しない。";
@@ -326,7 +347,8 @@ export function sceneSchema(game, { mode = "life" } = {}) {
   });
   const alternatives = [];
   const generic = ids.filter(
-    (id) => !["switch", "startup", "move"].includes(id),
+    (id) =>
+      !["switch", "startup", "move", "promote", "transfer", "internalVenture"].includes(id),
   );
   if (generic.length) alternatives.push(option(generic, decision(generic)));
   if (ids.includes("switch"))
@@ -368,6 +390,19 @@ export function sceneSchema(game, { mode = "life" } = {}) {
           },
           name: text(60),
         }),
+      ),
+    );
+  for (const id of ["transfer", "internalVenture"].filter((x) => ids.includes(x)))
+    alternatives.push(option([id], decision([id], { unit: text(80) })));
+  if (ids.includes("promote"))
+    alternatives.push(
+      option(
+        ["promote"],
+        game.position.rank === "lead"
+          ? decision(["promote"], {
+              track: { type: "string", enum: ["manager", "specialist"] },
+            })
+          : decision(["promote"]),
       ),
     );
   if (ids.includes("move"))

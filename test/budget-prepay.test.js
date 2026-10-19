@@ -42,7 +42,7 @@ function checkBudget(before, next) {
 function replayAt(g, length, scenes = {}) {
   return replay(g.profile, g.scenario, g.seed, g.decisions.slice(0, length),
     scenes, false, g.dynamicFrom, g.worldFrom, g.retirementFrom,
-    g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom);
+    g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom);
 }
 const scene = {
   title: "住まいと手元の備えを考える",
@@ -52,7 +52,7 @@ const scene = {
     ["prepay", "備えを残して元金を返す"],
     ["learn", "次の仕事のために学ぶ"],
     ["rest", "体調と暮らしを整える"],
-    ["connect", "大切な人と相談する"],
+    ["focus", "今の仕事で備えをつくる"],
   ].map(([id, label]) => ({
     id, label, hint: "時間や手元資金の配分を考える",
     reason: "現在の暮らしと余裕から考える", decision: { id, intent: label },
