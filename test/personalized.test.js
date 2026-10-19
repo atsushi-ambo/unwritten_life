@@ -12,6 +12,7 @@ import {
 } from "../public/engine.js";
 import { storyRequest, sceneSchema } from "../public/story.js";
 import { makeAI } from "../lib/ai.mjs";
+import { readyAI } from "./fixtures/ai-replies.js";
 import { makeServer } from "../server.mjs";
 const profile = {
   age: 32,
@@ -287,18 +288,16 @@ test("personalized API uses separate caches for life/career, validates exactly f
 });
 test("career AI rejects the retirement boundary before transport or accounting, while legacy clients retain their choice rule", async () => {
   let requests = 0;
-  const ai = makeAI({
-    transport: async (_url, options) => {
-      requests++;
-      const context = JSON.parse(JSON.parse(options.body).messages[1].content);
-      assert.ok(context.allowedActions.some((a) => a.id === "switch"));
-      return {
-        status: 200,
-        text: JSON.stringify({
-          message: { content: JSON.stringify(careerScene()) },
-        }),
-      };
-    },
+  const ai = await readyAI(async (_url, options) => {
+    requests++;
+    const context = JSON.parse(JSON.parse(options.body).messages[1].content);
+    assert.ok(context.allowedActions.some((a) => a.id === "switch"));
+    return {
+      status: 200,
+      text: JSON.stringify({
+        message: { content: JSON.stringify(careerScene()) },
+      }),
+    };
   });
   const before = createGame({ ...profile, age: 64, retirementAge: 65 }, "steady", 4),
     boundary = advance(before, "rest");

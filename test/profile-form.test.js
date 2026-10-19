@@ -222,30 +222,3 @@ test("quick HTML hides whole detailed sections and exposes only one start contro
     ),
   );
 });
-
-test("older local servers cannot silently discard detailed inputs during AI generation", async () => {
-  const app = await readFile(
-    new URL("../public/app.js", import.meta.url),
-    "utf8",
-  );
-  const c = createContext({
-    standalone: false,
-    aiState: { provider: "ollama" },
-    serverPersonalizedChoices: true,
-    serverProfileDetails: false,
-    game: { profile: { municipality: "合成市" } },
-  });
-  runInContext(
-    app.slice(
-      app.indexOf("function needsChoiceServerUpdate()"),
-      app.indexOf("function needsCareerServerUpdate()"),
-    ),
-    c,
-  );
-  assert.equal(runInContext("needsChoiceServerUpdate()", c), true);
-  c.serverProfileDetails = true;
-  assert.equal(runInContext("needsChoiceServerUpdate()", c), false);
-  c.serverProfileDetails = false;
-  c.game.profile = {};
-  assert.equal(runInContext("needsChoiceServerUpdate()", c), false);
-});

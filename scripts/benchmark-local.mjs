@@ -20,9 +20,9 @@ if (process.platform !== "darwin") {
 }
 const model = process.argv[2];
 const variant = process.argv[3] ?? "current";
-// The older prompt experiments describe the legacy 3–5 choice contract.
-// Keep their schema and validation separate from today's personalized four.
-const personalized = variant === "current";
+// The focused/narrative experiments used the retired 3–5 choice contract and
+// rule options; only today's personalized four can be measured.
+const personalized = true;
 const sampleSeed = Number(process.env.BENCH_SEED ?? 2026);
 if (
   !Number.isSafeInteger(sampleSeed) ||
@@ -31,9 +31,9 @@ if (
 ) {
   throw new Error("BENCH_SEED must be an integer from 0 to 2147483647.");
 }
-if (!model || !["current", "focused", "narrative"].includes(variant)) {
+if (!model || variant !== "current") {
   throw new Error(
-    "Usage: node scripts/benchmark-local.mjs INSTALLED_MODEL [current|focused|narrative]",
+    "Usage: node scripts/benchmark-local.mjs INSTALLED_MODEL [current]",
   );
 }
 const localJSON = async (path) => {

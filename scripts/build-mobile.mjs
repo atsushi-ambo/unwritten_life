@@ -4,7 +4,9 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { parse, serialize } from "parse5";
 
-export async function buildMobile(output, { cloud = false } = {}) {
+// The phone edition is the owner's private hosted app: OpenAI through the
+// same-origin Worker. There is no offline edition, since play needs the AI.
+export async function buildMobile(output) {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   const target = resolve(output ?? resolve(root, "artifacts/mobile"));
   const protectedPaths = [
@@ -45,7 +47,7 @@ export async function buildMobile(output, { cloud = false } = {}) {
   // All modules share a content revision, including their transitive imports.
   // A deployment must never combine cached JS with a newer HTML contract.
   const revision = createHash("sha256")
-    .update(JSON.stringify([cloud, [...sources]]))
+    .update(JSON.stringify(["mobile-cloud", [...sources]]))
     .digest("hex")
     .slice(0, 16);
   for (const file of files) {
@@ -73,11 +75,11 @@ export async function buildMobile(output, { cloud = false } = {}) {
   const html = document.childNodes.find((n) => n.tagName === "html");
   html.attrs.push({
     name: "data-edition",
-    value: cloud ? "mobile-cloud" : "mobile",
+    value: "mobile-cloud",
   });
   const head = html.childNodes.find((n) => n.tagName === "head");
   const csp = parse(
-    `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src ${cloud ? "'self' " : ""}https://www.wikidata.org/w/api.php; object-src 'none'; base-uri 'none'; form-action 'none'">`,
+    `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self' https://www.wikidata.org/w/api.php; object-src 'none'; base-uri 'none'; form-action 'none'">`,
   )
     .childNodes.find((n) => n.tagName === "html")
     .childNodes.find((n) => n.tagName === "head").childNodes[0];
@@ -85,9 +87,7 @@ export async function buildMobile(output, { cloud = false } = {}) {
   head.childNodes.unshift(csp);
   const body = html.childNodes.find((n) => n.tagName === "body");
   const banner = parse(
-    cloud
-      ? '<aside class="mobile-edition-banner"><strong>スマホ体験版 · OpenAIは手動生成</strong><span>AI生成を押したときだけプロフィールと選択履歴をOpenAIへ送ります。見積り累計$0.10・100回まで。セーブはこの端末のブラウザに保存します。</span></aside>'
-      : '<aside class="mobile-edition-banner"><strong>スマホ体験版 · 端末内で遊べます</strong><span>会社情報を取得するときだけ企業名をWikidataへ送ります。AIは手動交換で使えます。PCのAPIキーとは接続せず、API課金は発生しません。</span></aside>',
+    '<aside class="mobile-edition-banner"><strong>スマホ版 · OpenAIで毎年自動生成</strong><span>場面と選択肢をつくるため、プロフィールと選択履歴をOpenAIへ送ります。見積り累計$5まで。セーブはこの端末のブラウザに保存します。</span></aside>',
   )
     .childNodes.find((n) => n.tagName === "html")
     .childNodes.find((n) => n.tagName === "body").childNodes[0];
@@ -104,11 +104,11 @@ if (
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
   const args = process.argv.slice(2);
-  const cloud = args.includes("--cloud");
-  if (cloud) args.splice(args.indexOf("--cloud"), 1);
+  // --cloud is accepted for older commands; every build is the hosted edition.
+  if (args.includes("--cloud")) args.splice(args.indexOf("--cloud"), 1);
   if (args.length && (args.length !== 2 || args[0] !== "--output"))
     throw new Error(
-      "使い方: npm run build:mobile -- [--cloud] --output 出力先",
+      "使い方: npm run build:mobile -- --output 出力先",
     );
-  console.log(JSON.stringify(await buildMobile(args[1], { cloud })));
+  console.log(JSON.stringify(await buildMobile(args[1])));
 }

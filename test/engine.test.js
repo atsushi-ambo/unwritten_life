@@ -307,8 +307,9 @@ test("pre-change retirement saves preserve boundary work history and the current
   for (const { id, save, expected } of fixtures) {
     assert.ok(!Object.hasOwn(save, "retirementFrom"));
     const restored = decodeSave(JSON.stringify(save));
-    const { retirementFrom, careLeaveSalaryFrom, prepayFrom, debtRepayFrom, salaryCapFrom, reflections, ...state } = restored;
+    const { retirementFrom, careLeaveSalaryFrom, prepayFrom, debtRepayFrom, salaryCapFrom, reflections, careerSeen, ...state } = restored;
     assert.deepEqual(reflections, {});
+    assert.deepEqual(careerSeen, {});
     assert.equal(retirementFrom, save.decisions.length + 1);
     assert.equal(careLeaveSalaryFrom, save.decisions.length);
     assert.equal(prepayFrom, save.decisions.length);
@@ -594,16 +595,12 @@ test("chosen employer and role change future outcomes and survive saving, replay
     advance(g, { id: "switch", target: "toyota", role: "tech" }).income,
   );
 });
-test("real evidence is dated; fictional employers unlock in their simulated founding year", async () => {
-  const { careerCandidates } = await import("../public/careers.js");
+test("legacy saves keep dated evidence and the founding year of earlier fictional employers", () => {
   const g = createGame(profile, "steady", 42);
-  assert.ok(careerCandidates(g).every((c) => c.kind === "real"));
   assert.throws(() =>
     advance(g, { id: "switch", target: "machi", role: "care" }),
   );
   let future = replay(profile, "steady", 42, Array(10).fill("rest"));
-  assert.ok(careerCandidates(future).some((c) => c.id === "machi"));
-  assert.ok(!careerCandidates(future).some((c) => c.id === "memory"));
   future = advance(future, { id: "switch", target: "machi", role: "care" });
   assert.equal(future.employer.kind, "fictional");
   assert.equal(future.employer.facts, null);
@@ -615,7 +612,6 @@ test("real evidence is dated; fictional employers unlock in their simulated foun
   });
   assert.equal(real.employer.facts.sources[0].checkedAt, "2026-10-17");
   assert.match(real.employer.facts.sources[0].url, /nintendo.co.jp/);
-  assert.ok(!careerCandidates(real).some((c) => c.id === "nintendo"));
 });
 test("starting a business pays setup once, ongoing costs yearly, and stops costs when leaving", () => {
   const g = createGame(profile, "steady", 42);

@@ -4,6 +4,7 @@ import { makeAI, configFrom } from "../lib/ai.mjs";
 import { publicAddress, destination, requestText } from "../lib/network.mjs";
 import { createGame, encodeSave, advance } from "../public/engine.js";
 import { storyRequest } from "../public/story.js";
+import { replyFor, readyAI, ollamaText, chatText } from "./fixtures/ai-replies.js";
 import http from "node:http";
 import { readFileSync } from "node:fs";
 const p = {
@@ -20,21 +21,11 @@ const p = {
   companyType: "unknown",
   company: "架空会社",
 };
-const scene = {
-  title: "学びを仕事へ",
-  body: "会社と暮らしを考え、次の一年を選ぶ。",
-  insight: "これは仮想の場面。",
-  options: ["learn", "rest", "connect"].map((id) => ({
-    id,
-    label: id,
-    hint: "時間の配分",
-  })),
-};
 test("every narration mode follows the career arc while preserving safety and output contracts", () => {
   const game = createGame(p);
-  for (const personalized of [false, true]) {
+  {
     for (const mode of ["life", "career"]) {
-      const { messages } = storyRequest(game, { personalized, mode });
+      const { messages } = storyRequest(game, { mode });
       const system = messages[0].content;
       for (const rule of [
         /キャリアと人生のシミュレーションの語り手/u,
@@ -62,8 +53,9 @@ test("every narration mode follows the career arc while preserving safety and ou
         /実在の求人サイトのブランド名は使わない/u,
         /出力はJSON[だの]け|出力はJSONのみ/u,
         /"title":"40文字以内"/u,
-      ]) assert.match(system, rule, `${personalized}/${mode}: ${rule}`);
-      if (personalized) {
+      ]) assert.match(system, rule, `${mode}: ${rule}`);
+      assert.match(system, /pastCandidates.*繰り返さず/u);
+      {
         assert.match(system, /body":"120〜200文字/u);
         assert.match(system, /選択肢は必ず4個/u);
         if (mode === "life") {
@@ -73,10 +65,6 @@ test("every narration mode follows the career arc while preserving safety and ou
           assert.match(system, /3つの異なる企業へのswitch案と、現職に残るfocus（求職中ならrest）を1案/u);
           assert.match(system, /具体的な役割は架空の提案で、求人情報として書かない/u);
         }
-      } else {
-        assert.match(system, /body":"200〜350文字/u);
-        assert.match(system, /optionsは3〜5個、id重複不可/u);
-        assert.match(system, /allowedActionsにない行動、金額の直接更新、病気の診断は禁止/u);
       }
     }
   }
@@ -91,11 +79,7 @@ test("actual local HTTP model transport parses a valid response and cache preven
     assert.equal(data.messages[0].role, "system");
     calls++;
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(
-      JSON.stringify({
-        choices: [{ message: { content: JSON.stringify(scene) } }],
-      }),
-    );
+    res.end(chatText(replyFor({ body })));
   });
   await new Promise((r) => mock.listen(0, "127.0.0.1", r));
   t.after(() => new Promise((r) => mock.close(r)));
@@ -108,7 +92,8 @@ test("actual local HTTP model transport parses a valid response and cache preven
   });
   const save = encodeSave(createGame(p));
   const a = await ai.generate(save);
-  assert.equal(a.scene.title, scene.title);
+  assert.equal(a.scene.title, "学びを仕事へ");
+  assert.equal(a.scene.options.length, 4);
   assert.equal(a.accounting.calls, 1);
   assert.equal(a.accounting.busy, false);
   assert.equal((await ai.generate(save)).cached, true);
@@ -121,13 +106,15 @@ test("actual local HTTP model transport parses a valid response and cache preven
 test("provider keys stay out of status and prompts, cloud requires consent and reserves budget", async () => {
   const ai = makeAI({
     validateDestination: async () => {},
-    transport: async () => ({
+    transport: async (_url, options) => ({
       status: 200,
-      text: JSON.stringify({
-        choices: [{ message: { content: JSON.stringify(scene) } }],
-      }),
+      text: chatText(replyFor(options)),
     }),
   });
+  await assert.rejects(
+    () => ai.generate(encodeSave(createGame(p)), true),
+    /接続を設定/,
+  );
   await ai.configure({
     provider: "openai",
     baseURL: "https://api.openai.com/v1",
@@ -153,14 +140,12 @@ test("provider keys stay out of status and prompts, cloud requires consent and r
 });
 test("malformed or malicious model output is rejected without retry and consumes one attempt", async () => {
   let calls = 0;
-  const ai = makeAI({
-    transport: async () => {
-      calls++;
-      return {
-        status: 200,
-        text: JSON.stringify({ message: { content: "not JSON" } }),
-      };
-    },
+  const ai = await readyAI(async () => {
+    calls++;
+    return {
+      status: 200,
+      text: JSON.stringify({ message: { content: "not JSON" } }),
+    };
   });
   await assert.rejects(() => ai.generate(encodeSave(createGame(p))), /JSON/);
   assert.equal(calls, 1);
@@ -222,19 +207,22 @@ test("bounded response sizes reject excess bodies over actual HTTP", async (t) =
 
 test("AI receives the chosen company and business context, and different employers do not share a cache entry", async () => {
   const contexts = [];
-  const ai = makeAI({
-    transport: async (_url, options) => {
-      const payload = JSON.parse(options.body);
-      contexts.push(JSON.parse(payload.messages[1].content));
-      return {
-        status: 200,
-        text: JSON.stringify({ message: { content: JSON.stringify(scene) } }),
-      };
-    },
+  const ai = await readyAI(async (_url, options) => {
+    const payload = JSON.parse(options.body);
+    contexts.push(JSON.parse(payload.messages[1].content));
+    return { status: 200, text: ollamaText(replyFor(options)) };
   });
   const g = createGame(p, "steady", 42);
-  const real = advance(g, { id: "switch", target: "microsoft", role: "tech" });
-  const other = advance(g, { id: "switch", target: "toyota", role: "tech" });
+  const facts = {
+    summary: "合成の事業資料。業務システムを提供する。",
+    sector: "tech",
+    confirmed: true,
+    sources: [{ url: "https://example.com/about", title: "合成の公式資料", checkedAt: "2026-10-19" }],
+  };
+  const switchTo = (name, evidence) =>
+    advance(g, { id: "switch", target: "custom", name, role: "tech", companyType: "unknown", facts: evidence });
+  const real = switchTo("合成システムズ", facts);
+  const other = switchTo("合成ロボティクス", null);
   await ai.generate(encodeSave(real));
   assert.equal((await ai.generate(encodeSave(real))).cached, true);
   await ai.generate(encodeSave(other));
@@ -245,9 +233,11 @@ test("AI receives the chosen company and business context, and different employe
   });
   await ai.generate(encodeSave(venture));
   assert.equal(contexts.length, 3);
-  assert.equal(contexts[0].currentEmployer, "Microsoft");
-  assert.match(contexts[0].companyEvidence.sources[0].url, /microsoft/);
-  assert.equal(contexts[1].currentEmployer, "トヨタ自動車");
+  assert.equal(contexts[0].currentEmployer, "合成システムズ");
+  assert.match(contexts[0].companyEvidence.sources[0].url, /example\.com/);
+  assert.deepEqual(contexts[0].pastCandidates, ["架空会社"]);
+  assert.equal(contexts[1].currentEmployer, "合成ロボティクス");
+  assert.equal(contexts[1].companyEvidence, null);
   assert.equal(contexts[2].career.kind, "venture");
   assert.equal(contexts[2].currentEmployer, "合成事業");
   assert.equal(contexts[2].companyEvidence, null);
@@ -256,14 +246,9 @@ test("AI receives the chosen company and business context, and different employe
 test("AI preserves pre-fix care-leave histories for open clients and separates salary-rule cache entries", async () => {
   const { save } = JSON.parse(readFileSync(new URL("./fixtures/care-leave-save.json", import.meta.url)));
   let calls = 0;
-  const ai = makeAI({
-    transport: async () => {
-      calls++;
-      return {
-        status: 200,
-        text: JSON.stringify({ message: { content: JSON.stringify(scene) } }),
-      };
-    },
+  const ai = await readyAI(async (_url, options) => {
+    calls++;
+    return { status: 200, text: ollamaText(replyFor(options)) };
   });
   const legacy = await ai.generate(JSON.stringify(save));
   assert.equal(legacy.cached, false);
@@ -283,15 +268,10 @@ test("AI preserves pre-fix care-leave histories for open clients and separates s
 });
 
 test("AI keeps prepay out of already-open old clients and hashes its boundary in the cache key", async () => {
-  const contexts = [], ai = makeAI({
-    transport: async (_url, options) => {
-      const payload = JSON.parse(options.body);
-      contexts.push(JSON.parse(payload.messages[1].content));
-      return {
-        status: 200,
-        text: JSON.stringify({ message: { content: JSON.stringify(scene) } }),
-      };
-    },
+  const contexts = [], ai = await readyAI(async (_url, options) => {
+    const payload = JSON.parse(options.body);
+    contexts.push(JSON.parse(payload.messages[1].content));
+    return { status: 200, text: ollamaText(replyFor(options)) };
   });
   const save = JSON.parse(encodeSave(createGame({
     ...p, savings: 1000, housing: "own", homeValue: 3000,
@@ -318,14 +298,9 @@ test("AI keeps prepay out of already-open old clients and hashes its boundary in
 
 test("AI preserves old-client debt rules and separates repayment boundaries in the cache", async () => {
   let calls = 0;
-  const ai = makeAI({
-    transport: async () => {
-      calls++;
-      return {
-        status: 200,
-        text: JSON.stringify({ message: { content: JSON.stringify(scene) } }),
-      };
-    },
+  const ai = await readyAI(async (_url, options) => {
+    calls++;
+    return { status: 200, text: ollamaText(replyFor(options)) };
   });
   const before = createGame({ ...p, savings: -2000 }, "steady", 42, 0, 0, 0, 0, 0, 110),
     saved = JSON.parse(encodeSave(advance(before, "rest")));
@@ -354,14 +329,9 @@ test("AI preserves old-client debt rules and separates repayment boundaries in t
 
 test("AI separates salary cap boundaries in the cache and rejects invalid ones", async () => {
   let calls = 0;
-  const ai = makeAI({
-    transport: async () => {
-      calls++;
-      return {
-        status: 200,
-        text: JSON.stringify({ message: { content: JSON.stringify(scene) } }),
-      };
-    },
+  const ai = await readyAI(async (_url, options) => {
+    calls++;
+    return { status: 200, text: ollamaText(replyFor(options)) };
   });
   const saved = JSON.parse(encodeSave(advance(
     createGame(p, "steady", 42, 0, 0, 0, 0, 0, 0, 110), "rest")));
@@ -414,21 +384,12 @@ test("local model discovery uses fixed endpoints, filters cloud models, and reje
 });
 
 test("misread financial balances in generated prose never replace the authoritative result card", async () => {
-  const ai = makeAI({
-    transport: async () => ({
-      status: 200,
-      text: JSON.stringify({
-        message: {
-          content: JSON.stringify({
-            ...scene,
-            body: "新しい仕事を試した。現金は789万円から211万円に減った。顧客の声を聞きながら、これまでの経験を次の取り組みにつなげる方法を考える一年だ。",
-            options: scene.options.map((o, i) =>
-              i ? o : { ...o, hint: "受講料は999万円" },
-            ),
-          }),
-        },
-      }),
-    }),
+  const ai = await readyAI(async (_url, options) => {
+    const scene = replyFor(options, {
+      body: "新しい仕事を試した。現金は789万円から211万円に減った。顧客の声を聞きながら、これまでの経験を次の取り組みにつなげる方法を考える一年だ。",
+    });
+    scene.options[0].hint = "受講料は999万円";
+    return { status: 200, text: ollamaText(scene) };
   });
   const g = createGame(p),
     result = await ai.generate(encodeSave(g));
@@ -444,12 +405,7 @@ test("OpenAI Luna uses the scene output allowance without hidden reasoning; othe
     validateDestination: async () => {},
     transport: async (_url, options) => {
       requests.push(JSON.parse(options.body));
-      return {
-        status: 200,
-        text: JSON.stringify({
-          choices: [{ message: { content: JSON.stringify(scene) } }],
-        }),
-      };
+      return { status: 200, text: chatText(replyFor(options)) };
     },
   });
   for (const model of ["gpt-6-luna", "gpt-6-astra"]) {
@@ -472,7 +428,7 @@ test("OpenAI Luna uses the scene output allowance without hidden reasoning; othe
 });
 
 test("configuration rechecks busy after destination and model discovery, preserving the active model and cache", async () => {
-  for (const stage of ["destination", "models"]) {
+  for (let stage of ["destination", "models"]) {
     const validating = Promise.withResolvers(),
       resumeValidation = Promise.withResolvers(),
       inference = Promise.withResolvers(),
@@ -492,13 +448,20 @@ test("configuration rechecks busy after destination and model discovery, preserv
           }
           return {
             status: 200,
-            text: JSON.stringify({ models: [{ name: "next-model" }] }),
+            text: JSON.stringify({ models: [{ name: "qwen3:8b" }, { name: "next-model" }] }),
           };
         }
         requestedModels.push(JSON.parse(options.body).model);
-        return inference.promise;
+        return inference.promise.then(() => ({
+          status: 200,
+          text: ollamaText(replyFor(options)),
+        }));
       },
     });
+    const pausing = stage;
+    stage = "ready";
+    await ai.configure({ provider: "ollama", model: "qwen3:8b" });
+    stage = pausing;
     const configuring = ai.configure({ provider: "ollama", model: "next-model" });
     const rejected = assert.rejects(configuring, {
       message: "生成中です。完了後に設定を変更してください。",
@@ -511,13 +474,10 @@ test("configuration rechecks busy after destination and model discovery, preserv
     await rejected;
     assert.equal(ai.status().model, "qwen3:8b");
     await assert.rejects(
-      () => ai.configure({ provider: "disabled" }),
+      () => ai.configure({ provider: "ollama", model: "qwen3:8b" }),
       /生成中です。完了後に設定を変更してください。/,
     );
-    inference.resolve({
-      status: 200,
-      text: JSON.stringify({ message: { content: JSON.stringify(scene) } }),
-    });
+    inference.resolve();
     const result = await generating;
     assert.equal(result.model, "qwen3:8b");
     assert.equal((await ai.generate(save)).cached, true);
@@ -553,8 +513,8 @@ test("local connection refusals explain how to start each provider and restore t
                     data: [{ id: "test-model" }],
                   }
                 : provider === "ollama"
-                  ? { message: { content: JSON.stringify(scene) } }
-                  : { choices: [{ message: { content: JSON.stringify(scene) } }] },
+                  ? { message: { content: JSON.stringify(replyFor(options)) } }
+                  : { choices: [{ message: { content: JSON.stringify(replyFor(options)) } }] },
             ),
           };
         },
@@ -638,19 +598,18 @@ test("timeouts, HTTP failures and cloud connection refusals keep their attempt a
 });
 
 test("AI output validation errors describe the rejected proposal while invalid user saves retain their own error", async () => {
-  let content = {
-      ...scene,
-      options: [{ id: "shell", label: "実行", hint: "不正" }],
-    },
+  let invalid = true,
     requests = 0;
-  const ai = makeAI({
-    transport: async () => {
-      requests++;
-      return {
-        status: 200,
-        text: JSON.stringify({ message: { content: JSON.stringify(content) } }),
-      };
-    },
+  const ai = await readyAI(async (_url, options) => {
+    requests++;
+    return {
+      status: 200,
+      text: ollamaText(
+        invalid
+          ? replyFor(options, { options: [{ id: "shell", label: "実行", hint: "不正" }] })
+          : replyFor(options),
+      ),
+    };
   });
   const save = encodeSave(createGame(p));
   await assert.rejects(() => ai.generate(save), {
@@ -667,7 +626,7 @@ test("AI output validation errors describe the rejected proposal while invalid u
   });
   assert.equal(requests, 1);
   assert.equal(ai.status().calls, 1);
-  content = scene;
-  assert.equal((await ai.generate(save)).scene.title, scene.title);
+  invalid = false;
+  assert.equal((await ai.generate(save)).scene.title, "学びを仕事へ");
   assert.equal(ai.status().calls, 2);
 });

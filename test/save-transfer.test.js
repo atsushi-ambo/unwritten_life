@@ -6,7 +6,7 @@ import { createContext, runInContext } from "node:vm";
 import { parse } from "parse5";
 import {
   createGame, advance, advanceYears, optionalProfileInputs, profileInputForLevel,
-  encodeSave, decodeSave, availableChoices, decisionId, replay, recordCareerReflection,
+  encodeSave, decodeSave, availableChoices, decisionId, replay, recordCareerReflection, careerSeenUntil,
 } from "../public/engine.js";
 import { careerMilestones, pendingCareerReflection } from "../public/careers.js";
 
@@ -58,6 +58,7 @@ function harness({ game = null, remember = false, stored = {} } = {}) {
     toast: (message) => notices.push(message),
     window: { scrollTo() {} },
     maybeGenerateScene() {},
+    aiReady: () => true, hosted: false, generationError: "",
     moveToStory() {},
     renderGame() { rendered++; runInContext("persist()", context); },
   });
@@ -65,7 +66,7 @@ function harness({ game = null, remember = false, stored = {} } = {}) {
     ["function readStoredGame()", "function readProfile()"],
     ["function showGame(", "function stat("],
     ["function showReflection()", '$("journey-review").addEventListener'],
-    ["function downloadSave(", "if (standalone || hosted)"],
+    ["function downloadSave(", 'if (hosted) {\n  $("ai-form").hidden'],
   ]) runInContext(app.slice(app.indexOf(start), app.indexOf(end)), context);
   return {
     $, context, storage, downloads, revoked, timers, notices,
@@ -255,7 +256,7 @@ test("undo retains the care-leave salary migration boundary and can repeat the r
   const { save } = JSON.parse(await readFile(new URL("./fixtures/care-leave-save.json", import.meta.url), "utf8"));
   const game = decodeSave(JSON.stringify(save));
   const h = harness({ game });
-  Object.assign(h.context, { replay, moveToStory() {} });
+  Object.assign(h.context, { replay, careerSeenUntil, moveToStory() {} });
   runInContext(app.slice(
     app.indexOf('$("undo-button").addEventListener'),
     app.indexOf('$("compare-button").addEventListener'),
@@ -264,7 +265,7 @@ test("undo retains the care-leave salary migration boundary and can repeat the r
   assert.equal(h.context.game.careLeaveSalaryFrom, game.careLeaveSalaryFrom);
   assert.equal(h.context.game.decisions.length, 3);
   assert.ok(h.context.game.cash > 30);
-  assert.deepEqual({ ...advance(h.context.game, "invest"), reflections: { ...h.context.game.reflections } }, game);
+  assert.deepEqual({ ...advance(h.context.game, "invest"), reflections: { ...h.context.game.reflections }, careerSeen: { ...h.context.game.careerSeen } }, game);
 });
 
 test("save controls use external event handlers and a JSON file input", async () => {
