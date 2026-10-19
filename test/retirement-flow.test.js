@@ -41,7 +41,7 @@ test("career comparison and AI career generation share the versioned retirement 
     };
     const context = createContext({
       $, game, aiState, isRetiredAt, encodeSave, storyRequest,
-      generating: false, hosted: false, revision: 0, cloudConsented: false,
+      generating: false, aiTesting: false, serverStale: false, hosted: false, revision: 0, cloudConsented: false,
       careerGenerating: false, careerDraft: null, careerError: "",
       recordCareerSeen: (g) => g, persist() {},
       renderAITiming() {}, renderGame() {}, renderCareerOffers() {},

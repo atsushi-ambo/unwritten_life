@@ -149,7 +149,7 @@ try {
         return { status: response.status, text };
       },
     });
-    await ai.configure({ provider: "ollama", model, requestCap: 1 });
+    // Watch memory from the start: configure() already runs a short verification inference.
     const timer = setInterval(() => {
       try {
         const sample = memory();
@@ -164,8 +164,10 @@ try {
         controller.abort(error);
       }
     }, 10000);
-    const start = performance.now();
+    let start = performance.now();
     try {
+      await ai.configure({ provider: "ollama", model, requestCap: 1 });
+      start = performance.now();
       const generated = await ai.generate(encodeSave(fixture.game), false, {
         personalized: true,
         mode: fixture.mode,

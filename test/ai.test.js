@@ -4,7 +4,7 @@ import { makeAI, configFrom } from "../lib/ai.mjs";
 import { publicAddress, destination, requestText } from "../lib/network.mjs";
 import { createGame, encodeSave, advance } from "../public/engine.js";
 import { storyRequest } from "../public/story.js";
-import { replyFor, readyAI, ollamaText, chatText } from "./fixtures/ai-replies.js";
+import { replyFor, isVerification, readyAI, ollamaText, chatText } from "./fixtures/ai-replies.js";
 import http from "node:http";
 import { readFileSync } from "node:fs";
 const p = {
@@ -77,7 +77,7 @@ test("actual local HTTP model transport parses a valid response and cache preven
     const data = JSON.parse(body);
     assert.equal(data.model, "test-model");
     assert.equal(data.messages[0].role, "system");
-    calls++;
+    if (!isVerification({ body })) calls++;
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(chatText(replyFor({ body })));
   });
@@ -116,7 +116,7 @@ test("provider keys stay out of status and prompts, cloud requires consent and r
     /接続を設定/,
   );
   await ai.configure({
-    provider: "openai",
+    provider: "openai", consent: true,
     baseURL: "https://api.openai.com/v1",
     model: "gpt-6-luna",
     apiKey: "synthetic-test-key",
@@ -178,7 +178,7 @@ test("SSRF address classes, ambiguous numeric hosts and cloud config are constra
   await assert.rejects(() => destination("http://localhost:4317", true));
   assert.throws(() =>
     configFrom({
-      provider: "openai",
+      provider: "openai", consent: true,
       apiKey: "test",
       inputRate: 0,
       outputRate: 0,
@@ -354,6 +354,7 @@ test("local model discovery uses fixed endpoints, filters cloud models, and reje
   const ai = makeAI({
     validateDestination: async () => {},
     transport: async (url) => {
+      if (url.endsWith("/api/chat")) return { status: 200, text: ollamaText({ ok: true }) };
       urls.push(url);
       return {
         status: 200,
@@ -404,13 +405,13 @@ test("OpenAI Luna uses the scene output allowance without hidden reasoning; othe
   const ai = makeAI({
     validateDestination: async () => {},
     transport: async (_url, options) => {
-      requests.push(JSON.parse(options.body));
+      if (!isVerification(options)) requests.push(JSON.parse(options.body));
       return { status: 200, text: chatText(replyFor(options)) };
     },
   });
   for (const model of ["gpt-6-luna", "gpt-6-astra"]) {
     await ai.configure({
-      provider: "openai",
+      provider: "openai", consent: true,
       baseURL: "https://api.openai.com/v1",
       model,
       apiKey: "synthetic-test-key",
@@ -427,67 +428,36 @@ test("OpenAI Luna uses the scene output allowance without hidden reasoning; othe
   assert.equal(ai.status().calls, 2);
 });
 
-test("configuration rechecks busy after destination and model discovery, preserving the active model and cache", async () => {
-  for (let stage of ["destination", "models"]) {
-    const validating = Promise.withResolvers(),
-      resumeValidation = Promise.withResolvers(),
-      inference = Promise.withResolvers(),
-      requestedModels = [];
+test("configuration locks discovery and verification; failed reconfiguration cannot leave an old connection ready", async () => {
+  for (const stage of ["destination", "models", "verification"]) {
+    const entered = Promise.withResolvers(), resume = Promise.withResolvers();
+    let pausing = false;
+    async function pause(at) { if (pausing && stage === at) { entered.resolve(); await resume.promise; } }
     const ai = makeAI({
-      validateDestination: async () => {
-        if (stage === "destination") {
-          validating.resolve();
-          await resumeValidation.promise;
-        }
-      },
-      transport: async (url, options) => {
-        if (url.endsWith("/api/tags")) {
-          if (stage === "models") {
-            validating.resolve();
-            await resumeValidation.promise;
-          }
-          return {
-            status: 200,
-            text: JSON.stringify({ models: [{ name: "qwen3:8b" }, { name: "next-model" }] }),
-          };
-        }
-        requestedModels.push(JSON.parse(options.body).model);
-        return inference.promise.then(() => ({
-          status: 200,
-          text: ollamaText(replyFor(options)),
-        }));
+      validateDestination: async () => pause("destination"),
+      transport: async (url) => {
+        await pause(url.endsWith("/api/tags") ? "models" : "verification");
+        return { status: 200, text: url.endsWith("/api/tags")
+          ? JSON.stringify({ models: [{ name: "qwen3:8b" }] }) : ollamaText({ ok: true }) };
       },
     });
-    const pausing = stage;
-    stage = "ready";
     await ai.configure({ provider: "ollama", model: "qwen3:8b" });
-    stage = pausing;
-    const configuring = ai.configure({ provider: "ollama", model: "next-model" });
-    const rejected = assert.rejects(configuring, {
-      message: "生成中です。完了後に設定を変更してください。",
-    });
-    await validating.promise;
-    const save = encodeSave(createGame(p));
-    const generating = ai.generate(save);
+    pausing = true;
+    const configuring = ai.configure({ provider: "ollama", model: "qwen3:8b" });
+    await entered.promise;
+    assert.equal(ai.status().ready, false);
+    assert.equal(ai.status().verifiedAt, null);
     assert.equal(ai.status().busy, true);
-    resumeValidation.resolve();
-    await rejected;
-    assert.equal(ai.status().model, "qwen3:8b");
-    await assert.rejects(
-      () => ai.configure({ provider: "ollama", model: "qwen3:8b" }),
-      /生成中です。完了後に設定を変更してください。/,
-    );
-    inference.resolve();
-    const result = await generating;
-    assert.equal(result.model, "qwen3:8b");
-    assert.equal((await ai.generate(save)).cached, true);
-    assert.deepEqual(requestedModels, ["qwen3:8b"]);
-    await ai.configure({ provider: "ollama", model: "next-model" });
-    const next = await ai.generate(save);
-    assert.equal(next.model, "next-model");
-    assert.equal(next.cached, false);
-    assert.equal((await ai.generate(save)).cached, true);
-    assert.deepEqual(requestedModels, ["qwen3:8b", "next-model"]);
+    await assert.rejects(ai.configure({ provider: "ollama" }), /生成中/);
+    await assert.rejects(ai.generate(encodeSave(createGame(p))), /生成中/);
+    resume.resolve();
+    await configuring;
+    assert.equal(ai.status().ready, true);
+    assert.equal(ai.status().calls, 0);
+    await assert.rejects(ai.configure({ provider: "ollama", model: "missing" }), /一覧/);
+    assert.equal(ai.status().ready, false);
+    assert.equal(ai.status().busy, false);
+    await assert.rejects(ai.generate(encodeSave(createGame(p))), /接続を設定/);
   }
 });
 
@@ -520,7 +490,7 @@ test("local connection refusals explain how to start each provider and restore t
         },
       });
       await ai.configure({
-        provider,
+        provider, consent: true,
         model: "test-model",
         inputRate: 0.1,
         outputRate: 0.5,
@@ -533,7 +503,7 @@ test("local connection refusals explain how to start each provider and restore t
           provider === "ollama"
             ? /PC内のAI（Ollama）に接続できません。.*start.command.*ollama serve/
             : /PC内のAI（LM Studio）に接続できません。.*サーバーを起動/;
-      assert.ok(before.reservedUSD > 0);
+      assert.equal(before.reservedUSD, 0);
       failure = refusal;
       await assert.rejects(() => ai.generate(save), message);
       assert.equal(ai.status().calls, before.calls);
@@ -573,6 +543,7 @@ test("timeouts, HTTP failures and cloud connection refusals keep their attempt a
             status: 200,
             text: JSON.stringify({ models: [{ name: "test-model" }] }),
           };
+        if (isVerification(options)) return { status: 200, text: provider === "ollama" ? ollamaText({ ok: true }) : chatText({ ok: true }) };
         requests++;
         assert.equal(options.timeout, 120000);
         if (failure instanceof Error) throw failure;
@@ -580,7 +551,7 @@ test("timeouts, HTTP failures and cloud connection refusals keep their attempt a
       },
     });
     await ai.configure({
-      provider,
+      provider, consent: true,
       model: "test-model",
       apiKey: provider === "openai" ? "synthetic-key" : "",
       inputRate: 0.1,
@@ -590,7 +561,7 @@ test("timeouts, HTTP failures and cloud connection refusals keep their attempt a
     const save = encodeSave(createGame(p));
     await assert.rejects(() => ai.generate(save, true), message);
     assert.equal(ai.status().calls, 1);
-    assert.ok(ai.status().reservedUSD > 0);
+    assert.equal(ai.status().reservedUSD > 0, provider === "openai");
     assert.equal(ai.status().busy, false);
     await assert.rejects(() => ai.generate(save, true), /上限/);
     assert.equal(requests, 1);
@@ -628,5 +599,104 @@ test("AI output validation errors describe the rejected proposal while invalid u
   assert.equal(ai.status().calls, 1);
   invalid = false;
   assert.equal((await ai.generate(save)).scene.title, "学びを仕事へ");
+  assert.equal(ai.status().calls, 2);
+});
+
+test("local and API caps remain separate; connection types cannot contradict providers", () => {
+  for (const provider of ["ollama", "lmstudio"]) {
+    assert.equal(configFrom({ provider }).requestCap, 1000);
+    assert.equal(configFrom({ provider, requestCap: 5000 }).requestCap, 5000);
+    assert.equal(configFrom({ provider, inputRate: 99, outputRate: 99 }).inputRate, 0);
+    for (const requestCap of [5001, 0, 1.1]) assert.throws(() => configFrom({ provider, requestCap }));
+    assert.throws(() => configFrom({ provider, type: "api" }));
+  }
+  const api = { provider: "openai", apiKey: "synthetic-key", inputRate: 1, outputRate: 1 };
+  assert.equal(configFrom(api).requestCap, 100);
+  assert.equal(configFrom(api).usdCap, 1);
+  assert.equal(configFrom({ ...api, requestCap: 300 }).requestCap, 300);
+  assert.throws(() => configFrom({ ...api, requestCap: 301 }));
+});
+
+for (const provider of ["ollama", "lmstudio", "openai", "openrouter", "custom"]) test(`${provider} configure requires real valid text; only API verification reserves cost and no game attempt`, async () => {
+  let bodyCalls = 0, failure = null;
+  const ai = makeAI({
+    validateDestination: async () => {},
+    transport: async (_url, options) => {
+      if (!options.body) return { status: 200, text: JSON.stringify({ models: [{ name: "test-model" }], data: [{ id: "test-model" }] }) };
+      bodyCalls++;
+      assert.equal(ai.status().ready, false);
+      assert.equal(ai.status().busy, true);
+      assert.equal(options.timeout, ["ollama", "lmstudio"].includes(provider) ? 120000 : 90000);
+      assert.equal(options.maxBytes, 16000);
+      const payload = JSON.parse(options.body);
+      assert.equal(payload.options?.num_predict ?? payload.max_completion_tokens ?? payload.max_tokens, 128);
+      if (failure instanceof Error) throw failure;
+      return { status: 200, text: provider === "ollama" ? ollamaText(failure ?? { ok: true }) : chatText(failure ?? { ok: true }) };
+    },
+  });
+  const settings = { provider, baseURL: "https://example.com/v1", model: "test-model", apiKey: "synthetic-key", inputRate: 1, outputRate: 1, consent: true };
+  const local = ["ollama", "lmstudio"].includes(provider);
+  const state = await ai.configure(settings);
+  assert.equal(bodyCalls, 1);
+  assert.equal(state.ready, true);
+  assert.ok(Number.isFinite(Date.parse(state.verifiedAt)));
+  assert.ok(state.verificationSeconds >= 0);
+  assert.equal(state.calls, 0);
+  assert.equal(state.reservedUSD > 0, !local);
+  const reserved = state.reservedUSD;
+  for (failure of [{ ok: false }, { ok: true, extra: true }, "text", new Error("synthetic connection failure")]) {
+    await assert.rejects(ai.configure(settings), /返答|文章|synthetic/);
+    assert.equal(ai.status().ready, false);
+    assert.equal(ai.status().verifiedAt, null);
+    assert.equal(ai.status().calls, 0);
+    assert.equal(ai.status().busy, false);
+  }
+  assert.equal(bodyCalls, 5);
+  assert.equal(ai.status().reservedUSD > reserved, !local);
+});
+
+test("verification rejects missing consent and exhausted USD before any generation", async () => {
+  let requests = 0;
+  const ai = makeAI({ validateDestination: async () => {}, transport: async (_url, options) => {
+    requests++;
+    return { status: 200, text: chatText(replyFor(options)) };
+  } });
+  const config = { provider: "openai", model: "test", apiKey: "synthetic", inputRate: 10000, outputRate: 10000, usdCap: 0.001 };
+  await assert.rejects(ai.configure(config), /同意/);
+  await assert.rejects(ai.configure({ ...config, consent: true }), /上限/);
+  assert.equal(requests, 0);
+  assert.equal(ai.status().calls, 0);
+  assert.equal(ai.status().reservedUSD, 0);
+  assert.equal(ai.status().ready, false);
+});
+
+test("active scene generation rejects reconfiguration and parallel calls; switching verified models invalidates the old cache", async () => {
+  const response = Promise.withResolvers();
+  const requestedModels = [];
+  const ai = makeAI({
+    validateDestination: async () => {},
+    transport: async (url, options) => {
+      if (url.endsWith("/api/tags")) return { status: 200, text: JSON.stringify({ models: [{ name: "qwen3:8b" }, { name: "next-model" }] }) };
+      if (isVerification(options)) return { status: 200, text: ollamaText({ ok: true }) };
+      requestedModels.push(JSON.parse(options.body).model);
+      await response.promise;
+      return { status: 200, text: ollamaText(replyFor(options)) };
+    },
+  });
+  await ai.configure({ provider: "ollama", model: "qwen3:8b" });
+  const save = encodeSave(createGame(p)), generating = ai.generate(save);
+  await assert.rejects(ai.configure({ provider: "ollama", model: "next-model" }), /生成中/);
+  await assert.rejects(ai.generate(save), /生成中/);
+  assert.equal(ai.status().model, "qwen3:8b");
+  assert.equal(ai.status().ready, true);
+  response.resolve();
+  assert.equal((await generating).model, "qwen3:8b");
+  assert.equal((await ai.generate(save)).cached, true);
+  await ai.configure({ provider: "ollama", model: "next-model" });
+  const next = await ai.generate(save);
+  assert.equal(next.model, "next-model");
+  assert.equal(next.cached, false);
+  assert.equal((await ai.generate(save)).cached, true);
+  assert.deepEqual(requestedModels, ["qwen3:8b", "next-model"]);
   assert.equal(ai.status().calls, 2);
 });

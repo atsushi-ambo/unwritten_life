@@ -38,7 +38,9 @@ export function fourReply(context, { career = context.generationMode === "career
     ...overrides,
   };
 }
+export const isVerification = (options) => JSON.parse(options.body).messages.at(-1).content === '{"ok":true} をそのまま返してください。';
 export function replyFor(options, overrides) {
+  if (isVerification(options)) return { ok: true };
   const payload = JSON.parse(options.body);
   const messages = payload.messages;
   return fourReply(JSON.parse(messages.at(-1).content), overrides);
@@ -54,7 +56,9 @@ export async function readyAI(transport, { config = {}, ...options } = {}) {
     transport: async (url, request = {}) =>
       url.endsWith("/api/tags")
         ? { status: 200, text: JSON.stringify({ models: [{ name: "qwen3:8b" }] }) }
-        : transport(url, request),
+        : isVerification(request)
+          ? { status: 200, text: ollamaText({ ok: true }) }
+          : transport(url, request),
   });
   await ai.configure({ provider: "ollama", model: "qwen3:8b", ...config });
   return ai;
