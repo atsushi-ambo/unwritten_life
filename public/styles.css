@@ -2286,3 +2286,22 @@ dialog p, dialog li { font-size: 14px; }
 .scene-retry .text-button {
   color: inherit;
 }
+.incident-note {
+  margin: 12px 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--muted);
+  background: var(--paper);
+  color: var(--ink);
+}
+.incident-note.tone-hard {
+  border-left-color: var(--accent);
+}
+.incident-note.tone-good {
+  border-left-color: var(--green);
+}
+.incident-note p {
+  margin: 0 0 4px;
+}
+.incident-note .incident-title {
+  font-weight: 700;
+}

@@ -15,12 +15,14 @@ function grind(g, years) {
   }
   return g;
 }
+// Salary rules are compared between action paths, so chance incidents (which
+// depend on the action) are off here.
 const capAt = (from) => (profile, scenario, seed) =>
-  createGame(profile, scenario, seed, 0, 0, 0, 0, 0, 0, from);
+  createGame(profile, scenario, seed, 0, 0, 0, 0, 0, 0, from, MAX_AGE);
 function replayAt(g, length) {
   return replay(g.profile, g.scenario, g.seed, g.decisions.slice(0, length),
     {}, false, g.dynamicFrom, g.worldFrom, g.retirementFrom,
-    g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom);
+    g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom);
 }
 
 test("long-run salaries level off near a job and region ceiling but keep variance", () => {

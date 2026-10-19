@@ -856,6 +856,7 @@ export function createGame(
   prepayFrom = 0,
   debtRepayFrom = 0,
   salaryCapFrom = 0,
+  incidentFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -883,7 +884,10 @@ export function createGame(
     debtRepayFrom > MAX_AGE ||
     !Number.isInteger(salaryCapFrom) ||
     salaryCapFrom < 0 ||
-    salaryCapFrom > MAX_AGE
+    salaryCapFrom > MAX_AGE ||
+    !Number.isInteger(incidentFrom) ||
+    incidentFrom < 0 ||
+    incidentFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -901,6 +905,7 @@ export function createGame(
     prepayFrom,
     debtRepayFrom,
     salaryCapFrom,
+    incidentFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -1284,6 +1289,164 @@ function narrateVentureYear(g, outcome, money) {
           : "手応えと収支は別のもの。続けるなら、どこで黒字にするかを考えたい。";
   }
   return { ...outcome, title, body, ...meta };
+}
+// Chance incidents: things that happen to a person regardless of the choice,
+// like a difficult boss in a company that looked good, or a partner's layoff.
+// The engine decides whether one happens, which one, and its mechanical
+// effect, from the seed. The AI only writes the concrete situation.
+// Annual rates are game assumptions, loosely informed by Japanese surveys on
+// workplace harassment and mental-health leave; they are not predictions.
+// `temporary` salary cuts (a leave, treatment) return the following year.
+export const INCIDENTS = Object.freeze({
+  difficultBoss: {
+    kind: "work", tone: "hard", rate: 0.06,
+    title: "上司やチームとの関係がこじれる",
+    body: "仕事の進め方や評価をめぐって、上司やチームとの関係がぎくしゃくした。",
+    effects: { health: -7, freedom: -3 },
+  },
+  harassment: {
+    kind: "work", tone: "hard", rate: 0.02,
+    title: "職場でハラスメントを受ける",
+    body: "職場で、人格を否定するような言動や過大な要求が続いた。",
+    effects: { health: -10, connection: -3 },
+    // A share of cases lead to a mental-health leave of absence.
+    severe: {
+      share: 0.25,
+      title: "ハラスメントで心身を崩し、休職する",
+      body: "職場でのハラスメントが続き、心身の不調から休職することになった。",
+      effects: { health: -20, connection: -3, salaryFactor: 0.7, temporary: true },
+    },
+  },
+  burnout: {
+    kind: "work", tone: "hard", rate: 0.004,
+    title: "心身の不調で休職する",
+    body: "働き続けた疲れが重なり、医師の勧めで一定期間休職することになった。",
+    effects: { health: -15, salaryFactor: 0.7, temporary: true },
+  },
+  layoff: {
+    kind: "work", tone: "hard", rate: 0.004,
+    title: "勤務先の人員整理で職を失う",
+    body: "勤務先が事業を縮小し、人員整理の対象になった。退職金と給付で当面をしのぐ。",
+    effects: { health: -8, layoff: true },
+  },
+  goodTeam: {
+    kind: "work", tone: "good", rate: 0.05,
+    title: "信頼できる上司や仲間に恵まれる",
+    body: "相談しやすい上司や、支え合える仲間と働けるようになった。",
+    effects: { health: 6, skill: 2 },
+  },
+  bigRole: {
+    kind: "work", tone: "good", rate: 0.025,
+    title: "思いがけず大きな役割を任される",
+    body: "これまでの仕事ぶりが目に留まり、想定より大きな役割を任された。",
+    effects: { salaryFactor: 1.1, freedom: -2, skill: 2 },
+  },
+  reorg: {
+    kind: "work", tone: "neutral", rate: 0.03,
+    title: "組織再編で担当が変わる",
+    body: "組織の再編で、担当する仕事や一緒に働く人が大きく変わった。",
+    effects: { skill: 2, freedom: -3 },
+  },
+  partnerJobLoss: {
+    kind: "life", tone: "hard", rate: 0.015,
+    title: "パートナーが職を失う",
+    body: "パートナーの勤め先で人員整理があり、家計と暮らしの見通しが変わった。",
+    effects: { health: -5, extraCost: 80 },
+  },
+  illness: {
+    kind: "life", tone: "hard", rate: 0.012,
+    title: "病気やけがで治療が必要になる",
+    body: "思いがけない病気やけがで、しばらく治療に時間を使うことになった。",
+    effects: { health: -10, extraCost: 30, salaryFactor: 0.9, temporary: true },
+  },
+  parentCare: {
+    kind: "life", tone: "hard", rate: 0.03,
+    title: "親の介護が始まる",
+    body: "親の体調が変わり、通院の付き添いや介護の段取りが暮らしに加わった。",
+    effects: { freedom: -6, connection: 2, extraCost: 40 },
+  },
+  oldFriend: {
+    kind: "life", tone: "good", rate: 0.02,
+    title: "古い友人との再会が転機になる",
+    body: "久しぶりに会った友人との話から、仕事や暮らしの新しい見方を得た。",
+    effects: { connection: 6, freedom: 2 },
+  },
+  windfall: {
+    kind: "life", tone: "good", rate: 0.008,
+    title: "思わぬ臨時収入がある",
+    body: "親族からの相続や思わぬ払い戻しなど、まとまったお金が入った。",
+    effects: { extraCost: -100 },
+  },
+});
+function incidentRates(g, choice, employer) {
+  const working =
+    !g.retired && g.age < g.profile.retirementAge && choice !== "retire" &&
+    !["venture", "seeking"].includes(employer.kind) &&
+    !(employer.kind === "initial" && ["student", "notWorking"].includes(g.profile.occupation));
+  const world = worldAt(g, employer);
+  const moved = choice === "switch";
+  const downturn = world.economy.id === "downturn";
+  const rates = {};
+  if (working) {
+    // A new workplace is a fresh draw of boss and team, good or bad.
+    rates.difficultBoss = INCIDENTS.difficultBoss.rate * (moved ? 2 : 1);
+    rates.harassment = INCIDENTS.harassment.rate * (moved ? 1.5 : 1);
+    rates.burnout =
+      INCIDENTS.burnout.rate * (g.health < 40 ? 2.5 : 1) * (choice === "focus" ? 1.3 : 1);
+    if (!moved)
+      rates.layoff =
+        INCIDENTS.layoff.rate *
+        (world.company.id === "pressure" ? 3 : 1) *
+        (downturn ? 1.5 : 1) *
+        (employer.companyType === "small" ? 1.3 : 1);
+    rates.goodTeam = INCIDENTS.goodTeam.rate * (moved ? 1.5 : 1);
+    if (choice !== "careLeave")
+      rates.bigRole = INCIDENTS.bigRole.rate * clamp(g.skill / 60, 0.3, 1.6);
+    rates.reorg = INCIDENTS.reorg.rate;
+  }
+  if (g.family.partner && g.age < 70)
+    rates.partnerJobLoss = INCIDENTS.partnerJobLoss.rate * (downturn ? 2 : 1);
+  rates.illness =
+    INCIDENTS.illness.rate + (g.age >= 50 ? 0.012 : 0) + (g.age >= 65 ? 0.02 : 0);
+  if (g.age >= 45 && g.age <= 70) rates.parentCare = INCIDENTS.parentCare.rate;
+  rates.oldFriend = INCIDENTS.oldFriend.rate;
+  rates.windfall = INCIDENTS.windfall.rate;
+  return rates;
+}
+// At most one incident a year. The roll, the pick and the severity use their
+// own seeded channels, so the same seed and choices give the same life.
+export function incidentAt(g, choice, employer = g.employer) {
+  const i = g.decisions.length;
+  if (i < g.incidentFrom || !worldEnabled(g)) return null;
+  const rates = incidentRates(g, choice, employer);
+  const total = Object.values(rates).reduce((a, b) => a + b, 0);
+  if (randomAt(g.seed, i, 141) >= total) return null;
+  let pick = randomAt(g.seed, i, 142) * total,
+    id = Object.keys(rates).at(-1);
+  for (const [key, rate] of Object.entries(rates)) {
+    if (pick < rate) {
+      id = key;
+      break;
+    }
+    pick -= rate;
+  }
+  const base = INCIDENTS[id];
+  const severe =
+    base.severe && randomAt(g.seed, i, 143) < base.severe.share ? base.severe : null;
+  const working = !g.retired && choice !== "retire";
+  const effects = { ...(severe ?? base).effects };
+  if (!working) delete effects.salaryFactor;
+  return {
+    id,
+    kind: base.kind,
+    tone: base.tone,
+    severe: Boolean(severe),
+    title: (severe ?? base).title,
+    body: (severe ?? base).body,
+    effects,
+    chance: Math.round(rates[id] * (severe ? base.severe.share : base.severe ? 1 - base.severe.share : 1) * 10000) / 10000,
+    yearChance: Math.round(total * 10000) / 10000,
+  };
 }
 function yearlyOutcome(g, choice, employer) {
   const i = g.decisions.length;
@@ -2153,7 +2316,7 @@ export function eventFor(g) {
     body = `${g.age}歳。${residenceProse(g)}で、${g.housing === "own" ? "持ち家を手入れしながら" : "住まいの費用を払いながら"}暮らしている。給与に代わる収入と、これまでの資産をどう使うか。仕事で培った経験やつながりと、新しい楽しみにも目を向けたい。`;
   } else if (g.employer.kind === "seeking") {
     title = "経験を持って、次の一歩を探す。";
-    body = `事業を終え、暮らしと仕事を組み直している。手元現金は約${Math.round(g.cash)}万円。これまでの経験を別の企業で生かすか、まず生活のペースを整えるか。収入と支出の変化を確かめながら、次の選択を考える。`;
+    body = `${g.employer.lastSalary ? "人員整理で職を離れ、次の仕事を探している" : "事業を終え、暮らしと仕事を組み直している"}。手元現金は約${Math.round(g.cash)}万円。これまでの経験を別の企業で生かすか、まず生活のペースを整えるか。収入と支出の変化を確かめながら、次の選択を考える。`;
   } else if (g.employer.kind === "venture") {
     title = `${company}を、自分の手で育てる。`;
     body = `${company}では、${g.employer.summary}という架空の事業で、${g.year - g.employer.started}年目に入った。顧客を探し、運営費を払いながら、自分の仕事をつくる。${technologyAt(g) > 0.5 ? "AIが広く使われる世界では、効率化だけでなく選ばれる理由も必要になっている。" : "AIを試しながら、任せる部分と自分で担う部分を見極めたい。"}手元の現金は約${Math.round(g.cash)}万円。${
@@ -2573,6 +2736,10 @@ export function advanceYears(game, decision, years = 1, { pauseAtMilestones = fa
       stopReason = "働き方の節目です。ここからの方針を選び直せます。";
       break;
     }
+    if (next.history.at(-1).incident?.tone === "hard" && i < years - 1) {
+      stopReason = "思いがけない出来事がありました。ここからの方針を選び直せます。";
+      break;
+    }
     if (pauseAtMilestones && careerMilestones(next).some((m) => m.step === next.decisions.length)) {
       stopReason = "キャリアの節目です。ここまでを一行で振り返れます。";
       break;
@@ -2608,6 +2775,29 @@ export function advance(g, rawDecision) {
       facts: null,
       summary: "事業を終え、働き方を組み直している",
     };
+  const incident = incidentAt(g, choice, employer);
+  if (incident?.effects.layoff) {
+    // No pay while looking for work; severance and benefits arrive as cash,
+    // and the next job starts from the previous pay rather than from zero.
+    incident.effects.salaryFactor = 0;
+    incident.effects.extraCost = -Math.round(g.salary * 0.76 * 0.6);
+    employer = {
+      kind: "seeking",
+      id: "seeking",
+      name: "次の仕事を探している",
+      role: "other",
+      companyType: "unknown",
+      facts: null,
+      summary: "人員整理で職を離れ、次の仕事を探している",
+      lastSalary: g.salary,
+      lastRole: employer.role,
+    };
+  }
+  const previousIncident = g.history.at(-1)?.incident;
+  const incidentRestore =
+    previousIncident?.effects.temporary && previousIncident.effects.salaryFactor
+      ? 1 / previousIncident.effects.salaryFactor
+      : 1;
   const c = CHOICES[choice],
     p = g.profile,
     tech = technologyAt(g),
@@ -2676,7 +2866,7 @@ export function advance(g, rawDecision) {
           choice === "startup"
             ? g.salary || 120
             : choice === "switch" && typeof decision === "object"
-              ? g.salary || 180
+              ? g.salary || (g.employer.lastSalary ?? 0) * 0.9 || 180
               : g.salary,
           [
             1 + growth,
@@ -2684,19 +2874,20 @@ export function advance(g, rawDecision) {
             familyChange.outcome && outcome !== familyChange.outcome
               ? familyChange.outcome.salaryFactor
               : 1,
+            incident?.effects.salaryFactor ?? 1,
           ],
           transitionIncome,
-          world &&
-            (g.decisions.length < g.careLeaveSalaryFrom || g.salary > 0) &&
-            decisionId(g.decisions.at(-1)) === "careLeave"
+          (world &&
+          (g.decisions.length < g.careLeaveSalaryFrom || g.salary > 0) &&
+          decisionId(g.decisions.at(-1)) === "careLeave"
             ? 1 / 0.85
-            : 1,
+            : 1) * incidentRestore,
         )
       : clamp(
         (choice === "startup"
           ? g.salary || 120
           : choice === "switch" && typeof decision === "object"
-            ? g.salary || 180
+            ? g.salary || (g.employer.lastSalary ?? 0) * 0.9 || 180
             : g.salary) *
           (1 + growth) *
           transitionIncome *
@@ -2704,6 +2895,8 @@ export function advance(g, rawDecision) {
           (familyChange.outcome && outcome !== familyChange.outcome
             ? familyChange.outcome.salaryFactor
             : 1) *
+          (incident?.effects.salaryFactor ?? 1) *
+          incidentRestore *
           (world &&
           (g.decisions.length < g.careLeaveSalaryFrom || g.salary > 0) &&
           decisionId(g.decisions.at(-1)) === "careLeave"
@@ -2717,7 +2910,11 @@ export function advance(g, rawDecision) {
     choice === "startup" ? VENTURES[decision.venture].setup : 0;
   const businessOverhead = venture && !retired ? venture.overhead : 0;
   let cost =
-      c.cost + businessSetup + businessOverhead + (outcome?.extraCost ?? 0),
+      c.cost +
+      businessSetup +
+      businessOverhead +
+      (outcome?.extraCost ?? 0) +
+      (incident?.effects.extraCost ?? 0),
     investmentTransfer = 0,
     homeTransaction = 0;
   if (choice === "invest") {
@@ -2818,18 +3015,28 @@ export function advance(g, rawDecision) {
     });
   const health = clamp(
     g.health +
-      c.health -
+      c.health +
+      (incident?.effects.health ?? 0) -
       (g.age >= 80 ? 2 : g.age >= 65 ? 1.4 : 0.8) +
       (p.priority === "time" ? 0.5 : 0),
   );
   const connection = clamp(
-    g.connection + c.connection - 1 + (p.priority === "people" ? 0.8 : 0),
+    g.connection +
+      c.connection +
+      (incident?.effects.connection ?? 0) -
+      1 +
+      (p.priority === "people" ? 0.8 : 0),
   );
   const freedom = clamp(
-    g.freedom + c.freedom - 0.5 + (p.priority === "freedom" ? 0.8 : 0),
+    g.freedom +
+      c.freedom +
+      (incident?.effects.freedom ?? 0) -
+      0.5 +
+      (p.priority === "freedom" ? 0.8 : 0),
   );
   const skill = clamp(
     g.skill +
+      (incident?.effects.skill ?? 0) +
       c.skill *
         (world && ["learn", "studyDaily"].includes(choice)
           ? 0.7 + randomAt(g.seed, i, 78) * 0.6
@@ -2901,9 +3108,12 @@ export function advance(g, rawDecision) {
     familyCost: familyChange.cost,
     familyOutcome: familyChange.outcome,
     studyHours,
-    note: outcome
-      ? `${outcome.title} ${effects[choice] ?? c.label}`
-      : effects[choice],
+    note: incident
+      ? `思いがけない出来事：${incident.title}。${outcome ? `${outcome.title} ${effects[choice] ?? c.label}` : (effects[choice] ?? c.label)}`
+      : outcome
+        ? `${outcome.title} ${effects[choice] ?? c.label}`
+        : effects[choice],
+    ...(incident ? { incident } : {}),
     aiBenefit,
     transitionCost,
     volatility,
@@ -3001,6 +3211,7 @@ export function replay(
   prepayFrom = 0,
   debtRepayFrom = 0,
   salaryCapFrom = 0,
+  incidentFrom = 0,
 ) {
   if (
     !Array.isArray(decisions) ||
@@ -3022,6 +3233,7 @@ export function replay(
     prepayFrom,
     debtRepayFrom,
     salaryCapFrom,
+    incidentFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -3063,6 +3275,7 @@ export function compareWorlds(g) {
       g.prepayFrom,
       g.debtRepayFrom,
       g.salaryCapFrom,
+      g.incidentFrom,
     ),
   );
 }
@@ -3076,7 +3289,10 @@ export function encodeSave(g) {
     g.debtRepayFrom > MAX_AGE ||
     !Number.isInteger(g.salaryCapFrom) ||
     g.salaryCapFrom < 0 ||
-    g.salaryCapFrom > MAX_AGE
+    g.salaryCapFrom > MAX_AGE ||
+    !Number.isInteger(g.incidentFrom) ||
+    g.incidentFrom < 0 ||
+    g.incidentFrom > MAX_AGE
   )
     fail();
   const value = JSON.stringify({
@@ -3088,6 +3304,7 @@ export function encodeSave(g) {
     prepayFrom: g.prepayFrom,
     debtRepayFrom: g.debtRepayFrom,
     salaryCapFrom: g.salaryCapFrom,
+    incidentFrom: g.incidentFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
@@ -3125,6 +3342,8 @@ export function decodeSave(value) {
     Object.hasOwn(d, "prepayFrom") ? d.prepayFrom : d.decisions?.length,
     Object.hasOwn(d, "debtRepayFrom") ? d.debtRepayFrom : d.decisions?.length,
     Object.hasOwn(d, "salaryCapFrom") ? d.salaryCapFrom : d.decisions?.length,
+    // Saves from before chance incidents keep their recorded years unchanged.
+    Object.hasOwn(d, "incidentFrom") ? d.incidentFrom : d.decisions?.length,
   );
   game.reflections = validateReflections(Object.hasOwn(d, "reflections") ? d.reflections : {}, game);
   game.careerSeen = validateCareerSeen(d.careerSeen ?? {}, game);

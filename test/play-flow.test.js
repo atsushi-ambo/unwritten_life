@@ -63,7 +63,8 @@ test("blank optional finances use explicit game defaults while zero stays zero a
 });
 
 test("five years retain five distinct episodes and real yearly outcomes, then restore exactly", () => {
-  const base = createGame(p, "steady", 42);
+  // Chance incidents would pause multi-year play; this case checks the episodes.
+  const base = createGame(p, "steady", 42, 0, 0, 0, 0, 0, 0, 0, 110);
   const result = advanceYears(
     base,
     { id: "studyDaily", intent: "顧客に説明できる設計を毎日学ぶ" },

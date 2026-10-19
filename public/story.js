@@ -168,6 +168,15 @@ export function storyRequest(
       aiSkill: Math.round(game.skill),
     },
     incomeFact: `現在の年収は${incomeDirection(game)}。取り組みの成功とは別の、計算済みの実際の変化。`,
+    lastIncident: game.history.at(-1)?.incident
+      ? {
+          title: game.history.at(-1).incident.title,
+          outline: game.history.at(-1).incident.body,
+          kind: game.history.at(-1).incident.kind,
+          tone: game.history.at(-1).incident.tone,
+          note: "ゲームの乱数で確定した、本人が選んでいない出来事。",
+        }
+      : null,
     lastFamilyEvent: game.history.at(-1)?.familyOutcome
       ? {
           title: game.history.at(-1).familyOutcome.title,
@@ -209,6 +218,7 @@ export function storyRequest(
       choice: h.choiceLabel,
       intention: h.intention ?? null,
       result: h.note,
+      incident: h.incident?.title ?? null,
       episode: h.episode ?? null,
     })),
   };
@@ -269,6 +279,9 @@ export function storyRequest(
   }
   system +=
     " すべての場面は本人のキャリアの歩みを軸にする。仕事・専門やスキル・転職候補の比較・現職に残るか移るか・学び直し・副業や小さな試み・起業・仕事からの退職のうち、現在の状態に合う話題を中心に描く。家族・お金・住まいは、その働き方を支えたり選択を迷わせたりする条件として結びつけ、AIで変わる労働市場が経験の生かし方や選択の負担にどう関わるかを描く。退職後は働いた年月に培った経験やつながりと、その先の暮らしを描き、再就職を強制しない。キャリアを軸にすることは転職を強制することではない。実在の求人サイトのブランド名は使わない。";
+  if (context.lastIncident)
+    system +=
+      " lastIncidentはゲームの乱数で確定した、本人が選んでいない出来事。誰が・どんな職場や家庭の状況で・何がきっかけで・本人がどう受け止めたかは、勤務先・職種・家族・直前の選択に合わせて具体的に自由に描いてよい。ただし出来事の種類と重さ（休職・失職・治療・介護など）は変えず、記録にない別の不幸・病名・診断・加害者の実名を加えない。転職したばかりなら新しい職場で起きたこととして描く。ハラスメントや心身の不調は本人の責任にせず、加害を正当化せず、相談・休む・離れるといった道があることが伝わるように描く。toneがhardなら4択の少なくとも1案はこの出来事への具体的な向き合い方（休む、相談する、職場を離れる、家族を支える等）にする。toneがgoodなら手応えとして描き、成功を保証しない。";
   if (context.allowedActions.some((a) => a.id === "prepay"))
     system += " prepayは生活費半年分と今年の支払いを残せる範囲でローン元金を繰り上げ返済する行動。通常の仕事や年金は続き、返済期間は維持する。金額や完済を約束しない。";
   return {

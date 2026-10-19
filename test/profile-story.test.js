@@ -183,6 +183,9 @@ test("five-year stories carry the chosen subject, calculated evaluation and inte
     },
     "steady",
     42,
+    0, 0, 0, 0, 0, 0, 0,
+    // Chance incidents would pause multi-year play; this case checks the story.
+    110,
   );
   const option = eventFor(g).options.find((o) => o.id === "studyDaily");
   const { game, entries } = advanceYears(g, option.decision, 5);
