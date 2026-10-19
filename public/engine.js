@@ -792,6 +792,16 @@ export function validateDecision(raw, g) {
     )
       fail();
     if (facts && (!facts.confirmed || !facts.sources.length)) fail();
+    // A move can be into a higher stage at another company (an executive
+    // hire, for example), but at most one stage above the current one.
+    let rank;
+    if (raw.rank !== undefined) {
+      if (typeof raw.rank !== "string" || !Object.hasOwn(RANKS, raw.rank)) fail();
+      const current = g.position?.rank ?? "unspecified";
+      if (raw.rank !== current && !["manager", "specialist"].map((t) => nextRank(current, t)).includes(raw.rank))
+        fail();
+      rank = raw.rank;
+    }
     const generated = raw.proposal !== undefined;
     let proposal;
     if (generated) {
@@ -813,6 +823,7 @@ export function validateDecision(raw, g) {
       name,
       companyType: raw.companyType,
       facts,
+      ...(rank ? { rank } : {}),
       ...detail,
       ...(generated
         ? {
@@ -1616,26 +1627,50 @@ function yearlyOutcome(g, choice, employer, decision = null) {
       firm = { growing: 1.15, stable: 1, pressure: 0.7 }[world.company.id] ?? 1,
       inRank = g.year - g.position.since,
       level = RANKS[g.position.rank].level;
-    const chance =
+    const target = nextRank(g.position.rank, decision?.track);
+    // Promotion needs both merit and luck: a seat above must open, and fewer
+    // open the higher it goes, so most people stay long at a middle stage.
+    // A good or difficult boss last year tilts the odds.
+    const lastIncident = g.history.at(-1)?.incident?.id;
+    const backing = ["goodTeam", "bigRole"].includes(lastIncident)
+      ? 1.4
+      : ["difficultBoss", "harassment"].includes(lastIncident)
+        ? 0.5
+        : 1;
+    const seat =
+      choice === "promote" && target
+        ? clamp(
+            { lead: 1, manager: 0.25, specialist: 0.32, director: 0.1, principal: 0.12 }[target] *
+              (target === "lead" ? 1 : { growing: 1.3, stable: 1, pressure: 0.6 }[world.company.id] ?? 1),
+            0,
+            1,
+          )
+        : 1;
+    const seatOpen = randomAt(g.seed, g.decisions.length, 151) < seat;
+    const merit =
       choice === "promote"
-        ? // Higher stages need more years in the current one and are narrower.
-          clamp(
+        ? clamp(
             ability *
               (inRank >= [2, 3, 4][level] ? 1 : 0.35) *
-              [1, 0.38, 0.12][level] *
-              firm,
+              [1, 0.6, 0.45][level] *
+              backing,
             0.04,
             0.7,
           )
+        : 1;
+    const chance =
+      choice === "promote"
+        ? seat * merit
         : choice === "transfer"
           ? clamp(0.45 + g.connection * 0.003 + g.skill * 0.002, 0.3, 0.8)
           : clamp(ability * 0.7 * firm, 0.15, 0.55);
-    const success = roll < chance;
-    const target = nextRank(g.position.rank, decision?.track);
+    const success = choice === "promote" ? seatOpen && roll < merit : roll < chance;
     const text = {
       promote: success
         ? [`${RANKS[target].label}に昇格した。`, "評価が認められ、任される範囲と責任が広がった。収入とともに、時間や気持ちの負担も変わる。"]
-        : ["昇格は今回は見送られた。", "評価は伸び悩んだ。何が足りなかったかを確かめ、もう一度挑むか、別の道を考えられる。"],
+        : !seatOpen
+          ? ["上の席が空かず、昇格は見送られた。", "評価とは別に、上の役職の席には限りがある。今年は空きがなかった。多くの人がこの段階で長く働き、別の形で力を発揮している。"]
+          : ["昇格は今回は見送られた。", "評価は伸び悩んだ。何が足りなかったかを確かめ、もう一度挑むか、別の道を考えられる。"],
       transfer: success
         ? ["希望した仕事へ社内で移った。", "同じ会社の中で新しい役割に就いた。これまでの人間関係を生かしながら、慣れない仕事を覚えていく。"]
         : ["異動の希望は今回は通らなかった。", "希望は伝わったが、今回は実現しなかった。今の仕事を続けながら次の機会を待てる。"],
@@ -1650,7 +1685,7 @@ function yearlyOutcome(g, choice, employer, decision = null) {
       body: text[1],
       salaryFactor: success
         ? choice === "promote"
-          ? [1.12, 1.15, 1.18][RANKS[target].level - 1] ?? 1.12
+          ? [1.1, 1.2, 1.25][RANKS[target].level - 1] ?? 1.1
           : choice === "internalVenture"
             ? 1.04
             : 1
@@ -1674,7 +1709,11 @@ function yearlyOutcome(g, choice, employer, decision = null) {
       "mentor",
     ].includes(choice)
   ) {
-    const success = roll < ability;
+    const steppingUp =
+      choice === "switch" &&
+      decision?.rank &&
+      RANKS[decision.rank].level > RANKS[g.position?.rank ?? "unspecified"].level;
+    const success = roll < ability * (steppingUp ? 0.75 : 1);
     const titles = {
       pilot: [
         "試した仕組みが、仕事で役立った。",
@@ -1911,6 +1950,7 @@ export function validateGeneratedScene(
             "candidateKind",
             "workModel",
             "proposal",
+            "rank",
           ]
         : o.id === "startup"
           ? ["venture", "name"]
@@ -2965,7 +3005,10 @@ export function advance(g, rawDecision) {
   // similar level) and starts a new tenure; the old one stays in the history.
   let position = g.position;
   if (choice === "switch" && typeof decision === "object")
-    position = { ...position, unit: "", joined: g.year, since: position.since };
+    position =
+      decision.rank && decision.rank !== position.rank
+        ? { rank: decision.rank, unit: "", joined: g.year, since: g.year }
+        : { ...position, unit: "", joined: g.year, since: position.since };
   if (outcome?.promotion)
     position = { ...position, rank: outcome.promotion, since: g.year };
   if (outcome?.unit) position = { ...position, unit: outcome.unit };
@@ -3015,7 +3058,12 @@ export function advance(g, rawDecision) {
       volatility +
       aiBenefit -
       transitionCost +
-      (choice === "focus" ? 0.023 : 0) +
+      // Aiming for promotion is also a year of committed work.
+      (["focus", "promote"].includes(choice)
+        ? 0.023
+        : ["transfer", "internalVenture"].includes(choice)
+          ? 0.01
+          : 0) +
       (g.health < 30 ? -0.035 : 0),
     -0.12,
     0.12,

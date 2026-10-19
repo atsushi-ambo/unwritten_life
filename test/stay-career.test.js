@@ -158,3 +158,61 @@ test("older saves without the stage or its boundary load and keep their recorded
     assert.throws(() => decodeSave(JSON.stringify({ ...saved, careerPathFrom })));
   assert.throws(() => decodeSave(JSON.stringify({ ...saved, profile: { ...saved.profile, rank: "ceo" } })));
 });
+
+test("promotions are for some: seats above are scarce, luck matters, and most people stay at a middle stage", () => {
+  const reached = { lead: 0, manager: 0, director: 0 };
+  let seatClosed = 0;
+  const N = 150;
+  for (let seed = 0; seed < N; seed++) {
+    let g = quiet(profile({ rank: "staff", age: 25 }), seed);
+    const seen = new Set();
+    for (let y = 0; y < 30 && !g.ended; y++) {
+      const ids = availableChoices(g);
+      g = advance(g, y % 2 === 0 && ids.includes("promote")
+        ? g.position.rank === "lead" ? { id: "promote", intent: "上を目指す", track: "manager" } : "promote"
+        : "focus");
+      seen.add(g.position.rank);
+      if (/席が空かず/.test(g.history.at(-1).outcome?.title ?? "")) seatClosed++;
+    }
+    for (const rank of Object.keys(reached)) if (seen.has(rank)) reached[rank]++;
+  }
+  assert.ok(reached.lead / N > 0.85, `lead ${reached.lead}`);
+  assert.ok(reached.manager / N > 0.3 && reached.manager / N < 0.75, `manager ${reached.manager}`);
+  assert.ok(reached.director / N < 0.15, `director ${reached.director}`);
+  assert.ok(seatClosed > 0);
+});
+
+test("a supportive boss raises the odds of the next promotion and a difficult one lowers them", () => {
+  const odds = (incident) => {
+    let total = 0;
+    for (let seed = 0; seed < 200; seed++) {
+      const g = quiet(profile({ rank: "staff" }), seed);
+      // Only last year's incident differs; the stage has lasted long enough.
+      const history = incident ? [{ incident: { id: incident, effects: {} } }] : [];
+      total += advance({ ...g, history, position: { ...g.position, since: g.year - 3 } }, "promote")
+        .history.at(-1).outcome.chance;
+    }
+    return total;
+  };
+  assert.ok(odds("goodTeam") > odds(null));
+  assert.ok(odds("difficultBoss") < odds(null));
+});
+
+test("a move can be one stage up at another company, never two", () => {
+  const lead = quiet(profile({ rank: "lead" }), 2);
+  const move = (rank) => ({
+    id: "switch", target: "custom", name: "合成エグゼクティブ社", role: "tech",
+    companyType: "unknown", facts: null, rank,
+  });
+  const up = advance(lead, move("manager"));
+  assert.equal(up.position.rank, "manager");
+  assert.equal(up.position.since, lead.year);
+  assert.equal(up.position.joined, lead.year);
+  assert.throws(() => advance(lead, move("director")));
+  assert.throws(() => advance(quiet(profile({ rank: "staff" }), 2), move("manager")));
+  const same = advance(lead, move("lead"));
+  assert.equal(same.position.rank, "lead");
+  const context = storyRequest(lead, { mode: "career" }).context;
+  assert.deepEqual(Object.keys(context.switchRanks), ["lead", "manager", "specialist"]);
+  assert.match(storyRequest(lead, { mode: "career" }).messages[0].content, /switchRanksのキーから選ぶ/);
+});
