@@ -1,5 +1,5 @@
 import {
-  EMPLOYERS,
+  LEGACY_EMPLOYERS,
   VENTURES,
   WORK_MODELS,
   workContext,
@@ -757,9 +757,9 @@ export function validateDecision(raw, g) {
         : {}),
     };
   }
-  if (typeof raw.target !== "string" || !Object.hasOwn(EMPLOYERS, raw.target))
+  if (typeof raw.target !== "string" || !Object.hasOwn(LEGACY_EMPLOYERS, raw.target))
     fail();
-  const c = EMPLOYERS[raw.target];
+  const c = LEGACY_EMPLOYERS[raw.target];
   if (g.year < (c.availableFrom ?? START_YEAR) || g.employer.id === raw.target)
     fail();
   return { id, target: raw.target, role: raw.role, ...detail };
@@ -809,7 +809,7 @@ function nextEmployer(g, decision) {
           }
         : {}),
     };
-  const c = EMPLOYERS[decision.target];
+  const c = LEGACY_EMPLOYERS[decision.target];
   return {
     kind: c.kind,
     id: decision.target,
@@ -950,6 +950,7 @@ export function createGame(
     history: [],
     scenes: {},
     reflections: {},
+    careerSeen: {},
   };
 }
 export function technologyAt(g) {
@@ -1628,7 +1629,7 @@ export function validateGeneratedScene(
       fail();
     if (
       decision.id === "switch" &&
-      employerKey(decision.name ?? EMPLOYERS[decision.target]?.name ?? "") ===
+      employerKey(decision.name ?? LEGACY_EMPLOYERS[decision.target]?.name ?? "") ===
         employerKey(g.employer.name)
     )
       fail();
@@ -1650,7 +1651,7 @@ export function validateGeneratedScene(
       (o) => o.id === (g.employer.kind === "seeking" ? "rest" : "focus"),
     );
     const names = moves.map((o) =>
-      employerKey(o.decision.name ?? EMPLOYERS[o.decision.target]?.name ?? ""),
+      employerKey(o.decision.name ?? LEGACY_EMPLOYERS[o.decision.target]?.name ?? ""),
     );
     const currentName = employerKey(g.employer.name);
     if (
@@ -3093,6 +3094,7 @@ export function encodeSave(g) {
     decisions: g.decisions,
     scenes: g.scenes,
     reflections: validateReflections(Object.hasOwn(g, "reflections") ? g.reflections : {}, g),
+    careerSeen: validateCareerSeen(g.careerSeen ?? {}, g),
   });
   if (value.length > 250000)
     throw new Error("保存データが上限を超えました。元の保存は保持しています。");
@@ -3125,9 +3127,32 @@ export function decodeSave(value) {
     Object.hasOwn(d, "salaryCapFrom") ? d.salaryCapFrom : d.decisions?.length,
   );
   game.reflections = validateReflections(Object.hasOwn(d, "reflections") ? d.reflections : {}, game);
+  game.careerSeen = validateCareerSeen(d.careerSeen ?? {}, game);
   return game;
 }
 
+// Company names the AI already proposed, keyed by the turn they were shown.
+// Only used to ask for different candidates later; never evidence or a choice.
+const CAREER_SEEN_TURNS = 30;
+function validateCareerSeen(raw, game) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw) || Object.keys(raw).length > CAREER_SEEN_TURNS) fail();
+  const result = {};
+  for (const [turn, names] of Object.entries(raw)) {
+    if (!/^(?:0|[1-9]\d{0,2})$/.test(turn) || Number(turn) > game.decisions.length ||
+      !Array.isArray(names) || names.length > 3 ||
+      names.some((n) => typeof n !== "string" || /[\u2028\u2029]/u.test(n))) fail();
+    result[turn] = names.map((n) => str(n, 60));
+  }
+  return result;
+}
+export function recordCareerSeen(game, names) {
+  const seen = { ...(game.careerSeen ?? {}), [String(game.decisions.length)]: names.slice(0, 3) };
+  const turns = Object.keys(seen).sort((a, b) => Number(a) - Number(b)).slice(-CAREER_SEEN_TURNS);
+  return { ...game, careerSeen: validateCareerSeen(Object.fromEntries(turns.map((t) => [t, seen[t]])), game) };
+}
+export function careerSeenUntil(game, length) {
+  return Object.fromEntries(Object.entries(game.careerSeen ?? {}).filter(([turn]) => Number(turn) <= length));
+}
 function validateReflections(raw, game) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw) || Object.keys(raw).length > 5) fail();
   const allowed = new Set(careerMilestones(game).map((m) => m.id));

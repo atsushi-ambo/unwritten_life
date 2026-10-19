@@ -6,6 +6,7 @@ import {
   createGame, advance, advanceYears, availableChoices, suggestedChoices,
   eventFor, amortizeYear, encodeSave, decodeSave, replay, compareWorlds,
   applyScene, validateGeneratedScene, profileStoryContext, MAX_AGE, CHOICES,
+  careerSeenUntil,
 } from "../public/engine.js";
 import { storyRequest, sceneSchema } from "../public/story.js";
 import { careerMilestones } from "../public/careers.js";
@@ -368,7 +369,7 @@ test("the UI undo handler preserves the migrated boundary when undoing prepaymen
   const migrated = decodeSave(JSON.stringify(saved)),
     paid = advance(migrated, "prepay"), button = {},
     context = createContext({
-      game: paid, generating: false, lastJourney: {}, revision: 0, replay, careerMilestones, favoriteYears: new Set(),
+      game: paid, generating: false, lastJourney: {}, revision: 0, replay, careerMilestones, careerSeenUntil, favoriteYears: new Set(),
       $: () => ({ addEventListener(_type, handler) { button.click = handler; } }),
       renderGame() {}, moveToStory() {},
     });
@@ -378,8 +379,8 @@ test("the UI undo handler preserves the migrated boundary when undoing prepaymen
   assert.equal(context.lastJourney, null);
   assert.equal(context.game.prepayFrom, 1);
   // Only normalize the metadata object's VM prototype; compare actual balances.
-  assert.deepEqual({ ...context.game, reflections: { ...context.game.reflections } }, migrated);
-  assert.deepEqual({ ...advance(context.game, "prepay"), reflections: { ...context.game.reflections } }, paid);
+  assert.deepEqual({ ...context.game, reflections: { ...context.game.reflections }, careerSeen: { ...context.game.careerSeen } }, migrated);
+  assert.deepEqual({ ...advance(context.game, "prepay"), reflections: { ...context.game.reflections }, careerSeen: { ...context.game.careerSeen } }, paid);
 });
 
 test("UI undo and retry preserve the debt repayment boundary", () => {
@@ -388,7 +389,7 @@ test("UI undo and retry preserve the debt repayment boundary", () => {
   for (let i = 0; i < 3; i++) g = advance(g, "rest");
   const paid = advance(g, "rest"), button = {},
     context = createContext({
-      game: paid, generating: false, lastJourney: {}, revision: 0, replay, createGame, careerMilestones, favoriteYears: new Set(),
+      game: paid, generating: false, lastJourney: {}, revision: 0, replay, createGame, careerMilestones, careerSeenUntil, favoriteYears: new Set(),
       $: () => ({ addEventListener(_type, handler) { button.click = handler; } }),
       again: { addEventListener(_type, handler) { button.retry = handler; } },
       renderGame() {}, moveToStory() {}, showGame() {},
@@ -397,8 +398,8 @@ test("UI undo and retry preserve the debt repayment boundary", () => {
   runInContext(app.slice(app.indexOf('$("undo-button").addEventListener'),
     app.indexOf('$("compare-button").addEventListener')), context);
   button.click();
-  assert.deepEqual({ ...context.game, reflections: { ...context.game.reflections } }, g);
-  assert.deepEqual({ ...advance(context.game, "rest"), reflections: { ...context.game.reflections } }, paid);
+  assert.deepEqual({ ...context.game, reflections: { ...context.game.reflections }, careerSeen: { ...context.game.careerSeen } }, g);
+  assert.deepEqual({ ...advance(context.game, "rest"), reflections: { ...context.game.reflections }, careerSeen: { ...context.game.careerSeen } }, paid);
   runInContext(app.slice(app.indexOf('again.addEventListener("click"'),
     app.indexOf('compare.addEventListener("click"')), context);
   button.retry();

@@ -2266,3 +2266,23 @@ dialog p, dialog li { font-size: 14px; }
   .comparison-grid { grid-template-columns: 1fr; }
   dialog { padding: 22px 18px; width: calc(100% - 24px); }
 }
+
+.notice-box {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--accent);
+  background: var(--paper);
+}
+.ai-setup-banner.is-ready {
+  border-color: var(--green);
+}
+.scene-retry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  margin-top: 16px;
+}
+.scene-retry .text-button {
+  color: inherit;
+}

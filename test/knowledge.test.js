@@ -16,7 +16,7 @@ import {
   loadKnowledge,
 } from "../public/world.js";
 import { storyRequest } from "../public/story.js";
-import { makeAI } from "../lib/ai.mjs";
+import { readyAI, replyFor, ollamaText } from "./fixtures/ai-replies.js";
 
 const profile = {
   age: 32,
@@ -34,7 +34,7 @@ const profile = {
   workModel: "services",
 };
 const ids = (refs) =>
-  [...refs.historical, ...refs.companies, ...refs.rules].map((r) => r.id);
+  [...refs.historical, ...refs.rules].map((r) => r.id);
 function openDB(indexedDB) {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(KNOWLEDGE_DB);
@@ -72,10 +72,7 @@ test("relevant local material changes with work, family and the last action with
   assert.ok(ids(knowledgeFor(base)).includes("rule-services"));
   assert.ok(!ids(knowledgeFor(product)).includes("rule-services"));
   assert.ok(ids(knowledgeFor(product)).includes("rule-product"));
-  assert.ok(ids(knowledgeFor(base)).includes("company-nttdata"));
-  assert.ok(
-    !ids(knowledgeFor(product)).some((id) => id.startsWith("company-")),
-  );
+  assert.ok(!ids(knowledgeFor(base)).some((id) => id.startsWith("company-")));
   assert.ok(!ids(knowledgeFor(base)).includes("rule-family"));
   const family = createGame(
     { ...profile, partner: "partner", children: 1, childStage: "young" },
@@ -97,11 +94,7 @@ test("relevant local material changes with work, family and the last action with
   const context = storyRequest(future).context;
   assert.equal(JSON.stringify(HISTORICAL_FACTS), before);
   assert.ok(context.historicalReference.every((r) => r.asOf === "2026-10-17"));
-  assert.ok(
-    context.localKnowledge.companySnapshots.every(
-      (r) => r.asOf === "2026-10-17",
-    ),
-  );
+  assert.equal(Object.hasOwn(context.localKnowledge, "companySnapshots"), false);
   assert.match(context.pastChoices.at(-1).intention, /顧客/);
 });
 
@@ -111,34 +104,16 @@ test("only a bounded relevant packet reaches AI and no new call is needed to ret
   assert.equal(context.localKnowledge.revision, KNOWLEDGE_REVISION);
   assert.ok(context.historicalReference.length <= 2);
   assert.ok(context.localKnowledge.gameAssumptions.length <= 4);
-  assert.equal(context.localKnowledge.companySnapshots.length, 1);
+  assert.equal(Object.hasOwn(context.localKnowledge, "companySnapshots"), false);
   assert.ok(!JSON.stringify(context.historicalReference).includes('"tags"'));
   let calls = 0;
-  const ai = makeAI({
-    transport: async (_url, options) => {
-      calls++;
-      const payload = JSON.parse(options.body);
-      const prompt = JSON.parse(payload.messages[1].content);
-      assert.equal(prompt.localKnowledge.revision, KNOWLEDGE_REVISION);
-      assert.ok(prompt.historicalReference.length <= 2);
-      return {
-        status: 200,
-        text: JSON.stringify({
-          message: {
-            content: JSON.stringify({
-              title: "今の仕事と次の学び",
-              body: "顧客との経験を振り返り、来年の暮らしと学びを考える。",
-              insight: "架空の提案。",
-              options: ["learn", "rest", "connect"].map((id) => ({
-                id,
-                label: id,
-                hint: "時間を配分する",
-              })),
-            }),
-          },
-        }),
-      };
-    },
+  const ai = await readyAI(async (_url, options) => {
+    calls++;
+    const payload = JSON.parse(options.body);
+    const prompt = JSON.parse(payload.messages[1].content);
+    assert.equal(prompt.localKnowledge.revision, KNOWLEDGE_REVISION);
+    assert.ok(prompt.historicalReference.length <= 2);
+    return { status: 200, text: ollamaText(replyFor(options)) };
   });
   const save = encodeSave(game);
   await ai.generate(save);

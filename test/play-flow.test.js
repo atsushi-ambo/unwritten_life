@@ -195,7 +195,7 @@ test("new-game form has three levels, no required financial entries, and company
     assert.ok(nodes.some((n) => attr(n, "id") === id));
 });
 
-test("mobile company lookup reads built-in evidence offline and bounds external requests to an anonymous fixed directory", async (t) => {
+test("phone company lookup has no built-in list and bounds external requests to an anonymous fixed directory", async (t) => {
   let calls = 0;
   const lookup = makeDirectorySearch({
     transport: async () => {
@@ -203,10 +203,9 @@ test("mobile company lookup reads built-in evidence offline and bounds external 
       throw Error("offline");
     },
   });
-  const known = await lookup("NTT DATA");
-  assert.equal(calls, 0);
-  assert.equal(known[0].known, true);
-  assert.match(known[0].description, /ITサービス/);
+  await assert.rejects(() => lookup("NTT DATA"), /offline/);
+  assert.equal(calls, 1);
+  calls = 0;
   const original = globalThis.fetch;
   t.after(() => {
     globalThis.fetch = original;

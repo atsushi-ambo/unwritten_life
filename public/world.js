@@ -1,8 +1,8 @@
-import { EMPLOYERS, employerKey, workContext } from "./careers.js";
+import { workContext } from "./careers.js";
 
 // Reviewed source material, shipped with the app. No player or AI output is
 // admitted to this catalog. Increment the revision when a record changes.
-export const KNOWLEDGE_REVISION = "2026-10-17.1";
+export const KNOWLEDGE_REVISION = "2026-10-19.1";
 function freeze(value) {
   if (value && typeof value === "object") {
     Object.values(value).forEach(freeze);
@@ -176,22 +176,7 @@ const rules = [
   checkedAt,
   asOf: checkedAt,
 }));
-const companies = Object.entries(EMPLOYERS)
-  .filter(([, entry]) => entry.kind === "real")
-  .map(([id, entry]) => ({
-    id: `company-${id}`,
-    companyId: id,
-    kind: "company",
-    year: entry.checkedAt,
-    title: `${entry.name}の公開事業情報`,
-    detail: entry.summary,
-    source: `${entry.name} / 公式資料`,
-    url: entry.url,
-    checkedAt: entry.checkedAt,
-    asOf: entry.checkedAt,
-    tags: [],
-  }));
-export const KNOWLEDGE = freeze([...history, ...companies, ...rules]);
+export const KNOWLEDGE = freeze([...history, ...rules]);
 export const HISTORICAL_FACTS = freeze(
   KNOWLEDGE.filter((r) => r.kind === "history"),
 );
@@ -245,22 +230,9 @@ export function knowledgeFor(
       .filter((r) => r.record.kind === kind && r.score > 0)
       .slice(0, limit)
       .map((r) => r.record);
-  const companyId = !["venture", "fictional", "seeking"].includes(
-    game.employer.kind,
-  )
-    ? Object.entries(EMPLOYERS).find(
-        ([, r]) =>
-          r.kind === "real" &&
-          employerKey(r.name) === employerKey(game.employer.name),
-      )?.[0]
-    : null;
-  const company = catalog.find(
-    (r) => r.kind === "company" && r.companyId === companyId,
-  );
   return {
     revision: KNOWLEDGE_REVISION,
     historical: pick("history", 2),
-    companies: company ? [company] : [],
     rules: pick("game-rule", mode === "career" ? 3 : 4),
   };
 }

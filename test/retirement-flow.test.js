@@ -5,7 +5,7 @@ import { createContext, runInContext } from "node:vm";
 import { createGame, advance, encodeSave, decodeSave, isRetiredAt, availableChoices, suggestedChoices } from "../public/engine.js";
 import { storyRequest } from "../public/story.js";
 
-test("career comparison, direct generation and manual exchange share the versioned retirement guard", async () => {
+test("career comparison and AI career generation share the versioned retirement guard", async () => {
   const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8"),
     before = createGame({
       age: 64, retirementAge: 65, region: "city", job: "tech",
@@ -23,57 +23,46 @@ test("career comparison, direct generation and manual exchange share the version
     [advance(legacy, "rest"), false],
   ]) {
     const elements = new Map();
-    let comparisons = 0, requests = 0, exchanges = 0;
+    let comparisons = 0, requests = 0;
     const $ = (id) => {
       if (!elements.has(id)) elements.set(id, {
         classList: { toggle() {} },
         setAttribute() {},
         addEventListener(_type, handler) { this.click = handler; },
-        showModal() { exchanges++; },
       });
       return elements.get(id);
     };
     const aiState = {
-      provider: "ollama", cloud: false, calls: 0, reservedUSD: 0,
+      provider: "ollama", cloud: false, ready: true, calls: 0, reservedUSD: 0,
       requestCap: 100, usdCap: 1, model: "synthetic",
     };
     const context = createContext({
       $, game, aiState, isRetiredAt, encodeSave, storyRequest,
-      generating: false, hosted: false, revision: 0,
-      careerGenerating: false, careerDraft: null,
-      exchangeMode: "life", exchangeRevision: 0, knowledgeCatalog: undefined,
-      needsCareerServerUpdate: () => false,
-      needsChoiceServerUpdate: () => false,
+      generating: false, hosted: false, revision: 0, cloudConsented: false,
+      careerGenerating: false, careerDraft: null, careerError: "",
+      recordCareerSeen: (g) => g, persist() {},
       renderAITiming() {}, renderGame() {}, renderCareerOffers() {},
       openCareer: () => { comparisons++; },
       performance: { now: () => 0 },
       setInterval: () => 0, clearInterval() {},
       api: async () => {
         requests++;
-        return { accounting: aiState, scene: {} };
+        return { accounting: aiState, scene: { options: [] } };
       },
     });
     for (const [start, end] of [
-      ["function renderAI()", "function renderAITiming()"],
+      ["function aiReady()", "function renderAITiming()"],
       ["async function generateCareerChoices()", '$("career-generate").addEventListener'],
-      ["function openExchange(", '$("exchange-button").addEventListener'],
       ['$("career-compare-button").addEventListener', "function renderCareer()"],
     ])
       runInContext(app.slice(app.indexOf(start), app.indexOf(end)), context);
     runInContext("renderAI()", context);
-    for (const id of ["career-compare-button", "career-generate", "career-exchange"])
+    for (const id of ["career-compare-button", "career-generate"])
       assert.equal($(id).disabled, !allowed, id);
     $("career-compare-button").click();
     await runInContext("generateCareerChoices()", context);
-    runInContext('openExchange("career")', context);
     assert.equal(comparisons, Number(allowed));
     assert.equal(requests, Number(allowed));
-    assert.equal(exchanges, Number(allowed));
-    aiState.provider = "disabled";
-    await runInContext("generateCareerChoices()", context);
-    assert.equal(exchanges, Number(allowed) * 2);
-    runInContext('openExchange("life")', context);
-    assert.equal(exchanges, Number(allowed) * 2 + 1);
   }
 });
 

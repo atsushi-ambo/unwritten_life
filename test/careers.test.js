@@ -1,19 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  EMPLOYERS,
-  careerOffers,
-  careerCandidates,
-} from "../public/careers.js";
-import {
-  JOBS,
   createGame,
   advance,
   encodeSave,
   decodeSave,
-  validateDecision,
+  recordCareerSeen,
+  careerSeenUntil,
 } from "../public/engine.js";
-import { storyRequest } from "../public/story.js";
+import { storyRequest, pastCandidates } from "../public/story.js";
+import { KNOWLEDGE } from "../public/world.js";
 const profile = {
   age: 30,
   region: "city",
@@ -28,108 +24,67 @@ const profile = {
   companyType: "small",
   company: "合成企業",
 };
-test("career offers contain two different plausible industries, staying and a different surprise; each is executable", () => {
-  for (const job of Object.keys(JOBS))
-    for (const year of [2026, 2036, 2041])
-      for (const seed of [0, 1, 42, 7612026]) {
-        let g = createGame({ ...profile, job }, "steady", seed);
-        while (g.year < year && !g.ended) g = advance(g, "rest");
-        if (g.ended || g.retired) continue;
-        const offers = careerOffers(g);
-        assert.deepEqual(
-          offers.map((o) => o.id),
-          ["familiar", "bridge", "stay", "surprise"],
-        );
-        const moving = offers.filter((o) => typeof o.decision === "object");
-        assert.equal(new Set(moving.map((o) => o.decision.target)).size, 3);
-        assert.equal(new Set(moving.map((o) => o.industry)).size, 3);
-        for (const offer of offers) {
-          assert.ok(offer.reason && offer.work && offer.tradeoff);
-          validateDecision(offer.decision, g);
-          const next = advance(g, offer.decision);
-          assert.equal(next.year, g.year + 1);
-          assert.deepEqual(
-            decodeSave(encodeSave(next)).employer,
-            next.employer,
-          );
-        }
-        const stayed = advance(g, offers[2].decision);
-        assert.deepEqual(stayed.employer, g.employer);
-        assert.equal(stayed.careerMoves, g.careerMoves);
-        assert.equal(stayed.history.at(-1).choice, "focus");
-      }
+const move = (name) => ({
+  id: "switch",
+  target: "custom",
+  name,
+  role: "tech",
+  companyType: "unknown",
+  facts: null,
 });
-test("example engineer gets NTT DATA, Mizuho, staying and Chugai; marketers receive marketing work, and choices rotate", () => {
+
+test("no built-in company list reaches the prompt or the knowledge catalog", () => {
   const g = createGame(profile, "steady", 7612026);
-  assert.deepEqual(
-    careerOffers(g).map((o) => o.company),
-    ["NTTデータ", "みずほ銀行", "合成企業", "中外製薬"],
-  );
-  const marketing = createGame(
-    { ...profile, job: "marketing" },
-    "steady",
-    7612026,
-  );
-  const offers = careerOffers(marketing);
-  assert.ok(
-    offers
-      .filter((o) => o.id !== "stay")
-      .every((o) => o.role === "marketing" && o.work.includes("顧客")),
-  );
-  assert.notDeepEqual(
-    offers.map((o) => o.company),
-    careerOffers(g).map((o) => o.company),
-  );
-  const next = advance(g, "focus");
-  assert.notDeepEqual(
-    careerOffers(next).map((o) => o.company),
-    careerOffers(g).map((o) => o.company),
-  );
-  assert.deepEqual(
-    storyRequest(g, { personalized: false }).context.careerRoutes.map(
-      (o) => o.company,
-    ),
-    careerOffers(g).map((o) => o.company),
-  );
-});
-test("current and recently worked employers are excluded or deprioritized, aliases are recognized, future companies obey founding dates", () => {
-  for (const [id, c] of Object.entries(EMPLOYERS)) {
-    const g = createGame(
-      { ...profile, company: c.aliases?.[0] ?? c.name },
-      "steady",
-      7612026,
-    );
-    assert.ok(!careerCandidates(g).some((x) => x.id === id));
-    const moving = careerOffers(g).filter(
-      (o) => typeof o.decision === "object",
-    );
-    assert.ok(!moving.some((o) => o.decision.target === id));
-    assert.ok(
-      moving.every((o) => EMPLOYERS[o.decision.target].industry !== c.industry),
-    );
+  for (const mode of ["life", "career"]) {
+    const { context, messages } = storyRequest(g, { mode });
+    assert.equal(Object.hasOwn(context, "careerRoutes"), false);
+    assert.equal(Object.hasOwn(context.localKnowledge, "companySnapshots"), false);
+    for (const name of ["Microsoft", "トヨタ自動車", "NTTデータ", "みずほ銀行", "中外製薬"])
+      assert.ok(!JSON.stringify(messages).includes(name), name);
   }
+  assert.ok(!KNOWLEDGE.some((r) => r.kind === "company"));
+});
+
+test("companies shown or worked at are passed back so the AI proposes different ones", () => {
+  let g = createGame(profile, "steady", 7612026);
+  assert.deepEqual(pastCandidates(g), []);
+  g = recordCareerSeen(g, ["合成商事", "合成ソフト", "合成企業"]);
+  assert.deepEqual(pastCandidates(g), ["合成商事", "合成ソフト"]);
+  g = advance(g, move("合成商事"));
+  g = recordCareerSeen(g, ["合成ロジ", "合成ソフト", "合成企業"]);
+  // The current employer is never listed; the previous one and older offers are.
+  assert.deepEqual(pastCandidates(g), ["合成企業", "合成ロジ", "合成ソフト"]);
+  assert.deepEqual(storyRequest(g, { mode: "career" }).context.pastCandidates, pastCandidates(g));
+  const restored = decodeSave(encodeSave(g));
+  assert.deepEqual(restored.careerSeen, g.careerSeen);
+  assert.deepEqual(careerSeenUntil(g, 0), { 0: ["合成商事", "合成ソフト", "合成企業"] });
+});
+
+test("the shown-company record is bounded, validated and accepts older saves without it", () => {
+  let g = createGame(profile, "steady", 1);
+  for (let i = 0; i < 40; i++) {
+    g = recordCareerSeen(g, [`会社${i}`]);
+    g = advance(g, "rest");
+  }
+  assert.equal(Object.keys(g.careerSeen).length, 30);
+  assert.equal(pastCandidates(g).length, 15);
+  const saved = JSON.parse(encodeSave(g));
+  delete saved.careerSeen;
+  assert.deepEqual(decodeSave(JSON.stringify(saved)).careerSeen, {});
+  for (const careerSeen of [
+    { 999: ["未来"] },
+    { 0: ["a", "b", "c", "d"] },
+    { 0: ["x".repeat(61)] },
+    { 0: [1] },
+    { "01": ["a"] },
+    [],
+  ])
+    assert.throws(() => decodeSave(JSON.stringify({ ...saved, careerSeen })));
+});
+
+test("saves that chose a company from an earlier built-in list still replay", () => {
   const g = createGame(profile, "steady", 7612026);
-  assert.ok(
-    careerOffers(g)
-      .filter((o) => o.kind)
-      .every((o) => o.kind === "real"),
-  );
-  const switched = advance(g, careerOffers(g)[0].decision);
-  assert.ok(
-    !careerOffers(switched).some(
-      (o) => o.decision?.target === switched.employer.id,
-    ),
-  );
-  const returned = advance(
-    advance(g, { id: "switch", target: "microsoft", role: "tech" }),
-    { id: "switch", target: "nttdata", role: "tech" },
-  );
-  assert.equal(careerOffers(returned)[0].company, "LayerX");
-  assert.equal(careerOffers({ ...g, retired: true }).length, 0);
-  assert.equal(careerOffers({ ...g, ended: true }).length, 0);
-  const seeking = {
-    ...g,
-    employer: { ...g.employer, kind: "seeking", name: "次の仕事を探している" },
-  };
-  assert.equal(careerOffers(seeking)[2].decision, "rest");
+  const legacy = advance(g, { id: "switch", target: "nttdata", role: "tech" });
+  assert.equal(legacy.employer.name, "NTTデータ");
+  assert.deepEqual(decodeSave(encodeSave(legacy)).employer, legacy.employer);
 });

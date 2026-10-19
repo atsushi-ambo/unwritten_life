@@ -13,7 +13,7 @@ export async function prepareHosted(target) {
   await mkdir(output, { recursive: true });
   for (const file of ["package.json", "package-lock.json", "tsconfig.json"])
     await copyFile(resolve(root, "hosted", file), resolve(output, file));
-  const { files } = await buildMobile(resolve(output, "public"), { cloud: true });
+  const { files } = await buildMobile(resolve(output, "public"));
   const assets = Object.fromEntries(await Promise.all(files.map(async (file) =>
     [file, await readFile(resolve(output, "public", file), "utf8")])));
   await writeFile(resolve(output, "assets.mjs"), `export default ${JSON.stringify(assets)};\n`);
