@@ -8,3 +8,5 @@ node_modules/
 coverage/
 artifacts/
 *.log
+.claude/worktrees/
+.claude/.cc-writes
