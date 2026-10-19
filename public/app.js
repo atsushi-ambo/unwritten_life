@@ -315,13 +315,26 @@ function renderCareerMap(container) {
   }
   const grid = node("ol", undefined, "career-map-grid");
   grid.setAttribute("aria-label", "一年ごとのキャリアの歩み");
+  const detail = node("p", "マスをタップすると、その年のキャリアを読めます。", "career-map-detail field-note");
+  detail.setAttribute("role", "status");
   for (const tile of tiles) {
     const cell = node("li", undefined, `career-tile state-${tile.state}`);
     const icon = node("span", tile.icon);
     icon.setAttribute("role", "img");
     icon.setAttribute("aria-label", `${tile.year}年・${tile.age}歳：${tile.label}。選択：${tile.choice}`);
-    cell.title = icon.getAttribute("aria-label");
-    cell.append(icon);
+    const button = node("button", undefined, "career-tile-button");
+    button.type = "button";
+    button.setAttribute("aria-label", icon.getAttribute("aria-label"));
+    button.setAttribute("aria-pressed", "false");
+    const select = () => {
+      for (const sibling of grid.querySelectorAll("button")) sibling.setAttribute("aria-pressed", "false");
+      button.setAttribute("aria-pressed", "true");
+      detail.textContent = icon.getAttribute("aria-label");
+    };
+    button.addEventListener("click", select);
+    button.addEventListener("focus", select);
+    button.append(icon);
+    cell.append(button);
     if (tile.age % 10 === 0) {
       const age = node("small", `${tile.age}歳`, "map-age");
       age.setAttribute("aria-hidden", "true");
@@ -337,7 +350,7 @@ function renderCareerMap(container) {
     item.append(icon, document.createTextNode(state.label));
     legend.append(item);
   }
-  container.append(grid, legend);
+  container.append(grid, detail, legend);
 }
 function renderCareerResume() {
   const record = careerRecord(game);
@@ -402,6 +415,7 @@ function renderCareerResume() {
       fallback.value = text;
       fallback.focus();
       fallback.select();
+      fallback.setSelectionRange(0, text.length);
       status.textContent = "コピーできませんでした。下のテキストを選択してコピーできます。";
     }
   });
@@ -461,6 +475,16 @@ function commitChoice(decision, years = Number($("year-step").value)) {
     toast(error.message);
   }
 }
+function selectCommand(event) {
+  const button = event.target.closest(".choice");
+  if (!button || button.disabled) return;
+  for (const command of $("choices").querySelectorAll("button"))
+    command.dataset.active = String(command === button);
+}
+// Safari does not always focus buttons after a tap. Track the pointer as well
+// as keyboard focus so the cursor still marks the chosen command.
+$("choices").addEventListener("pointerdown", selectCommand);
+$("choices").addEventListener("focusin", selectCommand);
 $("choices").addEventListener("keydown", (event) => {
   if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
   const buttons = [...$("choices").querySelectorAll("button:not(:disabled)")];
@@ -590,8 +614,27 @@ function showReflection() {
   $("reflection-line").value = "";
   $("reflection-error").textContent = "";
   $("reflection-dialog").showModal();
-  $("reflection-line").focus();
+  syncReflectionViewport();
+  $("reflection-line").focus({ preventScroll: true });
   return true;
+}
+function syncReflectionViewport() {
+  const dialog = $("reflection-dialog"), viewport = window.visualViewport;
+  if (!dialog.open || !viewport) return;
+  if (!window.matchMedia("(max-width: 640px)").matches) {
+    dialog.style.removeProperty("top");
+    dialog.style.removeProperty("max-height");
+    return;
+  }
+  // The keyboard can shrink only the visual viewport, leaving vh/dvh unchanged.
+  dialog.style.top = `max(${viewport.offsetTop + 12}px, env(safe-area-inset-top))`;
+  dialog.style.maxHeight = `calc(${Math.max(0, viewport.height - 24)}px - env(safe-area-inset-top) - env(safe-area-inset-bottom))`;
+  if (document.activeElement === $("reflection-line")) {
+    const input = $("reflection-line").getBoundingClientRect();
+    const bottom = viewport.offsetTop + viewport.height - 92;
+    if (input.bottom > bottom) dialog.scrollTop += input.bottom - bottom;
+    else if (input.top < viewport.offsetTop + 24) dialog.scrollTop -= viewport.offsetTop + 24 - input.top;
+  }
 }
 function finishReflection(text) {
   if (!activeReflection || activeReflection.revision !== revision) return;
@@ -2355,15 +2398,14 @@ $("export-legacy").addEventListener("click", () => {
 });
 if (standalone || hosted) {
   $("ai-form").hidden = true;
-  $("ai-description").textContent = hosted
-    ? "OpenAIで場面と選択肢を生成できます。送信内容を確認し、同意を入れて生成ボタンを押してください。累計の見積り上限$0.10・100回まで。自動生成と自動再試行はしません。セーブはこの端末内です。"
-    : "AI未接続でも、各年のできごとと選択の結果が続きます。AIを使う場合は、依頼文をコピーして好きなAIの返答を取り込めます。PCのOllamaやAPIキーとは自動接続しません。";
   $("auto-scene").checked = false;
   for (const id of ["research-button", "career-research"])
     if ($(id)) $(id).hidden = true;
   for (const el of document.querySelectorAll("[data-pc-only]"))
     el.hidden = true;
 }
+window.visualViewport?.addEventListener("resize", syncReflectionViewport);
+window.visualViewport?.addEventListener("scroll", syncReflectionViewport);
 readStoredGame();
 updateBudget();
 status().catch((error) => {

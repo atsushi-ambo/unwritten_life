@@ -4,6 +4,7 @@ import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { createContext, runInContext } from "node:vm";
+import { parse } from "parse5";
 import { buildMobile } from "../scripts/build-mobile.mjs";
 test("new careers stop AI requests on an older running server without switching providers or stopping the game", async () => {
   const app = await readFile(
@@ -55,6 +56,7 @@ test("mobile build contains only public assets, opts out of network calls, and k
   assert.equal(result.files.length, 8);
   assert.deepEqual((await readdir(dir)).sort(), result.files.sort());
   const html = await readFile(resolve(dir, "index.html"), "utf8");
+  checkCareerCopy(html, false);
   assert.match(html, /data-edition="mobile"/);
   assert.match(html, /name="careerInterests"/);
   assert.match(html, /id="career-rule-fallback"/);
@@ -133,6 +135,7 @@ test("hosted mobile uses only same-origin scene requests and does not claim that
   t.after(() => rm(dir, { recursive: true, force: true }));
   await buildMobile(dir, { cloud: true });
   const html = await readFile(resolve(dir, "index.html"), "utf8");
+  checkCareerCopy(html, true);
   assert.match(html, /data-edition="mobile-cloud"/);
   assert.match(html, /connect-src 'self'/);
   assert.match(html, /OpenAIは手動生成/);
@@ -176,3 +179,26 @@ test("hosted mobile uses only same-origin scene requests and does not claim that
     "synthetic-csrf-token",
   );
 });
+
+function checkCareerCopy(html, cloud) {
+  const elements = new Map();
+  const collect = (element) => {
+    const id = element.attrs?.find((a) => a.name === "id")?.value;
+    if (id) elements.set(id, element);
+    for (const child of element.childNodes ?? []) collect(child);
+  };
+  const text = (element) => element.nodeName === "#text" ? element.value : (element.childNodes ?? []).map(text).join("");
+  const doc = parse(html);
+  collect(doc);
+  assert.match(html, /<title>Unwritten Life — その転職の、ずっと先の未来まで。<\/title>/);
+  assert.match(html, /name="description"\s+content="その転職の、ずっと先の未来まで。/);
+  assert.match(html, new RegExp(`${cloud ? "HOSTED" : "MOBILE"} CAREER / 0.3`));
+  for (const id of ["about-ai-copy", "privacy-ai-copy", "ai-description", "edition-privacy"]) {
+    assert.doesNotMatch(text(elements.get(id)), /Ollama|Codex|Claude|ローカルサーバー|PC内/);
+  }
+  assert.match(text(elements.get("about-ai-copy")), /キャリア/);
+  assert.match(text(elements.get("command-help")), /タップ/);
+  for (const id of ["ai-form", "research-button", "career-research"])
+    assert.ok(elements.get(id).attrs.some((a) => a.name === "hidden"), id);
+  assert.doesNotMatch(html, /unsafe-inline|unsafe-eval/);
+}

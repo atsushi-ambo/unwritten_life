@@ -40,7 +40,7 @@ test("career log favorites filter the newest-first feed and disappear when their
   await expectFits(page);
 });
 
-test("ending resume shows the career map and milestone line, copies locally, and offers a clipboard fallback", async ({ page, baseURL }) => {
+test("ending resume shows the career map and milestone line, copies locally, and offers a clipboard fallback", async ({ page, baseURL, isMobile }) => {
   const external = [], errors = [];
   await page.route("**/*", async (route) => {
     if (new URL(route.request().url()).origin === new URL(baseURL).origin) return route.continue();
@@ -69,18 +69,90 @@ test("ending resume shows the career map and milestone line, copies locally, and
   await expect(card.locator(".career-reflections")).toContainText(line);
   await expect(card.locator("script")).toHaveCount(0);
   await expect(page.locator("#ending-map .career-tile")).toHaveCount(game.decisions.length);
-  await page.locator("#copy-resume").click();
+  await page.locator("#copy-resume")[isMobile ? "tap" : "click"]();
   await expect(page.locator("#resume-copy-status")).toHaveText("コピーしました。");
   const text = await page.evaluate(() => window.__copiedResume);
   for (const expected of ["職務経歴書", "Microsoft", line, "退職後", "キャリアマップ"])
     expect(text).toContain(expected);
   await page.evaluate(() => { window.__clipboardDenied = true; });
-  await page.locator("#copy-resume").click();
+  await page.locator("#copy-resume")[isMobile ? "tap" : "click"]();
   await expect(page.locator("#resume-copy-fallback")).toBeVisible();
+  await expect(page.locator("#resume-copy-fallback")).toHaveValue(text);
+  await expect(page.locator("#resume-copy-fallback")).toBeFocused();
+  expect(await page.locator("#resume-copy-fallback").evaluate((el) => [el.selectionStart, el.selectionEnd, el.readOnly]))
+    .toEqual([0, text.length, true]);
+  // Clipboard API can be absent, as well as present but denied.
+  await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined }));
+  await page.locator("#copy-resume")[isMobile ? "tap" : "click"]();
   await expect(page.locator("#resume-copy-fallback")).toHaveValue(text);
   await expectFits(page);
   expect(external).toEqual([]);
   expect(errors).toEqual([]);
+});
+
+for (const width of [320, 390]) test(`touch commands, map labels and checkpoint submission fit at ${width}px`, async ({ page, isMobile }) => {
+  test.skip(!isMobile, "Touch interaction coverage uses the four mobile projects");
+  await page.setViewportSize({ width, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await page.locator("#remember").check();
+  let game = createGame({ ...syntheticProfile, age: 18 }, "steady", 42);
+  while (game.age < 29) game = advance(game, "rest");
+  await page.locator("#import-save-file").setInputFiles(saveFile(game));
+  await expectFits(page);
+  const commands = page.locator("#choices button");
+  const sizes = await commands.evaluateAll((buttons) => buttons.map((b) => b.getBoundingClientRect().height));
+  expect(sizes.every((height) => height >= 44)).toBe(true);
+  await page.evaluate(() => {
+    document.addEventListener("pointerdown", (event) => {
+      const button = event.target.closest("#choices .choice");
+      if (button) window.__tappedCommand = {
+        active: button.dataset.active,
+        cursor: getComputedStyle(button.querySelector(".command-cursor")).visibility,
+      };
+    });
+  });
+  await commands.first().tap();
+  expect(await page.evaluate(() => window.__tappedCommand)).toEqual({ active: "true", cursor: "visible" });
+  await expect(page.locator("#hud-age")).toHaveText("30歳");
+  await page.locator("#journey-next").tap();
+  const dialog = page.locator("#reflection-dialog"), input = page.locator("#reflection-line");
+  await expect(dialog).toBeVisible();
+  await input.tap();
+  await input.fill("これからも自分のペースで学ぶ");
+  // Playwright does not open the native iOS keyboard. Shrink only the visual
+  // viewport (not the layout viewport), matching its important layout effect.
+  await page.evaluate(() => {
+    Object.defineProperty(window.visualViewport, "height", { configurable: true, value: 380 });
+    Object.defineProperty(window.visualViewport, "offsetTop", { configurable: true, value: 24 });
+    window.visualViewport.dispatchEvent(new Event("resize"));
+  });
+  const visible = await page.evaluate(() => {
+    const input = document.querySelector("#reflection-line").getBoundingClientRect();
+    const submit = document.querySelector("#reflection-form button[type=submit]").getBoundingClientRect();
+    return [input, submit].every((r) => r.top >= 24 && r.bottom <= 404);
+  });
+  expect(visible).toBe(true);
+  await expect(input).toBeFocused();
+  await page.locator("#reflection-form button[type=submit]").tap();
+  await expect(dialog).toBeHidden();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("unwritten-life:v2")).reflections["age-30"]))
+    .toBe("これからも自分のペースで学ぶ");
+  const tiles = page.locator("#career-map .career-tile-button");
+  await expect(tiles).toHaveCount(12);
+  const layout = await tiles.evaluateAll((buttons) => buttons.map((b) => {
+    const r = b.getBoundingClientRect();
+    return { x: r.x, y: r.y, width: r.width, height: r.height };
+  }));
+  expect(new Set(layout.map((r) => r.y)).size).toBeGreaterThan(1);
+  expect(layout.every((r) => r.width >= 44 && r.height >= 44)).toBe(true);
+  await tiles.last().tap();
+  await expect(page.locator("#career-map .career-map-detail")).toHaveText(await tiles.last().getAttribute("aria-label"));
+  await expect(tiles.last()).toHaveAttribute("aria-pressed", "true");
+  const favorite = page.locator("#history .history-favorite").first();
+  await favorite.tap();
+  await expect(page.locator("#history .history-favorite").first()).toHaveAttribute("aria-pressed", "true");
+  await expectFits(page);
 });
 
 test("career milestones pause multi-year play, save one optional line, and support undo and skip", async ({ page }) => {
@@ -284,4 +356,46 @@ test("rule career fallback opens by keyboard and remains usable without AI", asy
   await cards.first().click();
   await expect(page.locator("#career-dialog")).toBeHidden();
   await expect(page.locator("#hud-year")).toHaveText("2027年");
+});
+
+test("safe areas protect edge content in portrait and landscape while retaining normal spacing", async ({ page }) => {
+  for (const width of [390, 640, 844, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 390 });
+    await page.goto("/");
+    const result = await page.evaluate(() => {
+      document.querySelector("#notice").textContent = "Synthetic notice";
+      const edges = [
+        ...[...document.querySelectorAll(".wrap, .mobile-edition-banner, dialog, #notice")]
+          .map((element) => ({ element, sides: ["Left", "Right"] })),
+        ...[...document.querySelectorAll("body, dialog")]
+          .map((element) => ({ element, sides: ["Top", "Bottom"] })),
+        { element: document.querySelector(".journey-footer"), sides: ["Bottom"] },
+      ];
+      const read = () => edges.flatMap(({ element, sides }) => sides.map((side) => ({
+        target: element.id || element.className || element.tagName,
+        side, padding: parseFloat(getComputedStyle(element)[`padding${side}`]),
+      })));
+      const normal = read();
+      // Browsers do not emulate a physical notch. Supply asymmetric insets to
+      // the real stylesheet, keeping its cascade and media queries intact.
+      const insets = { Left: 59, Right: 47, Top: 44, Bottom: 34 };
+      const substitute = (rules) => {
+        for (const rule of rules) {
+          if (rule.cssRules) substitute(rule.cssRules);
+          if (rule.style) rule.style.cssText = rule.style.cssText.replace(
+            /env\(safe-area-inset-(left|right|top|bottom)\)/g,
+            (_, side) => `${insets[side[0].toUpperCase() + side.slice(1)]}px`,
+          );
+        }
+      };
+      for (const sheet of document.styleSheets) substitute(sheet.cssRules);
+      return { normal, protected: read(), insets, noticeBottom: parseFloat(getComputedStyle(document.querySelector("#notice")).bottom) };
+    });
+    expect(result.normal.find((edge) => edge.target.includes("wrap")).padding).toBe(width <= 640 ? 16 : width <= 960 ? 28 : 48);
+    expect(result.protected).toEqual(result.normal.map((edge) => ({
+      ...edge, padding: Math.max(edge.padding, result.insets[edge.side]),
+    })));
+    expect(result.noticeBottom).toBeGreaterThanOrEqual(result.insets.Bottom);
+    await expectFits(page);
+  }
 });

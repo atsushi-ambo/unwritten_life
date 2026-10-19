@@ -25,7 +25,7 @@ function loadHandler(context, start, end) {
   runInContext(app.slice(from, to), context);
 }
 
-test("direct life and career requests omit private reflections and preserve the local record", async () => {
+for (const hosted of [false, true]) test(`${hosted ? "hosted" : "PC"} life and career HTTP saves omit private reflections and preserve the local record`, async () => {
   const initial = createGame({
     age: 29, region: "city", job: "tech", ai: "daily", priority: "balance",
     gender: "undisclosed", household: "solo", companyType: "small",
@@ -33,27 +33,36 @@ test("direct life and career requests omit private reflections and preserve the 
   const game = recordCareerReflection(advance(initial, "rest"), "age-30", "PRIVATE_REFLECTION");
   for (const mode of ["life", "career"]) {
     const $ = elements();
-    const aiState = { provider: "ollama", cloud: false };
-    let requests = 0;
+    const aiState = { provider: hosted ? "openai" : "ollama", cloud: hosted };
+    $("cloud-consent").checked = true;
+    $("career-consent").checked = true;
+    const requests = [];
     const context = createContext({
       $, game, aiState, isRetiredAt, encodeSave, generating: false, revision: 1,
+      standalone: false, hosted, apiToken: "synthetic-csrf",
+      crypto: { randomUUID: () => "synthetic-request-id" },
       needsCareerServerUpdate: () => false, needsChoiceServerUpdate: () => false,
       performance: { now: () => 0 }, setInterval: () => 0, clearInterval() {},
       connectionKey: () => "synthetic", document: { querySelectorAll: () => [] },
       renderAI() {}, renderGame() {}, renderCareerOffers() {}, renderAITiming() {}, toast() {}, status: async () => {},
-      api: async (path, body) => {
-        requests++;
-        assert.equal(path, "/api/scene");
-        assert.equal(body.mode, mode);
-        assert.deepEqual(JSON.parse(body.save).reflections, {});
-        assert.doesNotMatch(JSON.stringify(body), /PRIVATE_REFLECTION/);
+      fetch: async (path, options) => {
+        requests.push({ path, options });
         throw Error("Synthetic provider failure");
       },
     });
+    loadHandler(context, "async function api(", "function readStoredGame(");
     if (mode === "life") loadHandler(context, "async function generateScene()", "function openComparison()");
     else loadHandler(context, "async function generateCareerChoices()", '$("career-generate").addEventListener');
     await runInContext(mode === "life" ? "generateScene()" : "generateCareerChoices()", context);
-    assert.equal(requests, 1);
+    assert.equal(requests.length, 1);
+    const { path, options } = requests[0], body = JSON.parse(options.body);
+    assert.equal(path, "/api/scene");
+    assert.equal(options.headers["X-Unwritten-Token"], "synthetic-csrf");
+    assert.equal(body.requestId, hosted ? "synthetic-request-id" : undefined);
+    assert.equal(body.cloudConsent, true);
+    assert.equal(body.mode, mode);
+    assert.deepEqual(JSON.parse(body.save).reflections, {});
+    assert.doesNotMatch(options.body, /PRIVATE_REFLECTION/);
     assert.equal(context.game.reflections["age-30"], "PRIVATE_REFLECTION");
   }
 });

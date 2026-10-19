@@ -60,6 +60,46 @@ export async function buildMobile(output, { cloud = false } = {}) {
     await writeFile(resolve(target, file), content);
   }
   const document = parse(sources.get("index.html"));
+  // Keep the shared runtime's element IDs, but specialize copy and hide PC
+  // controls in the generated HTML too (before JavaScript has loaded).
+  const elements = new Map();
+  const collect = (element) => {
+    const id = element.attrs?.find((a) => a.name === "id")?.value;
+    if (id) elements.set(id, element);
+    for (const child of element.childNodes ?? []) collect(child);
+  };
+  collect(document);
+  const setText = (element, value) => {
+    element.childNodes = [{ nodeName: "#text", value, parentNode: element }];
+  };
+  const copy = {
+    "edition-privacy": cloud
+      ? "キャリアは端末内で進行 · OpenAIは同意して手動生成"
+      : "キャリアは端末内で進行 · 好きなAIと手動交換できます",
+    "about-ai-copy": cloud
+      ? "現在の職歴と過去の選択から、OpenAIでキャリアの場面や4択を手動生成できます。送信内容を確認し、同意して生成します。好きなAIとの手動交換も使えます。AI未接続でも遊べます。"
+      : "端末内でキャリアの場面と選択が続きます。AIを使う場合は、依頼文を好きなAIに渡して返答を取り込む手動交換ができます。接続しなくても遊べます。",
+    "privacy-ai-copy": cloud
+      ? "OpenAIへの送信は同意して生成を押したときだけです。APIキーはサーバー側で管理し、端末へ配布しません。セーブは任意でこのブラウザ内に保存します。節目の一行はAIへ送信しません。共有ブラウザからは保存を見られる可能性があります。"
+      : "ゲームは端末内で進みます。手動交換では、依頼文と送信先を自分で確認してください。セーブは任意でこのブラウザ内に保存します。節目の一行はAIへ渡す依頼文に含めません。共有ブラウザからは保存を見られる可能性があります。",
+    "privacy-research-copy": "会社の候補を検索するときだけ、企業名をWikidataへ送ります。候補は利用者が確認します。外部ページから会社情報を取り込む機能は、この版では使いません。",
+    "command-help": "コマンドをタップして決定 · キーボードは↑↓とEnter",
+    "reflection-note": "セーブに残る自分用の記録です。AIには送りません。空欄や×でも進めます。",
+    "ai-description": cloud
+      ? "OpenAIでキャリアの場面と選択肢を生成できます。送信内容を確認し、同意を入れて生成ボタンを押してください。累計の見積り上限$0.10・100回まで。自動生成と自動再試行はしません。セーブはこの端末内です。"
+      : "AI未接続でも、各年のキャリアと選択の結果が続きます。AIを使う場合は、依頼文をコピーして好きなAIの返答を取り込めます。",
+    "ai-settings-button": cloud ? "AIの利用について ↗" : "AIの手動交換について ↗",
+    "ai-dialog-title": cloud ? "AIで、次のキャリアを描く。" : "好きなAIと、キャリアを描く。",
+  };
+  for (const [id, value] of Object.entries(copy)) setText(elements.get(id), value);
+  elements.get("ai-form").attrs.push({ name: "hidden", value: "" });
+  const hidePC = (element) => {
+    if (element.attrs?.some((a) => a.name === "data-pc-only") ||
+        ["research-button", "career-research"].includes(element.attrs?.find((a) => a.name === "id")?.value))
+      element.attrs.push({ name: "hidden", value: "" });
+    for (const child of element.childNodes ?? []) hidePC(child);
+  };
+  hidePC(document);
   const versionAssets = (element) => {
     for (const attr of element.attrs ?? [])
       if (
@@ -86,8 +126,8 @@ export async function buildMobile(output, { cloud = false } = {}) {
   const body = html.childNodes.find((n) => n.tagName === "body");
   const banner = parse(
     cloud
-      ? '<aside class="mobile-edition-banner"><strong>スマホ体験版 · OpenAIは手動生成</strong><span>AI生成を押したときだけプロフィールと選択履歴をOpenAIへ送ります。見積り累計$0.10・100回まで。セーブはこの端末のブラウザに保存します。</span></aside>'
-      : '<aside class="mobile-edition-banner"><strong>スマホ体験版 · 端末内で遊べます</strong><span>会社情報を取得するときだけ企業名をWikidataへ送ります。AIは手動交換で使えます。PCのAPIキーとは接続せず、API課金は発生しません。</span></aside>',
+      ? '<aside class="mobile-edition-banner"><strong>キャリア体験版 · OpenAIは手動生成</strong><span>AI生成を押したときだけプロフィールと選択履歴をOpenAIへ送ります。見積り累計$0.10・100回まで。セーブはこの端末のブラウザに保存します。</span></aside>'
+      : '<aside class="mobile-edition-banner"><strong>キャリア体験版 · 端末内で遊べます</strong><span>会社の候補を検索するときだけ企業名をWikidataへ送ります。AIは手動交換で使えます。このアプリからのAPI課金は発生しません。</span></aside>',
   )
     .childNodes.find((n) => n.tagName === "html")
     .childNodes.find((n) => n.tagName === "body").childNodes[0];
@@ -95,7 +135,7 @@ export async function buildMobile(output, { cloud = false } = {}) {
   body.childNodes.unshift(banner);
   await writeFile(
     resolve(target, "index.html"),
-    serialize(document).replace("LOCAL EDITION / 0.3", "MOBILE DEMO / 0.3"),
+    serialize(document).replace("LOCAL EDITION / 0.3", cloud ? "HOSTED CAREER / 0.3" : "MOBILE CAREER / 0.3"),
   );
   return { output: target, files: ["index.html", ...files], revision };
 }
