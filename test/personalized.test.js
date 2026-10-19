@@ -44,7 +44,7 @@ function lifeScene() {
     insight: "選択の結果はゲームの中の仮定です。",
     options: [
       ordinary("studyDaily", "自社サービスの信頼性を毎日学ぶ"),
-      ordinary("connect", "家族と来年の暮らしを相談する"),
+      ordinary("focus", "今の会社で信頼性の改善を任せてもらう"),
       ordinary("rest", "健康と暮らしのペースを整える"),
       {
         ...ordinary("move", "大都市へ住まいを移す"),
