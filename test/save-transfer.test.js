@@ -12,8 +12,10 @@ import { careerMilestones, pendingCareerReflection } from "../public/careers.js"
 
 const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 const saveKey = "unwritten-life:v2";
+// Chance incidents are off so multi-year cases are not paused by luck.
 const initial = () => createGame(
   optionalProfileInputs(profileInputForLevel({}, "quick", "balanced")), "steady", 42,
+  0, 0, 0, 0, 0, 0, 0, 110,
 );
 const file = (raw) => new File([raw], "save.json", { type: "application/json" });
 

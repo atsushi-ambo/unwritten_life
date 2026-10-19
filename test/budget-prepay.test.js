@@ -35,13 +35,14 @@ function checkBudget(before, next) {
   close(b.investment, h.liquidation - h.investmentTransfer);
   close(b.other, h.bonus - h.businessSetup - h.businessOverhead -
     (h.outcome?.extraCost ?? 0) -
+    (h.incident?.effects.extraCost ?? 0) -
     CHOICES[h.choice].cost);
   return b;
 }
 function replayAt(g, length, scenes = {}) {
   return replay(g.profile, g.scenario, g.seed, g.decisions.slice(0, length),
     scenes, false, g.dynamicFrom, g.worldFrom, g.retirementFrom,
-    g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom);
+    g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom);
 }
 const scene = {
   title: "住まいと手元の備えを考える",

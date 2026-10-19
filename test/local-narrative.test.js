@@ -2,8 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   JOBS, REGIONS, QUICK_PRESETS, createGame, optionalProfileInputs, profileInputForLevel,
-  advance, eventFor, availableChoices, replay,
+  advance, eventFor, availableChoices, replay, MAX_AGE,
 } from "../public/engine.js";
+
+// These cases check the prose for chosen actions, so chance incidents are off.
+const steadyGame = (p, seed) => createGame(p, "steady", seed, 0, 0, 0, 0, 0, 0, 0, MAX_AGE);
 
 const sentences = (text) =>
   text.match(/[^。！？!?]+[。！？!?]*/gu)?.map((s) => s.trim()).filter(Boolean) ?? [];
@@ -34,7 +37,7 @@ test("eight-year local narratives across presets and every job remain natural, v
       for (const seed of [42, 2026]) {
         for (const plan of [Array(8).fill("studyDaily"),
           ["studyDaily", "focus", "invest", "connect", "rest", "learn", "focus", "invest"]]) {
-          let g = createGame(profile(preset, job), "steady", seed);
+          let g = steadyGame(profile(preset, job), seed);
           let previous = eventFor(g).body;
           checkProse(previous);
           for (const action of plan) {
@@ -52,7 +55,7 @@ test("eight-year local narratives across presets and every job remain natural, v
             assert.deepEqual(eventFor(g), scene);
             previous = scene.body;
           }
-          const restored = replay(g.profile, g.scenario, g.seed, g.decisions);
+          const restored = replay(g.profile, g.scenario, g.seed, g.decisions, {}, false, 0, 0, 0, 0, 0, 0, 0, MAX_AGE);
           assert.deepEqual(restored, g);
         }
       }
@@ -61,10 +64,10 @@ test("eight-year local narratives across presets and every job remain natural, v
 });
 
 test("housing changes and children's stages appear without an annual family suffix", () => {
-  let g = createGame(profile("family", "tech", { savings: 3000 }), "steady", 42);
+  let g = steadyGame(profile("family", "tech", { savings: 3000 }), 42);
   g = advance(g, "home");
   assert.match(eventFor(g).body, /買った家/);
-  const moved = advance(createGame(profile("family", "tech"), "steady", 42), "move");
+  const moved = advance(steadyGame(profile("family", "tech"), 42), "move");
   assert.match(eventFor(moved).body, /へ移り/);
   g = advance(g, "rest");
   g = advance(g, "rest");

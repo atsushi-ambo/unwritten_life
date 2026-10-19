@@ -493,6 +493,22 @@ function appendBudget(parent, h, collapsed = false) {
     );
   parent.append(box);
 }
+// A chance incident is shown apart from the chosen action, with the game's
+// assumed odds, so a hard year reads as luck rather than as the player's fault.
+function incidentNote(h) {
+  if (!h.incident) return null;
+  const percent = (p) => `${(p * 100).toFixed(p < 0.01 ? 1 : 0)}%`;
+  const box = node("div", undefined, `incident-note tone-${h.incident.tone}`);
+  box.append(
+    node("p", `思いがけない出来事：${h.incident.title}`, "incident-title"),
+    node("p", h.incident.body),
+    node(
+      "small",
+      `この年に何か思いがけない出来事が起きる確率は${percent(h.incident.yearChance)}、この出来事そのものは${percent(h.incident.chance)}でした（ゲームの仮定）。`,
+    ),
+  );
+  return box;
+}
 function showJourney(journey) {
   const first = journey.entries[0],
     last = journey.entries.at(-1);
@@ -513,6 +529,8 @@ function showJourney(journey) {
       node("h3", h.episode?.title ?? h.outcome?.title ?? h.title),
       node("p", h.episode?.body ?? h.note),
     );
+    const incident = incidentNote(h);
+    if (incident) row.append(incident);
     const delta = Math.round(h.income) - Math.round(previousIncome);
     row.append(
       node(
@@ -711,6 +729,8 @@ function renderGame() {
       node("h2", h.outcome?.title ?? h.choiceLabel),
       node("p", h.outcome?.body ?? h.note),
     );
+    const incident = incidentNote(h);
+    if (incident) resultCard.append(incident);
     const changes = node("div", undefined, "result-changes");
     for (const [label, key, unit] of [
       ["年収", "income", "万円"],
@@ -804,6 +824,7 @@ function renderGame() {
         game.prepayFrom,
         game.debtRepayFrom,
         game.salaryCapFrom,
+        game.incidentFrom,
       );
       showGame(true);
     });
@@ -1219,6 +1240,7 @@ $("undo-button").addEventListener("click", () => {
     game.prepayFrom,
     game.debtRepayFrom,
     game.salaryCapFrom,
+    game.incidentFrom,
   );
   const reached = new Set(careerMilestones(game).map((m) => m.id));
   game.reflections = Object.fromEntries(Object.entries(reflections).filter(([id]) => reached.has(id)));
