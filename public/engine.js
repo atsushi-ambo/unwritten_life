@@ -3002,6 +3002,67 @@ export function advanceYears(game, decision, years = 1, { pauseAtMilestones = fa
     stopReason = "キャリアや暮らしが変わる選択なので、まず一年の結果を見ます。";
   return { game: next, entries, requested, stopReason };
 }
+// A direction changes course once, then continues without repeating a move,
+// purchase or business expansion. Every year still uses the ordinary rules.
+export function advanceDirection(game, decision, { years = 5 } = {}) {
+  if (!Number.isInteger(years) || years < 1 || years > 5) fail();
+  const id = decisionId(decision), entries = [];
+  let next = game, stopReason = "";
+  for (let i = 0; i < years; i++) {
+    const before = next;
+    let action = decision;
+    if (i) {
+      const allowed = availableChoices(next);
+      const working = !isRetiredAt(next) && next.employer.kind !== "seeking" &&
+        !(next.employer.kind === "initial" && ["student", "notWorking"].includes(next.profile.occupation));
+      const preferred = ["learn", "studyDaily"].includes(id) ? ["studyDaily", "learn"]
+        : ["rest", "recover", "careLeave", "connect", "explore"].includes(id) ? [id]
+          : ["familyPlan", "reconsiderFamily", "meet"].includes(id) ? ["connect", "rest"]
+            : working ? ["focus"] : ["rest"];
+      action = [...preferred, working ? "focus" : "rest"].find((a) => allowed.includes(a));
+      if (!action) {
+        stopReason = "状況が変わり、この方針を続けられなくなりました。";
+        break;
+      }
+      // Retain a continuing study/rest intention, never a one-time transaction.
+      if (typeof decision === "object" && decision.intent &&
+        (action === id || ["learn", "studyDaily"].includes(id)))
+        action = { id: action, intent: decision.intent };
+    }
+    next = advance(next, action);
+    const entry = next.history.at(-1);
+    entries.push(entry);
+    if (next.ended) {
+      stopReason = entry.careerEnd ? "キャリアに区切りがつきました。" : "キャリアと人生の物語が完結しました。";
+    } else if (next.family.childAges.length !== before.family.childAges.length || next.family.partner !== before.family.partner) {
+      stopReason = "家族の節目です。働き方と暮らしの配分を選び直せます。";
+    } else if (isRetiredAt(next) !== isRetiredAt(before) || ["failure", "closure"].includes(entry.outcome?.kind)) {
+      stopReason = "働き方の節目です。ここからの方針を選び直せます。";
+    } else if (entry.incident?.tone === "hard") {
+      stopReason = "思いがけない出来事がありました。ここからの方針を選び直せます。";
+    }
+    if (stopReason) break;
+  }
+  const blocks = validateDirectionBlocks(game.directionBlocks ?? [], game.decisions.length);
+  next = { ...next, directionBlocks: [...blocks, [game.decisions.length, next.decisions.length]] };
+  return { game: next, entries, requested: years, stopReason };
+}
+function validateDirectionBlocks(raw, length) {
+  if (!Array.isArray(raw) || raw.length > MAX_AGE) fail();
+  let previous = 0;
+  return raw.map((block) => {
+    if (!Array.isArray(block) || block.length !== 2) fail();
+    const [start, end] = block;
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < previous ||
+      end <= start || end > length || end - start > 5) fail();
+    previous = end;
+    return [start, end];
+  });
+}
+export function previousDirectionStep(game) {
+  const block = game.directionBlocks?.at(-1);
+  return block?.[1] === game.decisions.length ? block[0] : Math.max(0, game.decisions.length - 1);
+}
 export function advance(g, rawDecision) {
   if (g.ended || g.decisions.length >= MAX_AGE)
     throw new Error("キャリアと人生の物語は完結しました。");
@@ -3537,6 +3598,7 @@ export function replay(
   careerPathFrom = 0,
   careerEndFrom = 0,
   payRealismFrom = 0,
+  directionBlocks,
 ) {
   if (
     !Array.isArray(decisions) ||
@@ -3585,6 +3647,10 @@ export function replay(
   }
   if (!g.ended && scenes[String(decisions.length)])
     g = applyScene(g, scenes[String(decisions.length)]);
+  if (directionBlocks !== undefined) {
+    const blocks = validateDirectionBlocks(directionBlocks, decisions.length);
+    g.directionBlocks = stopAtEnd ? blocks.filter(([, end]) => end <= g.decisions.length) : blocks;
+  }
   return g;
 }
 export function compareWorlds(g) {
@@ -3607,6 +3673,7 @@ export function compareWorlds(g) {
       g.careerPathFrom,
       g.careerEndFrom,
       g.payRealismFrom,
+      g.directionBlocks,
     ),
   );
 }
@@ -3655,6 +3722,7 @@ export function encodeSave(g) {
     scenes: g.scenes,
     reflections: validateReflections(Object.hasOwn(g, "reflections") ? g.reflections : {}, g),
     careerSeen: validateCareerSeen(g.careerSeen ?? {}, g),
+    ...(g.directionBlocks === undefined ? {} : { directionBlocks: validateDirectionBlocks(g.directionBlocks, g.decisions.length) }),
   });
   if (value.length > 250000)
     throw new Error("保存データが上限を超えました。元の保存は保持しています。");
@@ -3698,6 +3766,8 @@ export function decodeSave(value) {
       ? d.payRealismFrom
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
   );
+  if (Object.hasOwn(d, "directionBlocks"))
+    game.directionBlocks = validateDirectionBlocks(d.directionBlocks, game.decisions.length);
   game.reflections = validateReflections(Object.hasOwn(d, "reflections") ? d.reflections : {}, game);
   game.careerSeen = validateCareerSeen(d.careerSeen ?? {}, game);
   return game;

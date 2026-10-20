@@ -59,7 +59,7 @@ test("hosted mobile uses only same-origin scene requests and does not claim that
   checkCareerCopy(html);
   assert.match(html, /data-edition="mobile-cloud"/);
   assert.match(html, /connect-src 'self'/);
-  assert.match(html, /OpenAIで毎年自動生成/);
+  assert.match(html, /OpenAIで5年ごとに生成/);
   assert.match(html, /\$5/);
   assert.doesNotMatch(html, /API課金は発生しません/);
   const app = await readFile(resolve(dir, "app.js"), "utf8");

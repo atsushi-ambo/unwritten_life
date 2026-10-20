@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { createGame, advance, recordCareerReflection, encodeSave } from "../public/engine.js";
+import { createGame, advance, recordCareerReflection, encodeSave, decodeSave } from "../public/engine.js";
 
 const syntheticProfile = {
   age: 29, region: "city", job: "tech", income: 500, ai: "sometimes",
@@ -7,6 +7,11 @@ const syntheticProfile = {
   savings: 500, monthlyCost: 12, companyType: "small", company: "合成SI社",
 };
 const saveFile = (game) => ({ name: "synthetic-save.json", mimeType: "application/json", buffer: Buffer.from(encodeSave(game)) });
+const quietGame = (profile = syntheticProfile) => createGame(profile, "steady", 42, 0, 0, 0, 0, 0, 0, 0, 110);
+async function finishDirection(page) {
+  await page.locator("#journey-next").click();
+  await expect(page.locator("#choices button").first()).toBeVisible();
+}
 async function expectFits(page) {
   const overflow = await page.evaluate(() => ({
     page: document.documentElement.scrollWidth > innerWidth,
@@ -98,24 +103,24 @@ test("an inferred region submits while hidden and keeps advanced financial entri
 
 test("career log favorites filter the newest-first feed and disappear when their year is undone", async ({ page }) => {
   await page.goto("/");
-  await page.locator("#demo-button").click();
+  await page.locator("#import-save-file").setInputFiles(saveFile(quietGame()));
   await page.locator("#choices button").first().click();
-  await page.locator("#journey-next").click();
+  await finishDirection(page);
   const favorite = page.getByRole("button", { name: "2026年の記録をお気に入り", exact: true });
   await favorite.click();
   await expect(favorite).toHaveAttribute("aria-pressed", "true");
   await page.locator("#history-favorites-only").click();
   await page.locator("#choices button").first().click();
-  await page.locator("#journey-next").click();
+  await finishDirection(page);
   await expect(page.locator("#history .history-row")).toHaveCount(1);
   await expect(page.locator("#history")).toContainText("2026");
   await favorite.click();
   await expect(page.locator("#history .history-row")).toHaveCount(0);
   await expect(page.locator("#history-favorites-only")).toBeFocused();
   await page.locator("#history-favorites-only").click();
-  await expect(page.locator("#history .history-row")).toHaveCount(2);
-  await expect(page.locator("#history .history-row").first()).toContainText("2027");
-  await page.getByRole("button", { name: "2027年の記録をお気に入り", exact: true }).click();
+  await expect(page.locator("#history .history-row")).toHaveCount(10);
+  await expect(page.locator("#history .history-row").first()).toContainText("2035");
+  await page.getByRole("button", { name: "2031年の記録をお気に入り", exact: true }).click();
   await page.locator("#undo-button").click();
   await expect(page.locator("#history-filter-status")).toContainText("★ 0件");
   await expectFits(page);
@@ -171,13 +176,13 @@ test("ending resume shows the career map and milestone line, copies locally, and
   expect(errors).toEqual([]);
 });
 
-for (const width of [320, 390]) test(`touch commands, map labels and checkpoint submission fit at ${width}px`, async ({ page, isMobile }) => {
+for (const width of [320, 390]) test(`touch commands, inline checkpoints and year cards fit at ${width}px`, async ({ page, isMobile }) => {
   test.skip(!isMobile, "Touch interaction coverage uses the mobile projects");
   await page.setViewportSize({ width, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   await page.locator("#remember").check();
-  let game = createGame({ ...syntheticProfile, age: 18 }, "steady", 42);
+  let game = quietGame({ ...syntheticProfile, age: 18 });
   while (game.age < 29) game = advance(game, "rest");
   await page.locator("#import-save-file").setInputFiles(saveFile(game));
   await expectFits(page);
@@ -196,78 +201,220 @@ for (const width of [320, 390]) test(`touch commands, map labels and checkpoint 
   });
   await commands.first().tap();
   expect(await page.evaluate(() => window.__tappedCommand)).toEqual({ active: "true", cursor: "visible" });
-  await expect(page.locator("#hud-age")).toHaveText("30歳");
+  await expect(page.locator("#hud-age")).toHaveText("29歳");
   await page.locator("#journey-next").tap();
-  const dialog = page.locator("#reflection-dialog"), input = page.locator("#reflection-line");
-  await expect(dialog).toBeVisible();
+  await expect(page.locator("#hud-age")).toHaveText("34歳");
+  const checkpoint = page.locator('[data-milestone="age-30"]');
+  const input = checkpoint.locator("input");
+  await expect(input).toBeVisible();
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
   await input.tap();
   await input.fill("これからも自分のペースで学ぶ");
-  // Playwright does not open the native iOS keyboard. Shrink only the visual
-  // viewport (not the layout viewport), matching its important layout effect.
-  await page.evaluate(() => {
-    Object.defineProperty(window.visualViewport, "height", { configurable: true, value: 380 });
-    Object.defineProperty(window.visualViewport, "offsetTop", { configurable: true, value: 24 });
-    window.visualViewport.dispatchEvent(new Event("resize"));
-  });
-  const visible = await page.evaluate(() => {
-    const input = document.querySelector("#reflection-line").getBoundingClientRect();
-    const submit = document.querySelector("#reflection-form button[type=submit]").getBoundingClientRect();
-    return [input, submit].every((r) => r.top >= 24 && r.bottom <= 404);
-  });
-  expect(visible).toBe(true);
-  await expect(input).toBeFocused();
-  await page.locator("#reflection-form button[type=submit]").tap();
-  await expect(dialog).toBeHidden();
+  await checkpoint.locator('button[type="submit"]').tap();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("unwritten-life:v2")).reflections["age-30"]))
     .toBe("これからも自分のペースで学ぶ");
+  await expect(page.locator("#choices button").first()).toBeVisible();
   const tiles = page.locator("#career-map .career-tile-button");
-  await expect(tiles).toHaveCount(12);
+  await expect(tiles).toHaveCount(16);
   const layout = await tiles.evaluateAll((buttons) => buttons.map((b) => {
     const r = b.getBoundingClientRect();
     return { x: r.x, y: r.y, width: r.width, height: r.height };
   }));
   expect(new Set(layout.map((r) => r.y)).size).toBeGreaterThan(1);
   expect(layout.every((r) => r.width >= 44 && r.height >= 44)).toBe(true);
+  expect(await page.locator(".journey-year").last().evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
   await tiles.last().tap();
   await expect(page.locator("#career-map .career-map-detail")).toHaveText(await tiles.last().getAttribute("aria-label"));
   await expect(tiles.last()).toHaveAttribute("aria-pressed", "true");
-  const favorite = page.locator("#history .history-favorite").first();
-  await favorite.tap();
+  await page.locator("#history .history-favorite").first().tap();
   await expect(page.locator("#history .history-favorite").first()).toHaveAttribute("aria-pressed", "true");
   await expectFits(page);
 });
 
-test("career milestones pause multi-year play, save one optional line, and support undo and skip", async ({ page }) => {
+test("inline milestones keep flowing, save an optional line, and undo a whole saved block", async ({ page }) => {
   await page.goto("/");
   await page.locator("#remember").check();
-  await page.locator("#import-save-file").setInputFiles(saveFile(createGame(syntheticProfile)));
-  await page.locator("#year-step").selectOption("10");
+  await page.locator("#import-save-file").setInputFiles(saveFile(quietGame()));
   await page.locator("#choices button").first().click();
-  await expect(page.locator("#hud-age")).toHaveText("30歳");
-  await expect(page.locator("#career-map .career-tile")).toHaveCount(1);
-  await page.keyboard.press("Escape");
-  await expect(page.locator("#reflection-dialog")).toBeVisible();
-  await expect(page.locator("#reflection-line")).toBeFocused();
-  await expect(page.locator("#reflection-line")).toHaveAttribute("maxlength", "80");
+  await finishDirection(page);
+  await expect(page.locator("#hud-age")).toHaveText("34歳");
+  const checkpoint = page.locator('[data-milestone="age-30"]');
+  await expect(checkpoint.locator("input")).toHaveAttribute("maxlength", "80");
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
   await expectFits(page);
-  await page.locator("#reflection-line").fill("余白のある仕事を続けたい");
-  await page.locator("#reflection-form button[type=submit]").click();
-  await expect(page.locator("#reflection-dialog")).toBeHidden();
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("unwritten-life:v2")).reflections["age-30"])).toBe("余白のある仕事を続けたい");
+  await checkpoint.locator("input").fill("余白のある仕事を続けたい");
+  await checkpoint.locator('button[type="submit"]').click();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("unwritten-life:v2")).reflections["age-30"]))
+    .toBe("余白のある仕事を続けたい");
   await page.reload();
   await page.locator("#resume-button").click();
-  await expect(page.locator("#reflection-dialog")).toBeHidden();
+  await expect(checkpoint).toContainText("余白のある仕事を続けたい");
+  await expect(checkpoint.locator("input")).toHaveCount(0);
   await page.locator("#undo-button").click();
   await expect(page.locator("#hud-age")).toHaveText("29歳");
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("unwritten-life:v2")).reflections)).toEqual({});
   await page.locator("#choices button").first().click();
-  await page.locator("#journey-next").click();
-  await expect(page.locator("#reflection-dialog")).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.locator("#reflection-dialog")).toBeHidden();
-  // The dialog hides before its async close event records the skip.
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("unwritten-life:v2")).reflections["age-30"])).toBe("");
+  await finishDirection(page);
+  // Leaving the input blank does not hold the next four directions back.
+  await expect(checkpoint.locator("input")).toBeVisible();
+  await expect(page.locator("#choices button")).toHaveCount(4);
+  await checkpoint.getByRole("button", { name: "今は書かない" }).click();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("unwritten-life:v2")).reflections["age-30"])).toBe("");
   await expectFits(page);
+});
+
+test("five year cards reveal on the clock, support pause and speed, and overlap the next AI scene", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.clock.install({ time: new Date("2026-10-20T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-20T00:00:01Z"));
+  const requests = [];
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/scene")) requests.push(JSON.parse(request.postData()).mode);
+  });
+  await page.goto("/");
+  await page.locator("#remember").check();
+  await page.locator("#import-save-file").setInputFiles(saveFile(quietGame({ ...syntheticProfile, age: 22 })));
+  await page.locator("#choices button").first().click();
+  await expect(page.locator("#journey-years .journey-year")).toHaveCount(0);
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+  await expect(page.locator("#hud-year")).toHaveText("2026年");
+  await expect(page.locator("#hud-age")).toHaveText("22歳");
+  await expect(page.locator("#progress")).toHaveJSProperty("value", 0);
+  await expect(page.locator("#career-map .career-tile")).toHaveCount(0);
+  // The second AI call finishes while the first year's card is still pending.
+  await expect(page.locator("#choices button")).toHaveCount(4);
+  await expect(page.locator("#choices")).toBeHidden();
+  expect(requests).toEqual(["life", "life"]);
+  await page.clock.runFor(5999);
+  await expect(page.locator("#journey-years .journey-year")).toHaveCount(0);
+  await page.clock.runFor(1);
+  await expect(page.locator("#journey-years .journey-year")).toHaveCount(1);
+  await expect(page.locator("#journey-years .journey-year").first()).toContainText("2026年 / 22歳");
+  await expect(page.locator("#journey-years .journey-year").first()).toContainText(/年収.*純資産/);
+  await expect(page.locator("#hud-year")).toHaveText("2026年");
+  await expect(page.locator("#career-map .career-tile")).toHaveCount(1);
+  await expect(page.locator("#progress")).toHaveJSProperty("value", 1);
+  await page.locator("#timeline-pause").click();
+  await expect(page.locator("#timeline-pause")).toHaveText("再開");
+  await page.clock.runFor(60_000);
+  await expect(page.locator("#journey-years .journey-year")).toHaveCount(1);
+  await page.locator("#timeline-pause").click();
+  await page.clock.runFor(6000);
+  await expect(page.locator("#journey-years .journey-year")).toHaveCount(2);
+  await expect(page.locator("#hud-year")).toHaveText("2027年");
+  await expect(page.locator("#hud-age")).toHaveText("23歳");
+  await expect(page.locator("#chapter-title")).toContainText("2027年、23歳");
+  await expect(page.locator("#chapter-label")).toContainText("2年が経過");
+  await expect(page.locator("#career-map .career-tile")).toHaveCount(2);
+  await expect(page.locator("#progress")).toHaveJSProperty("value", 2);
+  await page.locator("#timeline-speed").selectOption("2");
+  await page.clock.runFor(3000);
+  await expect(page.locator("#journey-years .journey-year")).toHaveCount(3);
+  await page.locator("#timeline").focus();
+  await page.keyboard.press("Space");
+  await expect(page.locator("#timeline-pause")).toHaveText("再開");
+  await page.clock.runFor(6000);
+  await expect(page.locator("#journey-years .journey-year")).toHaveCount(3);
+  await page.keyboard.press("Space");
+  // Opening the comparison leaves the year clock running behind it.
+  await page.locator("#career-compare-button").click();
+  await expect(page.locator("#career-offers .career-offer-button")).toHaveCount(4);
+  await page.clock.runFor(3000);
+  await expect(page.locator("#journey-years .journey-year")).toHaveCount(4);
+  await page.locator("#career-dialog [data-close]").click();
+  await finishDirection(page);
+  await expect(page.locator("#journey-years .journey-year")).toHaveCount(5);
+  await expect(page.locator("#choices button")).toHaveCount(4);
+  await expect(page.locator("#timeline-controls")).toBeHidden();
+  await expect(page.locator("#hud-year")).toHaveText("2031年");
+  await expect(page.locator("#hud-age")).toHaveText("27歳");
+  await expect(page.locator("#career-map .career-tile")).toHaveCount(5);
+  await expect(page.locator("#progress")).toHaveJSProperty("value", 5);
+  await expect(page.locator("#event-card")).toBeInViewport();
+  expect(requests).toEqual(["life", "life", "career"]);
+  expect(await page.evaluate(() => localStorage.getItem("unwritten-life:timeline-speed"))).toBe("2");
+  await expectFits(page);
+  await page.reload();
+  await page.locator("#resume-button").click();
+  await expect(page.locator("#timeline-speed")).toHaveValue("2");
+  await page.locator("#undo-button").click();
+  await expect(page.locator("#hud-age")).toHaveText("22歳");
+  await expect(page.locator("#journey-years .journey-year")).toHaveCount(0);
+});
+
+test("compact cards keep their full text folded and automatic following respects reflection focus", async ({ page, isMobile }) => {
+  if (!isMobile) await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.clock.install({ time: new Date("2026-10-20T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-20T00:00:01Z"));
+  await page.addInitScript(() => {
+    window.__timelineScrolls = [];
+    const scrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (options) {
+      if (this.classList.contains("journey-year") || this.id === "event-card")
+        window.__timelineScrolls.push({ target: this.id || this.dataset.year, behavior: options?.behavior });
+      return scrollIntoView.call(this, options);
+    };
+  });
+  await page.goto("/");
+  await page.locator("#remember").check();
+  await page.locator("#import-save-file").setInputFiles(saveFile(quietGame()));
+  await page.locator("#choices button").first().click();
+  await page.clock.runFor(6000);
+  const rows = page.locator("#journey-years .journey-year");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toBeInViewport();
+  expect(await page.evaluate(() => window.__timelineScrolls)).toEqual([{ target: "2026", behavior: "instant" }]);
+  const input = rows.first().locator(".timeline-reflection input");
+  await input.fill("入力中は読み進める位置を保つ");
+  await page.clock.runFor(6000);
+  await expect(rows).toHaveCount(2);
+  await expect(input).toBeFocused();
+  expect(await page.evaluate(() => window.__timelineScrolls.length)).toBe(1);
+  await finishDirection(page);
+  const original = decodeSave(await page.evaluate(() => localStorage.getItem("unwritten-life:v2")));
+  for (let i = 0; i < 5; i++) {
+    const row = rows.nth(i), details = row.locator(":scope > details.timeline-details");
+    await expect(row.locator("details")).toHaveCount(1);
+    await expect(details).not.toHaveAttribute("open");
+    await expect(details.locator(":scope > summary")).toHaveText("詳しく見る");
+    await expect(details.locator(".timeline-original")).toHaveText(original.history[i].episode.body);
+    await expect(details.locator(".budget-window")).toContainText("家計の内訳");
+    const prose = await row.evaluate((el) => [...el.children].filter((n) => n.tagName === "P" && !n.matches(".eyebrow, .timeline-direction"))
+      .map((n) => ({ className: n.className, sentences: (n.textContent.match(/[^。！？\n]+[。！？]?/gu) ?? []).length })));
+    expect(prose.length).toBeLessThanOrEqual(1);
+    for (const paragraph of prose) {
+      expect(paragraph.className).toBe("timeline-summary");
+      expect(paragraph.sentences).toBeLessThanOrEqual(2);
+    }
+    await expect(row.locator(":scope > .timeline-direction")).toHaveCount(i === 0 ? 1 : 0);
+  }
+  await rows.first().locator("details > summary").click();
+  await expect(rows.first().locator(".timeline-original")).toBeVisible();
+  await expectFits(page);
+});
+
+test("after skipping the years a slow AI shows the waiting state then four directions", async ({ page }) => {
+  let calls = 0, release;
+  const pending = new Promise((resolve) => { release = resolve; });
+  await page.route("**/api/scene", async (route) => {
+    if (++calls === 2) await pending;
+    await route.continue();
+  });
+  await page.goto("/");
+  await page.locator("#import-save-file").setInputFiles(saveFile(quietGame()));
+  await page.locator("#choices button").first().click();
+  await expect.poll(() => calls).toBe(2);
+  await page.locator("#journey-next").click();
+  await expect(page.locator("#journey-years .journey-year")).toHaveCount(5);
+  await expect(page.locator("#event-card")).toContainText("次の5年を考えています");
+  await expect(page.locator("#choices button")).toHaveCount(0);
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+  await expectFits(page);
+  release();
+  await expect(page.locator("#choices button")).toHaveCount(4);
+  await expect(page.locator("#choices button").first()).toBeVisible();
+  expect(calls).toBe(2);
 });
 
 test("local play advances, undo restores state, and mobile commands fit without external traffic", async ({ page, baseURL }) => {
@@ -280,10 +427,10 @@ test("local play advances, undo restores state, and mobile commands fit without 
   });
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
-  await page.locator("#demo-button").click();
+  await page.locator("#import-save-file").setInputFiles(saveFile(quietGame()));
   await expect(page.locator("#hud-year")).toHaveText("2026年");
   await expect(page.locator("#chapter-label")).toContainText("あなたのキャリア");
-  await expect(page.locator("#choice-title")).toHaveText("コマンド / 今年のキャリアと暮らし");
+  await expect(page.locator("#choice-title")).toHaveText("コマンド / 次の5年の方針");
   await expect(page.locator(".journal h2")).toHaveText("これまでのキャリアと暮らし。");
   const original = await page.locator(".journey-hud").textContent();
   await expect(page.locator("#choices button")).toHaveCount(4);
@@ -298,12 +445,14 @@ test("local play advances, undo restores state, and mobile commands fit without 
   await expect(commands.last()).toBeFocused();
   await page.keyboard.press("Home");
   await page.keyboard.press("Enter");
-  await expect(page.locator("#hud-year")).toHaveText("2027年");
+  await expect(page.locator("#hud-year")).toHaveText("2026年");
   await expect(page.locator("#journey-next")).toBeVisible();
-  await expect(page.locator("#journey-title")).toHaveText("2026年のキャリア記録。");
-  await expect(page.locator("#career-map .career-tile")).toHaveCount(1);
-  await expect(page.locator("#career-map [role=img]")).toHaveAttribute("aria-label", /2026年.*歳.*選択/);
-  await page.locator("#journey-next").click();
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+  await expect(page.locator("#career-map .career-tile")).toHaveCount(0);
+  await finishDirection(page);
+  await expect(page.locator("#hud-year")).toHaveText("2031年");
+  await expect(page.locator("#career-map .career-tile")).toHaveCount(5);
+  await expect(page.locator("#career-map [role=img]").first()).toHaveAttribute("aria-label", /2026年.*歳.*選択/);
   await page.locator("#undo-button").click();
   await expect(page.locator("#hud-year")).toHaveText("2026年");
   await expect(page.locator(".journey-hud")).toHaveText(original);
@@ -325,8 +474,9 @@ test("opt-in save resumes the same year and deletion removes the saved game", as
   await page.locator("#quick-start").click();
   await expect(page.locator("#hud-year")).toHaveText("2026年");
   await page.locator("#choices button").first().click();
-  await expect(page.locator("#hud-year")).toHaveText("2027年");
-  await page.locator("#journey-next").click();
+  await expect(page.locator("#hud-year")).toHaveText("2026年");
+  await finishDirection(page);
+  await expect(page.locator("#hud-year")).not.toHaveText("2026年");
   const status = await page.locator(".journey-hud").textContent();
   await page.reload();
   await page.locator("#resume-button").click();
@@ -343,7 +493,7 @@ test("save files download and restore the current game, with confirmation and op
   await page.goto("/");
   await page.locator("#demo-button").click();
   await page.locator("#choices button").first().click();
-  await page.locator("#journey-next").click();
+  await finishDirection(page);
   const status = await page.locator(".journey-hud").textContent();
   const downloading = page.waitForEvent("download");
   await page.locator("#game-export-save").click();
@@ -416,13 +566,13 @@ test("career interests survive profile tier changes and reach the AI context", a
   await expect(page.locator("#context-preview")).toContainText("事業会社のAI推進、外資SaaS");
 });
 
-test("career offers are generated by AI when the dialog opens and a choice advances one year", async ({ page }) => {
+test("career offers are generated by AI when the dialog opens and a choice advances one direction", async ({ page }) => {
   const requests = [];
   page.on("request", (request) => {
     if (request.url().endsWith("/api/scene")) requests.push(JSON.parse(request.postData()).mode);
   });
   await page.goto("/");
-  await page.locator("#demo-button").click();
+  await page.locator("#import-save-file").setInputFiles(saveFile(quietGame()));
   await expect(page.locator("#choices button")).toHaveCount(4);
   await page.locator("#career-compare-button").click();
   const cards = page.locator("#career-offers .career-offer-button");
@@ -434,7 +584,9 @@ test("career offers are generated by AI when the dialog opens and a choice advan
   await expectFits(page);
   await cards.first().click();
   await expect(page.locator("#career-dialog")).toBeHidden();
-  await expect(page.locator("#hud-year")).toHaveText("2027年");
+  await expect(page.locator("#hud-year")).toHaveText("2026年");
+  await finishDirection(page);
+  await expect(page.locator("#hud-year")).toHaveText("2031年");
 });
 
 test("safe areas protect edge content in portrait and landscape while retaining normal spacing", async ({ page }) => {

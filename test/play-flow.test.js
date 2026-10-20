@@ -197,8 +197,10 @@ test("new-game form has three levels, no required financial entries, and company
   const company = nodes.find((n) => attr(n, "id") === "company-name");
   const button = nodes.find((n) => attr(n, "id") === "company-search");
   assert.equal(company.parentNode, button.parentNode);
-  for (const id of ["journey-dialog", "journey-next", "journey-review"])
+  for (const id of ["timeline", "journey-next", "timeline-pause", "timeline-speed"])
     assert.ok(nodes.some((n) => attr(n, "id") === id));
+  for (const id of ["year-step", "journey-dialog", "reflection-dialog"])
+    assert.ok(!nodes.some((n) => attr(n, "id") === id));
 });
 
 test("phone company lookup has no built-in list and bounds external requests to an anonymous fixed directory", async (t) => {

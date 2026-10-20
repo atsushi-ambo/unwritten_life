@@ -47,15 +47,6 @@
 .company-search-row button {
   flex: 0 0 auto;
 }
-.journey-dialog {
-  width: min(680px, calc(100vw - 28px));
-  max-height: 88dvh;
-  padding: max(26px, env(safe-area-inset-top)) max(26px, env(safe-area-inset-right)) max(26px, env(safe-area-inset-bottom)) max(26px, env(safe-area-inset-left));
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  background: var(--paper);
-  color: var(--ink);
-}
 .journey-years {
   display: grid;
   gap: 16px;
@@ -78,16 +69,18 @@
 .journey-year small {
   color: var(--muted);
 }
-.journey-footer {
-  position: sticky;
-  bottom: -26px;
-  background: var(--paper);
-  padding: 16px 0 max(4px, env(safe-area-inset-bottom));
-  border-top: 1px solid var(--line);
-}
-.journey-footer button {
-  width: 100%;
-}
+.timeline { min-width: 0; margin-block: 24px; }
+.timeline-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.timeline-controls label { display: flex; align-items: center; gap: 6px; }
+.timeline-controls select { width: auto; min-height: 44px; }
+.journey-footer { padding-bottom: max(0px, env(safe-area-inset-bottom)); }
+.timeline-reflection { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.timeline-reflection input { width: 100%; min-width: 0; font-size: 16px; min-height: 44px; }
+.timeline-reflection button { margin: 10px 8px 0 0; max-width: 100%; white-space: normal; }
+.timeline-reflection h4 { margin: 0; }
+.timeline, .journey-year { overflow-wrap: anywhere; }
+.timeline-details { margin-top: 12px; }
+.timeline-details > summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 @keyframes year-arrive {
   from {
     opacity: 0.3;
@@ -113,9 +106,6 @@
   }
   .profile-levels small {
     font-size: 10px;
-  }
-  .journey-dialog {
-    padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
   }
   .journey-year {
     padding: 14px;
@@ -2045,29 +2035,18 @@ progress::-moz-progress-bar { background: #42745a; }
 .choice-symbol { font-size: 19px; color: var(--green); flex-shrink: 0; width: 20px; }
 .choice-arrow { display: none; }
 .choice:disabled .command-cursor { visibility: hidden; }
-.year-result, .journey-dialog {
+.year-result {
   background: var(--window);
   color: #fff7dd;
   border: 6px double #fff7dd;
   outline: 2px solid var(--window);
   box-shadow: var(--pixel-shadow);
 }
-.year-result .eyebrow, .journey-dialog .eyebrow { color: var(--gold); }
+.year-result .eyebrow { color: var(--gold); }
 .year-result .field-note, .year-result .result-factors { color: #d8e5d2; }
 .year-result .result-changes span { color: var(--ink); }
-.year-result .budget-window, .journey-dialog .budget-window { color: var(--ink); }
+.year-result .budget-window { color: var(--ink); }
 .year-result .budget-window .field-note { color: var(--muted); }
-.journey-dialog .journey-year {
-  background: #213f54;
-  border: 2px solid #809da4;
-  box-shadow: 3px 3px 0 #0d2133;
-}
-.journey-dialog .journey-year small { color: #d8e5d2; }
-.journey-dialog .journey-footer { background: var(--window); border-color: #809da4; }
-.journey-dialog .close-button { color: #fff7dd; border-color: #fff7dd; }
-.journey-dialog .text-button, .journey-dialog > .field-note { color: #d8e5d2; }
-.journey-dialog .journey-footer .button { border-color: var(--gold); }
-.journey-dialog :focus-visible { outline-color: var(--gold); }
 .career-map { min-width: 0; margin-block: 20px; }
 .career-map h3 { font-size: 14px; margin: 0; }
 .career-map .field-note { margin: 6px 0; }
@@ -2147,7 +2126,6 @@ progress::-moz-progress-bar { background: #42745a; }
 .career-reflections blockquote p { margin: 4px 0; }
 .career-resume #copy-resume { white-space: normal; max-width: 100%; }
 #resume-copy-fallback { width: 100%; min-width: 0; font-size: 16px; user-select: text; -webkit-user-select: text; }
-#reflection-form .button { margin-top: 12px; max-width: 100%; white-space: normal; }
 .year-result h2 { font-weight: 700; }
 .history-row { border-top: 2px dashed var(--line); }
 .history-row .history-year { font: 700 19px Menlo, Consolas, monospace; }
@@ -2254,22 +2232,6 @@ dialog p, dialog li { font-size: 14px; }
   .world-context { padding: 18px; }
   .comparison-grid { grid-template-columns: 1fr; }
   dialog { padding: max(22px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left)); width: calc(100% - 24px); }
-  #reflection-dialog {
-    position: fixed;
-    top: max(12px, env(safe-area-inset-top));
-    bottom: auto;
-    margin: 0 auto;
-    max-height: calc(100dvh - 24px);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding-bottom: max(18px, env(safe-area-inset-bottom));
-  }
-  #reflection-dialog .dialog-top { gap: 8px; }
-  #reflection-dialog .eyebrow { font-size: 11px; }
-  #reflection-dialog h2 { font-size: 21px; margin-block: 12px; }
-  #reflection-dialog p { margin-block: 10px; }
-  #reflection-line { width: 100%; min-width: 0; font-size: 16px; min-height: 44px; }
-  #reflection-form .button { position: sticky; bottom: 0; width: 100%; min-height: 44px; }
 }
 
 .notice-box {
