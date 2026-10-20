@@ -5,8 +5,8 @@ import {
   compareWorlds, profileInputForLevel, salaryCeiling, MAX_AGE, JOBS, SCENARIOS,
 } from "../public/engine.js";
 
-const quick = (preset = "balanced", job = "tech") =>
-  ({ ...profileInputForLevel({}, "quick", preset), job });
+const quick = (band = "30s", job = "tech") =>
+  ({ ...profileInputForLevel({}, "quick", { band, region: "city" }), job });
 // The playtest pattern: study daily and deepen work, take every raise offered.
 function grind(g, years) {
   for (let k = 0; k < years && !g.ended && g.age < g.profile.retirementAge; k++) {
@@ -27,11 +27,11 @@ function replayAt(g, length) {
 
 test("long-run salaries level off near a job and region ceiling but keep variance", () => {
   for (const job of Object.keys(JOBS)) {
-    for (const preset of ["balanced", "starter", "experienced"]) {
+    for (const band of ["30s", "20s", "40s"]) {
       for (const scenario of Object.keys(SCENARIOS)) {
         const peaks = [];
         for (let seed = 0; seed < 8; seed++) {
-          let g = capAt(0)(quick(preset, job), scenario, seed);
+          let g = capAt(0)(quick(band, job), scenario, seed);
           const ceiling = salaryCeiling(g);
           let peak = 0;
           while (!g.ended && g.age < g.profile.retirementAge) {
@@ -41,10 +41,10 @@ test("long-run salaries level off near a job and region ceiling but keep varianc
               assert.ok(g.salary - before <= before * 0.1, `${job} ${seed} ${before}->${g.salary}`);
             peak = Math.max(peak, g.salary);
           }
-          assert.ok(peak <= ceiling * 1.6, `${job} ${preset} ${scenario} ${seed}: ${peak} > ${ceiling}`);
+          assert.ok(peak <= ceiling * 1.6, `${job} ${band} ${scenario} ${seed}: ${peak} > ${ceiling}`);
           peaks.push(Math.round(peak));
         }
-        assert.ok(new Set(peaks).size > 4, `${job} ${preset} ${scenario}: ${peaks}`);
+        assert.ok(new Set(peaks).size > 4, `${job} ${band} ${scenario}: ${peaks}`);
       }
     }
   }
@@ -52,9 +52,10 @@ test("long-run salaries level off near a job and region ceiling but keep varianc
 
 test("the reported IT career stays plausible while high earners remain possible", () => {
   const peaks = [], before = [];
+  const reported = { ...quick(), age: 30, income: 500, savings: 300, monthlyCost: 12 };
   for (let seed = 0; seed < 30; seed++) {
-    peaks.push(grind(capAt(0)(quick(), "steady", seed), 34).salary);
-    before.push(grind(capAt(MAX_AGE)(quick(), "steady", seed), 34).salary);
+    peaks.push(grind(capAt(0)(reported, "steady", seed), 34).salary);
+    before.push(grind(capAt(MAX_AGE)(reported, "steady", seed), 34).salary);
   }
   const median = (v) => [...v].sort((a, b) => a - b)[15];
   // Without the boundary the same choices compound to several thousand 万円.

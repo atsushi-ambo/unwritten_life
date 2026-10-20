@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  JOBS, REGIONS, QUICK_PRESETS, createGame, optionalProfileInputs, profileInputForLevel,
+  JOBS, REGIONS, QUICK_AGE_BANDS, createGame, optionalProfileInputs, profileInputForLevel,
   advance, eventFor, availableChoices, replay, MAX_AGE,
 } from "../public/engine.js";
 
@@ -10,8 +10,8 @@ const steadyGame = (p, seed) => createGame(p, "steady", seed, 0, 0, 0, 0, 0, 0, 
 
 const sentences = (text) =>
   text.match(/[^。！？!?]+[。！？!?]*/gu)?.map((s) => s.trim()).filter(Boolean) ?? [];
-const profile = (preset, job, extra = {}) => optionalProfileInputs({
-  ...profileInputForLevel({}, "quick", preset), job, ...extra,
+const profile = (band, job, extra = {}) => optionalProfileInputs({
+  ...profileInputForLevel({}, "quick", { band, region: "city" }), job, ...extra,
 });
 function checkProse(text) {
   assert.doesNotMatch(text, /賃貸等/);
@@ -31,13 +31,13 @@ function worldSentences(g) {
   return sentences(`${world?.shock.body ?? ""} ${world?.frontier ?? ""}`);
 }
 
-test("eight-year local narratives across presets and every job remain natural, varied and replayable", () => {
-  for (const preset of Object.keys(QUICK_PRESETS)) {
+test("eight-year local narratives across age bands and every job remain natural, varied and replayable", () => {
+  for (const band of Object.keys(QUICK_AGE_BANDS)) {
     for (const job of Object.keys(JOBS)) {
       for (const seed of [42, 2026]) {
         for (const plan of [Array(8).fill("studyDaily"),
           ["studyDaily", "focus", "invest", "connect", "rest", "learn", "focus", "invest"]]) {
-          let g = steadyGame(profile(preset, job), seed);
+          let g = steadyGame(profile(band, job), seed);
           let previous = eventFor(g).body;
           checkProse(previous);
           for (const action of plan) {
@@ -45,7 +45,7 @@ test("eight-year local narratives across presets and every job remain natural, v
             const before = g;
             g = advance(g, availableChoices(g).includes(action) ? action : "rest");
             const scene = eventFor(g);
-            const where = `${preset}/${job}/${seed}/${g.year}/${action}`;
+            const where = `${band}/${job}/${seed}/${g.year}/${action}`;
             checkProse(scene.body);
             const episode = g.history.at(-1).episode;
             for (const text of [episode.title, episode.body, episode.next]) checkProse(text);
@@ -64,10 +64,10 @@ test("eight-year local narratives across presets and every job remain natural, v
 });
 
 test("housing changes and children's stages appear without an annual family suffix", () => {
-  let g = steadyGame(profile("family", "tech", { savings: 3000 }), 42);
+  let g = steadyGame(profile("30s", "tech", { savings: 3000, household: "care", partner: "partner", children: 2, childStage: "young" }), 42);
   g = advance(g, "home");
   assert.match(eventFor(g).body, /買った家/);
-  const moved = advance(steadyGame(profile("family", "tech"), 42), "move");
+  const moved = advance(steadyGame(profile("30s", "tech", { household: "care", partner: "partner", children: 2, childStage: "young" }), 42), "move");
   assert.match(eventFor(moved).body, /へ移り/);
   g = advance(g, "rest");
   g = advance(g, "rest");
@@ -76,7 +76,7 @@ test("housing changes and children's stages appear without an annual family suff
 });
 
 test("investment episode and action outcome describe allocating money", () => {
-  const g = advance(createGame(profile("balanced", "tech"), "steady", 42), "invest");
+  const g = advance(createGame(profile("30s", "tech"), "steady", 42), "invest");
   const record = g.history.at(-1);
   assert.match(record.outcome.title, /お金/);
   assert.match(record.episode.title, /お金/);
@@ -85,7 +85,7 @@ test("investment episode and action outcome describe allocating money", () => {
 });
 
 test("rest, relationships and retirement keep the career throughline without forcing a job change", () => {
-  const start = createGame(profile("balanced", "tech", { age: 50 }), "steady", 42);
+  const start = createGame(profile("30s", "tech", { age: 50 }), "steady", 42);
   for (const action of ["rest", "connect", "move", "invest", "retire"]) {
     const g = advance(start, action);
     const episode = g.history.at(-1).episode;

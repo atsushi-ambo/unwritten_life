@@ -15,6 +15,87 @@ async function expectFits(page) {
   expect(overflow).toEqual({ page: false, dialogs: false });
 }
 
+test("quick start uses age band and region estimates and starts with neutral family fields", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("#quick-age-band")).toHaveValue("30s");
+  await expect(page.locator("#quick-region")).toHaveValue("city");
+  await expect(page.locator("#quick-summary")).toContainText("35歳・地方都市でスタート。年収480万円・資産400万円");
+  await page.locator("#quick-age-band").selectOption("20s");
+  await page.locator("#quick-region").selectOption("metro");
+  await expect(page.locator("#quick-summary")).toHaveText("25歳・首都圏・大都市でスタート。年収390万円・資産100万円など、年代と地域から決めたゲーム用の目安を使います。");
+  await expectFits(page);
+  await page.locator("#remember").check();
+  await page.locator("#quick-start").click();
+  await expect(page.locator("#hud-age")).toHaveText("25歳");
+  const p = await page.evaluate(() => JSON.parse(localStorage.getItem("unwritten-life:v2")).profile);
+  expect([p.age, p.region, p.income, p.savings, p.monthlyCost, p.rent]).toEqual([25, "metro", 390, 100, 11, 9]);
+  expect([p.household, p.partner, p.children]).toEqual(["solo", "unspecified", 0]);
+  await expectFits(page);
+});
+
+test("detailed municipality inference can be revealed, overridden, and recomputed on a new municipality", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('[data-profile-level="standard"]').click();
+  const municipality = page.locator("#municipality"), region = page.locator("#region");
+  await expect(region).toBeHidden();
+  await expect(page.locator("#region-inference")).toContainText("市区町村が未入力のため、家賃・生活費は「地方都市」の目安で計算します");
+  await municipality.fill("埼玉県久喜市");
+  await expect(region).toHaveValue("metro");
+  await expect(region).toBeHidden();
+  await expect(region).toBeEnabled();
+  await expect(page.locator("#region-inference")).toContainText("家賃・生活費は「首都圏・大都市」の目安で計算します");
+  await expect(page.locator("#budget-summary")).toContainText("生活費 15.5万円/月 ＋ 家賃 9万円/月");
+  await expectFits(page);
+  await page.getByRole("button", { name: "変更", exact: true }).click();
+  await expect(region).toBeVisible();
+  await expect(region).toBeFocused();
+  await region.selectOption("rural");
+  await expect(page.locator("#region-inference")).toContainText("郊外・地方");
+  await page.locator('[data-profile-level="quick"]').click();
+  await expect(region).toBeDisabled();
+  await page.locator('[data-profile-level="standard"]').click();
+  await expect(region).toBeVisible();
+  await expect(region).toHaveValue("rural");
+  await municipality.fill("宮城県仙台市");
+  await expect(region).toHaveValue("city");
+  await expect(region).toBeVisible();
+  await municipality.fill("どこか");
+  await expect(region).toBeVisible();
+  await expect(region).toHaveValue("city");
+  await expect(page.locator("#region-inference")).toContainText("市区町村から判定できないため");
+  await municipality.fill("");
+  await expect(region).toBeVisible();
+  await municipality.fill("埼玉県久喜市");
+  await expect(region).toHaveValue("metro");
+  await expect(region).toBeVisible();
+  await page.locator("#remember").check();
+  await page.locator("#quick-start").click();
+  await expect(page.locator("#hud-year")).toHaveText("2026年");
+  const p = await page.evaluate(() => JSON.parse(localStorage.getItem("unwritten-life:v2")).profile);
+  expect([p.region, p.municipality, p.monthlyCost, p.rent]).toEqual(["metro", "埼玉県久喜市", 15.5, 9]);
+});
+
+test("an inferred region submits while hidden and keeps advanced financial entries", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('[data-profile-level="advanced"]').click();
+  await page.locator("#monthly-cost").fill("27.3");
+  await page.locator('[name="rent"]').fill("8.1");
+  await page.locator("#municipality").fill("長野県軽井沢町");
+  await expect(page.locator("#region")).toBeHidden();
+  await expect(page.locator("#region")).toHaveValue("rural");
+  await page.locator("#municipality").fill("埼玉県久喜市");
+  await expect(page.locator("#region")).toBeHidden();
+  await expect(page.locator("#region")).toHaveValue("metro");
+  await expect(page.locator("#monthly-cost")).toHaveValue("27.3");
+  await expect(page.locator('[name="rent"]')).toHaveValue("8.1");
+  await expectFits(page);
+  await page.locator("#remember").check();
+  await page.locator("#quick-start").click();
+  await expect(page.locator("#hud-year")).toHaveText("2026年");
+  const p = await page.evaluate(() => JSON.parse(localStorage.getItem("unwritten-life:v2")).profile);
+  expect([p.region, p.municipality, p.monthlyCost, p.rent]).toEqual(["metro", "埼玉県久喜市", 27.3, 8.1]);
+});
+
 test("career log favorites filter the newest-first feed and disappear when their year is undone", async ({ page }) => {
   await page.goto("/");
   await page.locator("#demo-button").click();
