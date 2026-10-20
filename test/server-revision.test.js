@@ -52,7 +52,7 @@ test("startup revision covers all server modules and imported browser modules wi
 function request(server, url, { method = "GET", headers = {}, body = "{}" } = {}) {
   return new Promise((resolve) => {
     const req = Readable.from([Buffer.from(body)]);
-    Object.assign(req, { url, method, headers: { host: "127.0.0.1:4317", ...headers } });
+    Object.assign(req, { url, method, headers: { host: "127.0.0.1:4341", ...headers } });
     const res = { statusCode: 200, setHeader() {}, writeHead(code) { this.statusCode = code; }, end(text) { resolve({ status: this.statusCode, data: JSON.parse(text) }); } };
     server.emit("request", req, res);
   });
@@ -70,7 +70,7 @@ test("/api/status exposes the startup hash and stale; valid config and generatio
   assert.equal(initial.status, 200);
   assert.equal(initial.data.stale, false);
   assert.match(initial.data.serverRevision, /^[a-f0-9]{64}$/);
-  const headers = { origin: "http://127.0.0.1:4317", "content-type": "application/json", "x-unwritten-token": initial.data.token };
+  const headers = { origin: "http://127.0.0.1:4341", "content-type": "application/json", "x-unwritten-token": initial.data.token };
   assert.equal((await request(server, "/api/ai/config", { method: "POST", headers })).status, 200);
   assert.equal((await request(server, "/api/scene", { method: "POST", headers, body: '{"choiceVersion":1}' })).status, 200);
   await writeFile(join(dir, "public/engine.js"), "// new engine\n");

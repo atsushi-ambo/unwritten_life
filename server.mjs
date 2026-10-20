@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { makeAI } from "./lib/ai.mjs";
 import { makeCompanySearch } from "./lib/company.mjs";
 import { companyPage } from "./lib/network.mjs";
+import { appPort } from "./lib/port.mjs";
 import { makeServerRevision, STALE_NOTICE } from "./lib/server-revision.mjs";
 
 const serverRevision = await makeServerRevision();
@@ -162,9 +163,7 @@ export function makeServer({
   });
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const port = Number(process.env.PORT ?? 4317);
-  if (!Number.isInteger(port) || port < 1024 || port > 65535)
-    throw new Error("Invalid PORT");
+  const port = appPort();
   const server = makeServer();
   server.requestTimeout = 10000;
   server.headersTimeout = 10000;

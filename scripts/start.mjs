@@ -1,11 +1,10 @@
 import { spawn, execFile } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { STALE_NOTICE } from "../lib/server-revision.mjs";
+import { appPort } from "../lib/port.mjs";
 import { makeServer } from "../server.mjs";
 
-const port = Number(process.env.PORT ?? 4317);
-if (!Number.isInteger(port) || port < 1024 || port > 65535)
-  throw new Error("Invalid PORT");
+const port = appPort();
 const url = `http://127.0.0.1:${port}`;
 const browser = () => {
   const command =
