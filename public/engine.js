@@ -78,6 +78,27 @@ export const REGIONS = Object.freeze({
   city: { label: "地方都市", cost: 17 },
   rural: { label: "郊外・地方", cost: 14 },
 });
+const PREFECTURES = /^(北海道|東京都|京都府|大阪府|(?:青森|岩手|宮城|秋田|山形|福島|茨城|栃木|群馬|埼玉|千葉|神奈川|新潟|富山|石川|福井|山梨|長野|岐阜|静岡|愛知|三重|滋賀|兵庫|奈良|和歌山|鳥取|島根|岡山|広島|山口|徳島|香川|愛媛|高知|福岡|佐賀|長崎|熊本|大分|宮崎|鹿児島|沖縄)県)/u;
+const METRO_CITIES = /^(横浜市|川崎市|相模原市|さいたま市|千葉市|大阪市|堺市|名古屋市|京都市|神戸市|福岡市)(?:.+区)?$/u;
+const TOKYO_WARDS = /^(千代田|中央|港|新宿|文京|台東|墨田|江東|品川|目黒|大田|世田谷|渋谷|中野|杉並|豊島|北|荒川|板橋|練馬|足立|葛飾|江戸川)区$/u;
+export function regionFromMunicipality(text) {
+  if (typeof text !== "string") return null;
+  const name = text.normalize("NFKC").replace(/\s/gu, "");
+  const prefecture = name.match(PREFECTURES)?.[0];
+  const place = name.slice(prefecture?.length ?? 0);
+  if (
+    place.length < 2 ||
+    !/^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ー々ヶケ]+$/u.test(place)
+  ) return null;
+  // Only a trailing 郡 marks a district: 郡 is also part of city names such as 郡山市 and 蒲郡市.
+  if (/[町村郡]$/u.test(place)) return "rural";
+  if (!/[市区]$/u.test(place)) return null;
+  if (
+    ["東京都", "神奈川県", "埼玉県", "千葉県", "大阪府"].includes(prefecture) ||
+    METRO_CITIES.test(place) || (!prefecture && TOKYO_WARDS.test(place))
+  ) return "metro";
+  return prefecture ? "city" : null;
+}
 export const PRIORITIES = Object.freeze({
   balance: "バランス",
   work: "仕事・挑戦",
@@ -516,71 +537,45 @@ export function optionalProfileInputs(raw, defaults = PROFILE_DEFAULTS) {
     else fail();
   return result;
 }
-export const QUICK_PRESETS = Object.freeze({
-  balanced: {
-    age: 30,
-    region: "city",
-    income: 500,
-    savings: 300,
-    monthlyCost: 12,
-    rent: 7,
-  },
-  starter: {
-    age: 23,
-    region: "metro",
-    income: 300,
-    savings: 80,
-    partner: "solo",
-    monthlyCost: 12,
-    rent: 8,
-  },
-  experienced: {
-    age: 40,
-    region: "metro",
-    income: 700,
-    savings: 1000,
-    monthlyCost: 15,
-    rent: 10,
-  },
-  family: {
-    age: 35,
-    region: "city",
-    income: 550,
-    savings: 500,
-    household: "care",
-    partner: "partner",
-    children: 2,
-    childStage: "young",
-    childrenWish: "two",
-    monthlyCost: 24,
-    rent: 9,
-  },
-  later: {
-    age: 55,
-    region: "city",
-    income: 650,
-    savings: 1800,
-    household: "shared",
-    partner: "partner",
-    monthlyCost: 20,
-    rent: 9,
-  },
+export const QUICK_AGE_BANDS = Object.freeze({
+  "20s": { age: 25, income: 350, savings: 100, monthlyCost: 11 },
+  "30s": { age: 35, income: 480, savings: 400, monthlyCost: 13 },
+  "40s": { age: 45, income: 580, savings: 900, monthlyCost: 15 },
+  "50s": { age: 55, income: 650, savings: 1500, monthlyCost: 17 },
+  "60s": { age: 63, income: 420, savings: 2000, monthlyCost: 16 },
 });
+export function quickProfile(quick = { band: "30s", region: "city" }) {
+  if (!quick || typeof quick !== "object" || Array.isArray(quick)) fail();
+  const { band, region } = quick;
+  if (
+    typeof band !== "string" ||
+    !Object.hasOwn(QUICK_AGE_BANDS, band) ||
+    typeof region !== "string" ||
+    !Object.hasOwn(REGIONS, region)
+  ) fail();
+  const values = QUICK_AGE_BANDS[band];
+  return {
+    ...values,
+    region,
+    income: Math.round((values.income * { metro: 1.1, city: 1, rural: 0.9 }[region]) / 10) * 10,
+    rent: { metro: 9, city: 7, rural: 5 }[region],
+  };
+}
 // New-game UI only: inactive sections retain their draft values in the DOM,
 // but never leak into the chosen starting profile. Saves stay strictly validated.
 export function profileInputForLevel(
   raw,
   level = "quick",
-  preset = "balanced",
+  quick = { band: "30s", region: "city" },
 ) {
   if (
     !raw ||
     typeof raw !== "object" ||
     Array.isArray(raw) ||
-    !["quick", "standard", "advanced"].includes(level) ||
-    !Object.hasOwn(QUICK_PRESETS, preset)
+    !["quick", "standard", "advanced"].includes(level)
   )
     fail();
+  const quickValues = quickProfile(quick);
   const base = {
     age: 30,
     region: "city",
@@ -613,7 +608,7 @@ export function profileInputForLevel(
     );
   const common = pick(["careerGoal", "tone", "scenario"]);
   if (level === "quick")
-    return { ...base, ...QUICK_PRESETS[preset], ...common };
+    return { ...base, ...quickValues, ...common };
   const p = {
     ...base,
     ...pick([

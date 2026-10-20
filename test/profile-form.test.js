@@ -5,6 +5,11 @@ import { parse } from "parse5";
 import { createContext, runInContext } from "node:vm";
 import {
   profileInputForLevel,
+  regionFromMunicipality,
+  isRetiredAt,
+  MAX_AGE,
+  REGIONS,
+  PROFILE_DEFAULTS,
   optionalProfileInputs,
   createGame,
   advance,
@@ -20,8 +25,75 @@ import {
   workContext,
 } from "../public/careers.js";
 import { storyRequest } from "../public/story.js";
-const profile = (raw, level = "standard", preset = "balanced") =>
-  optionalProfileInputs(profileInputForLevel(raw, level, preset));
+const profile = (raw, level = "standard", quick) =>
+  optionalProfileInputs(profileInputForLevel(raw, level, quick));
+
+test("municipality inference normalizes spaces and leaves unknown locations to the player", () => {
+  for (const [text, expected] of [
+    ["埼玉県久喜市", "metro"], ["東京都世田谷区", "metro"],
+    ["世田谷区", "metro"], ["大阪市", "metro"],
+    ["宮城県仙台市", "city"], ["静岡県浜松市", "city"],
+    ["長野県軽井沢町", "rural"], ["北海道虻田郡ニセコ町", "rural"],
+    ["千葉県長生郡一宮町", "rural"], ["長野県白馬村", "rural"],
+    ["北海道虻田郡", "rural"], ["軽井沢町", "rural"],
+    ["　埼玉県　久喜市　", "metro"], ["宮城県 仙台市", "city"],
+    ["", null], ["　　", null], ["どこか", null], ["仙台市", null],
+    ["東京都", null], ["架空県架空市", null], ["東京都123市", null],
+    [null, null], [123, null],
+  ]) assert.equal(regionFromMunicipality(text), expected, String(text));
+  for (const city of ["横浜市", "川崎市", "相模原市", "さいたま市", "千葉市",
+    "堺市", "名古屋市", "京都市", "神戸市", "福岡市"])
+    assert.equal(regionFromMunicipality(city), "metro", city);
+  assert.equal(regionFromMunicipality("愛知県名古屋市中区"), "metro");
+  // 郡 inside a city name and 村 inside a ward name are not town markers.
+  for (const [text, expected] of [
+    ["福島県郡山市", "city"], ["奈良県大和郡山市", "city"], ["愛知県蒲郡市", "city"],
+    ["愛知県名古屋市中村区", "metro"], ["名古屋市中村区", "metro"],
+  ]) assert.equal(regionFromMunicipality(text), expected, text);
+  assert.equal(regionFromMunicipality("大阪府豊中市"), "metro");
+});
+
+test("every quick age band and region uses the stated game estimates with neutral family fields", () => {
+  const bands = [
+    ["20s", 25, [390, 350, 320], 100, 11],
+    ["30s", 35, [530, 480, 430], 400, 13],
+    ["40s", 45, [640, 580, 520], 900, 15],
+    ["50s", 55, [720, 650, 590], 1500, 17],
+    ["60s", 63, [460, 420, 380], 2000, 16],
+  ];
+  for (const [band, age, incomes, savings, monthlyCost] of bands) {
+    for (const [i, region] of ["metro", "city", "rural"].entries()) {
+      const p = profile({ household: "care", partner: "partner", children: 3 },
+        "quick", { band, region });
+      assert.deepEqual([p.age, p.income, p.savings, p.monthlyCost, p.rent],
+        [age, incomes[i], savings, monthlyCost, [9, 7, 5][i]]);
+      assert.equal(p.region, region);
+      assert.deepEqual([p.household, p.partner, p.children], ["solo", "unspecified", 0]);
+      const game = createGame(p, "steady", 42);
+      assert.deepEqual(decodeSave(encodeSave(game)), game);
+    }
+  }
+  const defaults = profile({}, "quick");
+  assert.deepEqual([defaults.age, defaults.region], [35, "city"]);
+  for (const quick of [
+    { band: "10s", region: "city" }, { band: "30s", region: "unknown" },
+    { band: "toString", region: "city" }, { band: "30s", region: "constructor" },
+    { band: null, region: "city" }, { band: "30s", region: [] },
+    {}, null, [], "balanced",
+  ]) assert.throws(() => profile({}, "quick", quick));
+});
+
+test("a quick start at 63 reaches retirement at 65 and stays within the replay age bound", () => {
+  let g = createGame(profile({}, "quick", { band: "60s", region: "city" }), "steady", 42);
+  assert.equal(g.profile.retirementAge, 65);
+  assert.equal(isRetiredAt(g), false);
+  while (g.age < 65) g = advance(g, "rest");
+  assert.equal(isRetiredAt(g), true);
+  while (!g.ended) g = advance(g, "rest");
+  assert.ok(g.age <= MAX_AGE);
+  assert.equal(g.ended, true);
+  assert.deepEqual(decodeSave(encodeSave(g)), g);
+});
 
 test("each starting level uses only its active fields without mutating the retained draft", () => {
   const draft = {
@@ -48,10 +120,10 @@ test("each starting level uses only its active fields without mutating the retai
     careerGoal: "switch",
   };
   const copy = structuredClone(draft);
-  const quick = profile(draft, "quick", "starter");
-  assert.equal(quick.age, 23);
-  assert.equal(quick.income, 300);
-  assert.equal(quick.savings, 80);
+  const quick = profile(draft, "quick", { band: "20s", region: "metro" });
+  assert.equal(quick.age, 25);
+  assert.equal(quick.income, 390);
+  assert.equal(quick.savings, 100);
   assert.equal(quick.company, "");
   assert.equal(quick.municipality, "");
   assert.equal(quick.jobDetail, "");
@@ -175,6 +247,107 @@ test("detailed work and municipality are bounded, survive replay and reach stori
   for (const [id, role] of Object.entries(OCCUPATIONS)) {
     const p = profile({ occupation: id });
     assert.equal(createGame(p).profile.job, role.job);
+  }
+});
+
+// Run the form's real handlers against the HTML's controls without storage or HTTP.
+async function formHarness() {
+  const html = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
+  const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+  const ids = new Map();
+  function adapt(n, parent = null) {
+    const attrs = Object.fromEntries((n.attrs ?? []).map((a) => [a.name, a.value]));
+    const el = {
+      tag: n.tagName, id: attrs.id, name: attrs.name, attrs, parent,
+      value: attrs.value ?? "", hidden: "hidden" in attrs, disabled: false,
+      textContent: "", checked: false, listeners: {},
+      addEventListener(type, fn) { this.listeners[type] = fn; },
+      closest() { return this.hidden ? this : this.parent?.closest() ?? null; },
+      focus() { this.focused = true; },
+      querySelectorAll(selector) {
+        return this.children.flatMap((child) => [
+          ...((selector.startsWith("[") ? selector.slice(1, -1) in child.attrs
+            : selector.split(",").includes(child.tag)) ? [child] : []),
+          ...child.querySelectorAll(selector),
+        ]);
+      },
+    };
+    el.children = (n.childNodes ?? []).map((child) => adapt(child, el));
+    if (el.tag === "select") el.value = (el.children.find((c) => "selected" in c.attrs)
+      ?? el.children.find((c) => c.tag === "option"))?.value ?? "";
+    if (el.id) ids.set(el.id, el);
+    return el;
+  }
+  adapt(parse(html));
+  const $ = (id) => ids.get(id), form = $("profile-form");
+  const controls = form.querySelectorAll("input,select,textarea");
+  form.elements = Object.fromEntries(controls.filter((el) => el.name).map((el) => [el.name, el]));
+  const context = createContext({
+    $, profileInputForLevel, optionalProfileInputs, PROFILE_DEFAULTS, REGIONS, regionFromMunicipality,
+    profileLevel: "standard", regionRevealed: false, manualRegion: false,
+    customCost: false, companySources: [],
+    FormData: class {
+      *[Symbol.iterator]() {
+        for (const el of controls) if (el.name && !el.disabled) yield [el.name, el.value];
+      }
+    },
+  });
+  for (const [start, end] of [
+    ["function readProfile()", "function showGame("],
+    ["function updateProfileVisibility()", "for (const [id, occupation]"],
+    ['$("monthly-cost").addEventListener', 'for (const id of [\n  "company-summary"'],
+  ]) runInContext(app.slice(app.indexOf(start), app.indexOf(end)), context);
+  runInContext("updateBudget()", context);
+  const edit = (id, value, event = "input") => {
+    $(id).value = value;
+    $(id).listeners[event]?.();
+    form.listeners[event]?.();
+  };
+  return { $, context, edit, read: () => runInContext("readProfile()", context) };
+}
+
+test("form inference submits a hidden region, retains manual overrides, and resets them on municipality edits", async () => {
+  const h = await formHarness(), { $, context, edit } = h;
+  edit("municipality", "埼玉県久喜市");
+  assert.equal($("region-field").hidden, true);
+  assert.equal($("region").disabled, false);
+  assert.match($("region-inference-text").textContent, /首都圏・大都市/);
+  assert.deepEqual([h.read().region, h.read().monthlyCost, h.read().rent], ["metro", 15.5, 9]);
+  const started = createGame(h.read());
+  assert.equal(started.profile.region, "metro");
+  assert.deepEqual(decodeSave(encodeSave(started)), started);
+  $("change-region").listeners.click();
+  assert.equal($("region-field").hidden, false);
+  assert.equal($("region").focused, true);
+  edit("region", "rural", "change");
+  assert.equal(h.read().region, "rural");
+  assert.match($("region-inference-text").textContent, /郊外・地方/);
+  runInContext('profileLevel = "quick"; updateBudget()', context);
+  assert.equal($("region").disabled, true);
+  assert.equal(h.read().region, "city");
+  runInContext('profileLevel = "advanced"; updateBudget()', context);
+  assert.equal(h.read().region, "rural");
+  edit("monthly-cost", "27.3");
+  const rent = $("profile-form").elements.rent;
+  rent.value = "8.1";
+  edit("municipality", "宮城県仙台市");
+  assert.equal($("region-field").hidden, false);
+  assert.deepEqual([h.read().region, h.read().monthlyCost, h.read().rent], ["city", 27.3, 8.1]);
+  for (const [text, reason] of [["どこか", /判定できないため/], ["", /未入力のため/]]) {
+    edit("municipality", text);
+    assert.equal($("region-field").hidden, false);
+    assert.equal(h.read().region, "city");
+    assert.match($("region-inference-text").textContent, reason);
+  }
+});
+
+test("without a readable municipality the area select stays hidden and falls back to 地方都市", async () => {
+  const h = await formHarness(), { $, edit } = h;
+  for (const [text, reason] of [["", /未入力のため/], ["どこか", /判定できないため/]]) {
+    edit("municipality", text);
+    assert.equal($("region-field").hidden, true);
+    assert.equal(h.read().region, "city");
+    assert.match($("region-inference-text").textContent, reason);
   }
 });
 

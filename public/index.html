@@ -174,18 +174,26 @@
               必須の自由入力はありません。分からない項目は空欄でOK。未入力の年収や資産には、下に表示するゲーム用の仮値を使います。
             </p>
             <div class="form-grid quick-grid">
-              <label id="quick-fields"
-                ><span class="field-label">近い現在地を選ぶ</span
-                ><select id="quick-preset">
-                  <option value="balanced">
-                    30歳・地方都市・仕事も暮らしも
-                  </option>
-                  <option value="starter">23歳・都市でキャリアを始める</option>
-                  <option value="experienced">40歳・経験を次の仕事へ</option>
-                  <option value="family">35歳・家族と仕事の両立</option>
-                  <option value="later">55歳・これからの働き方を考える</option>
-                </select></label
-              >
+              <div id="quick-fields">
+                <label
+                  ><span class="field-label">年代</span
+                  ><select id="quick-age-band">
+                    <option value="20s">20代</option>
+                    <option value="30s" selected>30代</option>
+                    <option value="40s">40代</option>
+                    <option value="50s">50代</option>
+                    <option value="60s">60代</option>
+                  </select></label
+                >
+                <label
+                  ><span class="field-label">住んでいる地域</span
+                  ><select id="quick-region">
+                    <option value="metro">首都圏・大都市</option>
+                    <option value="city" selected>地方都市</option>
+                    <option value="rural">郊外・地方</option>
+                  </select></label
+                >
+              </div>
               <label
                 ><span class="field-label">試してみたいキャリア</span
                 ><select name="careerGoal">
@@ -227,25 +235,34 @@
                       value="30"
                     /><span>歳</span></span
                   ></label
-                ><label
+                ><label id="region-field"
                   ><span class="field-label">暮らしのエリア</span
                   ><select name="region" id="region">
                     <option value="metro">首都圏・大都市</option>
                     <option value="city" selected>地方都市</option>
                     <option value="rural">郊外・地方</option>
                   </select></label
-                ><label
-                  ><span class="field-label"
-                    >市区町村 <small>任意・番地は不要</small></span
-                  ><input
-                    name="municipality"
-                    maxlength="80"
-                    autocomplete="off"
-                    placeholder="例：埼玉県久喜市、東京都世田谷区"
-                  /><small
-                    >地名は物語に使います。家賃などはエリア区分や入力額を使います。</small
-                  ></label
                 >
+                <div>
+                  <label
+                    ><span class="field-label"
+                      >市区町村 <small>任意・番地は不要</small></span
+                    ><input
+                      id="municipality"
+                      name="municipality"
+                      maxlength="80"
+                      autocomplete="off"
+                      placeholder="例：埼玉県久喜市、東京都世田谷区"
+                  /></label>
+                  <p id="region-inference" class="field-note">
+                    <span id="region-inference-text"></span>（<button
+                      id="change-region"
+                      class="text-button"
+                      type="button"
+                      aria-controls="region-field"
+                    >変更</button>）
+                  </p>
+                </div>
                 <label
                   ><span class="field-label">主な仕事・活動</span
                   ><select name="occupation" id="occupation">

@@ -6,6 +6,7 @@ import {
   RANKS,
   inCompany,
   REGIONS,
+  regionFromMunicipality,
   PRIORITIES,
   CHOICES,
   decisionId,
@@ -81,6 +82,8 @@ let game = null,
   generating = false,
   revision = 0,
   customCost = false,
+  regionRevealed = false,
+  manualRegion = false,
   careerMode = "switch",
   careerSources = [],
   careerResearchRevision = 0,
@@ -211,9 +214,14 @@ function readProfile() {
   const raw = profileInputForLevel(
     Object.fromEntries(new FormData($("profile-form"))),
     profileLevel,
-    $("quick-preset").value,
+    { band: $("quick-age-band").value, region: $("quick-region").value },
   );
-  const p = optionalProfileInputs(raw, PROFILE_DEFAULTS);
+  const p = optionalProfileInputs(
+    raw,
+    profileLevel === "quick"
+      ? PROFILE_DEFAULTS
+      : { ...PROFILE_DEFAULTS, ...regionCosts(raw.region, raw.household) },
+  );
   const summary = $("company-summary").value.trim();
   p.companyFacts =
     profileLevel !== "quick" && p.company && summary
@@ -1403,7 +1411,8 @@ function updateProfileVisibility() {
     !$("company-name").value.trim() ||
     $("company-search").textContent.includes("調べています");
   for (const el of f.querySelectorAll("input,select,textarea"))
-    el.disabled = !!el.closest("[hidden]");
+    // The inferred region stays part of FormData while its control is hidden.
+    el.disabled = el.id === "region" ? !detailed : !!el.closest("[hidden]");
   $("quick-start").textContent = detailed
     ? "この私で、はじめる ↗"
     : "この設定ですぐ始める ↗";
@@ -1412,7 +1421,7 @@ function updateBudget() {
   updateProfileVisibility();
   const values = readProfile();
   $("quick-summary").textContent =
-    `${values.age}歳 / ${JOBS[values.job].label}でスタート。年収${values.income}万円・資産${values.savings}万円など、選んだ人物のゲーム用設定を使います。`;
+    `${values.age}歳・${REGIONS[values.region].label}でスタート。年収${values.income}万円・資産${values.savings}万円など、年代と地域から決めたゲーム用の目安を使います。`;
   $("budget-summary").textContent =
     `このゲームの初期設定：年収 ${values.income}万円、金融資産 ${values.savings}万円（うち株式 ${values.stocks}万円）、生活費 ${values.monthlyCost}万円/月 ＋ ${values.housing === "own" ? "持ち家の維持・返済費" : "家賃 " + values.rent + "万円/月"}。未入力はゲーム用の仮値です。実際の資産を入力する必要はありません。`;
 }
@@ -1435,7 +1444,8 @@ for (const button of document.querySelectorAll("[data-profile-level]")) {
     updateBudget();
   });
 }
-$("quick-preset").addEventListener("change", updateBudget);
+for (const id of ["quick-age-band", "quick-region"])
+  $(id).addEventListener("change", updateBudget);
 function knowledgeItem(fact) {
   const item = node("p"),
     link = node(
@@ -1494,18 +1504,46 @@ loadKnowledge().then((loaded) => {
 $("monthly-cost").addEventListener("input", () => {
   customCost = true;
 });
+function regionCosts(region, household = "solo") {
+  return {
+    monthlyCost: Math.round(
+      ((12 * REGIONS[region].cost) / 17) *
+      { solo: 1, shared: 1.5, care: 1.8 }[household] * 10,
+    ) / 10,
+    rent: { metro: 9, city: 7, rural: 5 }[region],
+  };
+}
 function suggestedCost() {
-  if (!customCost)
-    $("monthly-cost").value = String(
-      Math.round(
-        ((12 * REGIONS[$("region").value].cost) / 17) *
-          { solo: 1, shared: 1.5, care: 1.8 }[$("household").value] *
-          10,
-      ) / 10,
-    );
+  const costs = regionCosts($("region").value, $("household").value);
+  $("profile-form").elements.rent.placeholder = `未入力なら仮の${costs.rent}万円`;
+  if (!customCost) $("monthly-cost").value = String(costs.monthlyCost);
   updateBudget();
 }
-$("region").addEventListener("change", suggestedCost);
+function updateMunicipalityRegion() {
+  // The area select stays hidden unless asked for: a blank or unreadable
+  // municipality falls back to 地方都市, and the line says why.
+  const text = $("municipality").value.trim(),
+    inferred = regionFromMunicipality(text);
+  if (!manualRegion) $("region").value = inferred ?? "city";
+  $("region-field").hidden = !regionRevealed;
+  $("region-inference-text").textContent = `${
+    manualRegion || inferred ? "" : text ? "市区町村から判定できないため、" : "市区町村が未入力のため、"
+  }家賃・生活費は「${REGIONS[$("region").value].label}」の目安で計算します`;
+  suggestedCost();
+}
+$("municipality").addEventListener("input", () => {
+  manualRegion = false;
+  updateMunicipalityRegion();
+});
+$("change-region").addEventListener("click", () => {
+  regionRevealed = true;
+  updateMunicipalityRegion();
+  $("region").focus();
+});
+$("region").addEventListener("change", () => {
+  manualRegion = true;
+  updateMunicipalityRegion();
+});
 $("household").addEventListener("change", suggestedCost);
 $("profile-form").addEventListener("input", updateBudget);
 $("profile-form").addEventListener("change", updateBudget);
@@ -2486,7 +2524,7 @@ if (hosted) {
 window.visualViewport?.addEventListener("resize", syncReflectionViewport);
 window.visualViewport?.addEventListener("scroll", syncReflectionViewport);
 readStoredGame();
-updateBudget();
+updateMunicipalityRegion();
 status()
   .then(restoreAI)
   .catch((error) => {
