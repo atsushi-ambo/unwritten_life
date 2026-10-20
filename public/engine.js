@@ -124,6 +124,16 @@ export function nextRank(rank, track = "manager") {
   if (rank === "specialist") return "principal";
   return null;
 }
+// Realistic pay applies to the years from payRealismFrom (older saves keep
+// their recorded years).
+export const payRealism = (g) => g.decisions.length >= (g.payRealismFrom ?? 0);
+// Stages a job move may target: the current one, or one above once the
+// current stage has lasted three years (people rarely climb at every move).
+export function switchRanks(g) {
+  const current = g.position?.rank ?? "unspecified";
+  if (payRealism(g) && g.year - (g.position?.since ?? g.year) < 3) return [current];
+  return [...new Set([current, ...["manager", "specialist"].map((t) => nextRank(current, t)).filter(Boolean)])];
+}
 // Building a career while staying: these and the existing in-company actions.
 export const STAY_ACTIONS = Object.freeze([
   "focus", "promote", "transfer", "internalVenture", "pilot", "negotiate", "mentor",
@@ -792,9 +802,7 @@ export function validateDecision(raw, g) {
     let rank;
     if (raw.rank !== undefined) {
       if (typeof raw.rank !== "string" || !Object.hasOwn(RANKS, raw.rank)) fail();
-      const current = g.position?.rank ?? "unspecified";
-      if (raw.rank !== current && !["manager", "specialist"].map((t) => nextRank(current, t)).includes(raw.rank))
-        fail();
+      if (!switchRanks(g).includes(raw.rank)) fail();
       rank = raw.rank;
     }
     const generated = raw.proposal !== undefined;
@@ -931,6 +939,7 @@ export function createGame(
   incidentFrom = 0,
   careerPathFrom = 0,
   careerEndFrom = 0,
+  payRealismFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -967,7 +976,10 @@ export function createGame(
     careerPathFrom > MAX_AGE ||
     !Number.isInteger(careerEndFrom) ||
     careerEndFrom < 0 ||
-    careerEndFrom > MAX_AGE
+    careerEndFrom > MAX_AGE ||
+    !Number.isInteger(payRealismFrom) ||
+    payRealismFrom < 0 ||
+    payRealismFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -988,6 +1000,7 @@ export function createGame(
     incidentFrom,
     careerPathFrom,
     careerEndFrom,
+    payRealismFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -1800,9 +1813,32 @@ const SALARY_CEILINGS = Object.freeze({
   independent: 1600,
   other: 650,
 });
+// The same level-off points with realistic pay (2026-10-20): close to the
+// Japanese wage statistics for staff in a regional city. Stages, region and
+// company size lift them less than before.
+const REALISTIC_CEILINGS = Object.freeze({
+  tech: 850,
+  marketing: 750,
+  office: 620,
+  creative: 650,
+  people: 700,
+  care: 480,
+  physical: 520,
+  independent: 1100,
+  other: 480,
+});
 // Soft ceiling for one employer: raises shrink above half of it and are
 // nearly gone at twice it. Losses are never damped, so variance remains.
 export function salaryCeiling(g, employer = g.employer) {
+  if (payRealism(g))
+    return Math.round(Math.max(
+      REALISTIC_CEILINGS[employer.role] *
+        { metro: 1.2, city: 1, rural: 0.88 }[g.region] *
+        ({ large: 1.1, small: 0.92, public: 0.95, self: 1.05 }[employer.companyType] ?? 1) *
+        (employer.kind === "venture" ? 1.8 : 1) *
+        (employer.kind === "venture" ? 1 : [1, 1.12, 1.3, 1.5][RANKS[g.position?.rank]?.level ?? 0]),
+      g.profile.income * 1.15,
+    ));
   const base =
     SALARY_CEILINGS[employer.role] *
     { metro: 1.2, city: 1, rural: 0.85 }[g.region] *
@@ -1820,7 +1856,11 @@ export function salaryCeiling(g, employer = g.employer) {
 // slips past the damping. The ratio uses full-time pay after care leave.
 function cappedSalary(g, employer, base, factors, transition, restore) {
   const ratio = (base * restore) / salaryCeiling(g, employer);
-  const damp = ratio <= 0.5 ? 1 : Math.exp(-3 * (ratio - 0.5));
+  const realism = payRealism(g),
+    start = 0.5;
+  // Pay peaks in the mid-50s: raises slow from 50 and nearly stop after 55.
+  const damp = (ratio <= start ? 1 : Math.exp(-3 * (ratio - start))) *
+    (!realism ? 1 : g.age >= 55 ? 0.15 : g.age >= 50 ? 0.5 : 1);
   const merit = factors.reduce((m, f) => m * Math.max(f, 1), 1),
     cut = factors.reduce((m, f) => m * Math.min(f, 1), 1);
   return clamp(
@@ -3072,10 +3112,28 @@ export function advance(g, rawDecision) {
     -0.12,
     0.12,
   );
-  if (choice === "switch") growth += -0.12 + randomAt(g.seed, i, 7) * 0.3;
+  const realism = payRealism(g);
+  // A small yearly seniority raise for employees before 50.
+  if (
+    realism &&
+    g.age < 50 &&
+    employer.kind !== "venture" &&
+    employer.kind !== "seeking" &&
+    employer.role !== "independent" &&
+    employer.companyType !== "self"
+  )
+    growth += 0.012;
+  // With realistic pay a move averages about +1% (raises, cuts and no change
+  // are each roughly a third of moves in the labour survey).
+  if (choice === "switch")
+    growth += realism
+      ? -0.11 + randomAt(g.seed, i, 7) * 0.24
+      : -0.12 + randomAt(g.seed, i, 7) * 0.3;
   if (choice === "switch" && typeof decision === "object") {
     growth +=
-      employer.role === g.employer.role ? (g.skill / 100) * 0.025 : -0.08;
+      employer.role === g.employer.role
+        ? (g.skill / 100) * (realism ? 0.01 : 0.025)
+        : -0.08;
   }
   const venture = employer.kind === "venture" ? VENTURES[employer.id] : null;
   if (venture)
@@ -3083,8 +3141,21 @@ export function advance(g, rawDecision) {
       (randomAt(g.seed, i, 21) - 0.5) * 0.4 +
       tech * (g.skill / 100 - 0.5) * 0.1;
   if (world) growth += world.growth;
+  // Employees are usually rehired at 60 on lower pay; the self-employed and
+  // business owners are not.
+  const rehire =
+    realism &&
+    g.age + 1 === 60 &&
+    !retired &&
+    !venture &&
+    choice !== "startup" &&
+    employer.kind !== "seeking" &&
+    employer.role !== "independent" &&
+    employer.companyType !== "self"
+      ? 0.75
+      : 1;
   const transitionIncome =
-    choice === "startup" ? 0.3 + randomAt(g.seed, i, 22) * 0.55 : 1;
+    (choice === "startup" ? 0.3 + randomAt(g.seed, i, 22) * 0.55 : 1) * rehire;
   const salary = retired
     ? 0
     : i >= g.salaryCapFrom
@@ -3461,6 +3532,7 @@ export function replay(
   incidentFrom = 0,
   careerPathFrom = 0,
   careerEndFrom = 0,
+  payRealismFrom = 0,
 ) {
   if (
     !Array.isArray(decisions) ||
@@ -3485,6 +3557,7 @@ export function replay(
     incidentFrom,
     careerPathFrom,
     careerEndFrom,
+    payRealismFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -3529,6 +3602,7 @@ export function compareWorlds(g) {
       g.incidentFrom,
       g.careerPathFrom,
       g.careerEndFrom,
+      g.payRealismFrom,
     ),
   );
 }
@@ -3551,7 +3625,10 @@ export function encodeSave(g) {
     g.careerPathFrom > MAX_AGE ||
     !Number.isInteger(g.careerEndFrom) ||
     g.careerEndFrom < 0 ||
-    g.careerEndFrom > MAX_AGE
+    g.careerEndFrom > MAX_AGE ||
+    !Number.isInteger(g.payRealismFrom) ||
+    g.payRealismFrom < 0 ||
+    g.payRealismFrom > MAX_AGE
   )
     fail();
   const value = JSON.stringify({
@@ -3566,6 +3643,7 @@ export function encodeSave(g) {
     incidentFrom: g.incidentFrom,
     careerPathFrom: g.careerPathFrom,
     careerEndFrom: g.careerEndFrom,
+    payRealismFrom: g.payRealismFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
@@ -3609,6 +3687,12 @@ export function decodeSave(value) {
     Object.hasOwn(d, "careerPathFrom") ? d.careerPathFrom : d.decisions?.length,
     // Saves from before the career ending keep their years after retirement.
     Object.hasOwn(d, "careerEndFrom") ? d.careerEndFrom : d.decisions?.length,
+    // Saves from before the realistic pay curve keep their recorded salaries.
+    // A scene already shown for the current year was made under the former
+    // move rules, so that year keeps them too.
+    Object.hasOwn(d, "payRealismFrom")
+      ? d.payRealismFrom
+      : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
   );
   game.reflections = validateReflections(Object.hasOwn(d, "reflections") ? d.reflections : {}, game);
   game.careerSeen = validateCareerSeen(d.careerSeen ?? {}, game);

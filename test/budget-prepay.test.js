@@ -42,7 +42,7 @@ function checkBudget(before, next) {
 function replayAt(g, length, scenes = {}) {
   return replay(g.profile, g.scenario, g.seed, g.decisions.slice(0, length),
     scenes, false, g.dynamicFrom, g.worldFrom, g.retirementFrom,
-    g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom);
+    g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom, g.payRealismFrom);
 }
 const scene = {
   title: "住まいと手元の備えを考える",
@@ -98,9 +98,11 @@ test("yearly budgets reconcile rent, mortgage, family, pensions and financial tr
 
 test("shortfall borrowing is repaid from later surpluses before interest with a six-month buffer", () => {
   for (const seed of [0, 42, 2026]) {
+    // The repayment mechanics are checked under the former pay curve, where
+    // these seeds both borrow and repay within ten years.
     let g = createGame({
       ...profile, savings: 0, monthlyCost: 30, rent: 5, children: 1,
-    }, "steady", seed), borrowed = false, repaid = false;
+    }, "steady", seed, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, MAX_AGE), borrowed = false, repaid = false;
     for (let i = 0; i < 10; i++) {
       const before = g;
       g = advance(g, i === 0 ? "careLeave" : "rest");

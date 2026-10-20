@@ -17,12 +17,12 @@ function grind(g, years) {
 }
 // Salary rules are compared between action paths, so chance incidents (which
 // depend on the action) are off here.
-const capAt = (from) => (profile, scenario, seed) =>
-  createGame(profile, scenario, seed, 0, 0, 0, 0, 0, 0, from, MAX_AGE);
+const capAt = (from, payRealismFrom = MAX_AGE) => (profile, scenario, seed) =>
+  createGame(profile, scenario, seed, 0, 0, 0, 0, 0, 0, from, MAX_AGE, 0, 0, payRealismFrom);
 function replayAt(g, length) {
   return replay(g.profile, g.scenario, g.seed, g.decisions.slice(0, length),
     {}, false, g.dynamicFrom, g.worldFrom, g.retirementFrom,
-    g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom);
+    g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom, g.payRealismFrom);
 }
 
 test("long-run salaries level off near a job and region ceiling but keep variance", () => {
@@ -64,11 +64,11 @@ test("the reported IT career stays plausible while high earners remain possible"
   assert.ok(Math.max(...peaks) > 1200);
   assert.ok(Math.max(...peaks) - Math.min(...peaks) > 200);
   // Ceilings follow role, region and employer type, never below a start income.
-  const g = createGame(quick());
+  const g = capAt(0)(quick(), "steady", 2026);
   assert.equal(salaryCeiling(g), 1400);
   assert.ok(salaryCeiling({ ...g, region: "metro" }) > salaryCeiling(g));
   assert.ok(salaryCeiling({ ...g, employer: { ...g.employer, role: "care" } }) < salaryCeiling(g));
-  assert.equal(salaryCeiling(createGame({ ...quick(), income: 3000 })), 3900);
+  assert.equal(salaryCeiling(capAt(0)({ ...quick(), income: 3000 }, "steady", 2026)), 3900);
 });
 
 test("salary cap migration replays old saves exactly and applies from the next decision", () => {
