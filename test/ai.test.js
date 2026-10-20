@@ -64,6 +64,7 @@ test("every narration mode follows the career arc while preserving safety and ou
         assert.match(system, /選択肢は必ず4個/u);
         if (mode === "life") {
           assert.match(system, /4択すべてを転職や仕事の案で埋めない/u);
+          assert.match(system, /転職（switch）は4択のうち多くても1案/u);
           assert.match(system, /子育て中なら少なくとも1案は育児や家族/u);
         } else {
           assert.match(system, /3つの異なる企業へのswitch案と、現職に残るfocus（求職中ならrest）を1案/u);

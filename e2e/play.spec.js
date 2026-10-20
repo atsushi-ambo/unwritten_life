@@ -17,12 +17,12 @@ async function expectFits(page) {
 
 test("quick start uses age band and region estimates and starts with neutral family fields", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator("#quick-age-band")).toHaveValue("30s");
+  await expect(page.locator("#quick-age-band")).toHaveValue("new");
   await expect(page.locator("#quick-region")).toHaveValue("city");
-  await expect(page.locator("#quick-summary")).toContainText("35歳・地方都市でスタート。年収480万円・資産400万円");
+  await expect(page.locator("#quick-summary")).toContainText("22歳・地方の中心都市でスタート。年収300万円・資産30万円");
   await page.locator("#quick-age-band").selectOption("20s");
   await page.locator("#quick-region").selectOption("metro");
-  await expect(page.locator("#quick-summary")).toHaveText("25歳・首都圏・大都市でスタート。年収390万円・資産100万円など、年代と地域から決めたゲーム用の目安を使います。");
+  await expect(page.locator("#quick-summary")).toHaveText("25歳・大都市圏でスタート。年収390万円・資産100万円など、年代と地域から決めたゲーム用の目安を使います。");
   await expectFits(page);
   await page.locator("#remember").check();
   await page.locator("#quick-start").click();
@@ -38,19 +38,19 @@ test("detailed municipality inference can be revealed, overridden, and recompute
   await page.locator('[data-profile-level="standard"]').click();
   const municipality = page.locator("#municipality"), region = page.locator("#region");
   await expect(region).toBeHidden();
-  await expect(page.locator("#region-inference")).toContainText("市区町村が未入力のため、家賃・生活費は「地方都市」の目安で計算します");
+  await expect(page.locator("#region-inference")).toContainText("市区町村が未入力のため、家賃・生活費は「地方の中心都市」の目安で計算します");
   await municipality.fill("埼玉県久喜市");
   await expect(region).toHaveValue("metro");
   await expect(region).toBeHidden();
   await expect(region).toBeEnabled();
-  await expect(page.locator("#region-inference")).toContainText("家賃・生活費は「首都圏・大都市」の目安で計算します");
+  await expect(page.locator("#region-inference")).toContainText("家賃・生活費は「大都市圏」の目安で計算します");
   await expect(page.locator("#budget-summary")).toContainText("生活費 15.5万円/月 ＋ 家賃 9万円/月");
   await expectFits(page);
   await page.getByRole("button", { name: "変更", exact: true }).click();
   await expect(region).toBeVisible();
   await expect(region).toBeFocused();
   await region.selectOption("rural");
-  await expect(page.locator("#region-inference")).toContainText("郊外・地方");
+  await expect(page.locator("#region-inference")).toContainText("地方の市町村");
   await page.locator('[data-profile-level="quick"]').click();
   await expect(region).toBeDisabled();
   await page.locator('[data-profile-level="standard"]').click();

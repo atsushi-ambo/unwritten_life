@@ -1515,7 +1515,7 @@ function suggestedCost() {
 }
 function updateMunicipalityRegion() {
   // The area select stays hidden unless asked for: a blank or unreadable
-  // municipality falls back to 地方都市, and the line says why.
+  // municipality falls back to 地方の中心都市, and the line says why.
   const text = $("municipality").value.trim(),
     inferred = regionFromMunicipality(text);
   if (!manualRegion) $("region").value = inferred ?? "city";

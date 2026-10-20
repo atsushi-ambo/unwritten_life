@@ -55,6 +55,7 @@ test("municipality inference normalizes spaces and leaves unknown locations to t
 
 test("every quick age band and region uses the stated game estimates with neutral family fields", () => {
   const bands = [
+    ["new", 22, [330, 300, 270], 30, 10],
     ["20s", 25, [390, 350, 320], 100, 11],
     ["30s", 35, [530, 480, 430], 400, 13],
     ["40s", 45, [640, 580, 520], 900, 15],
@@ -311,7 +312,7 @@ test("form inference submits a hidden region, retains manual overrides, and rese
   edit("municipality", "埼玉県久喜市");
   assert.equal($("region-field").hidden, true);
   assert.equal($("region").disabled, false);
-  assert.match($("region-inference-text").textContent, /首都圏・大都市/);
+  assert.match($("region-inference-text").textContent, /大都市圏/);
   assert.deepEqual([h.read().region, h.read().monthlyCost, h.read().rent], ["metro", 15.5, 9]);
   const started = createGame(h.read());
   assert.equal(started.profile.region, "metro");
@@ -321,7 +322,7 @@ test("form inference submits a hidden region, retains manual overrides, and rese
   assert.equal($("region").focused, true);
   edit("region", "rural", "change");
   assert.equal(h.read().region, "rural");
-  assert.match($("region-inference-text").textContent, /郊外・地方/);
+  assert.match($("region-inference-text").textContent, /地方の市町村/);
   runInContext('profileLevel = "quick"; updateBudget()', context);
   assert.equal($("region").disabled, true);
   assert.equal(h.read().region, "city");
@@ -341,7 +342,7 @@ test("form inference submits a hidden region, retains manual overrides, and rese
   }
 });
 
-test("without a readable municipality the area select stays hidden and falls back to 地方都市", async () => {
+test("without a readable municipality the area select stays hidden and falls back to 地方の中心都市", async () => {
   const h = await formHarness(), { $, edit } = h;
   for (const [text, reason] of [["", /未入力のため/], ["どこか", /判定できないため/]]) {
     edit("municipality", text);
