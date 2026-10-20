@@ -74,9 +74,11 @@ const narrativeSentences = (text) =>
   text.match(/[^。！？!?]+[。！？!?]*/gu)?.map((s) => s.trim()).filter(Boolean) ?? [];
 
 export const REGIONS = Object.freeze({
-  metro: { label: "首都圏・大都市", cost: 22 },
-  city: { label: "地方都市", cost: 17 },
-  rural: { label: "郊外・地方", cost: 14 },
+  // Named by city size so the three never overlap (2026-10-20). Tokyo-area
+  // suburbs count as metro, as regionFromMunicipality infers.
+  metro: { label: "大都市圏", cost: 22 },
+  city: { label: "地方の中心都市", cost: 17 },
+  rural: { label: "地方の市町村", cost: 14 },
 });
 const PREFECTURES = /^(北海道|東京都|京都府|大阪府|(?:青森|岩手|宮城|秋田|山形|福島|茨城|栃木|群馬|埼玉|千葉|神奈川|新潟|富山|石川|福井|山梨|長野|岐阜|静岡|愛知|三重|滋賀|兵庫|奈良|和歌山|鳥取|島根|岡山|広島|山口|徳島|香川|愛媛|高知|福岡|佐賀|長崎|熊本|大分|宮崎|鹿児島|沖縄)県)/u;
 const METRO_CITIES = /^(横浜市|川崎市|相模原市|さいたま市|千葉市|大阪市|堺市|名古屋市|京都市|神戸市|福岡市)(?:.+区)?$/u;
@@ -548,6 +550,8 @@ export function optionalProfileInputs(raw, defaults = PROFILE_DEFAULTS) {
   return result;
 }
 export const QUICK_AGE_BANDS = Object.freeze({
+  // A new graduate: first-year pay and little saved (2026-10-20 default).
+  new: { age: 22, income: 300, savings: 30, monthlyCost: 10 },
   "20s": { age: 25, income: 350, savings: 100, monthlyCost: 11 },
   "30s": { age: 35, income: 480, savings: 400, monthlyCost: 13 },
   "40s": { age: 45, income: 580, savings: 900, monthlyCost: 15 },
@@ -695,7 +699,7 @@ export function profileInputForLevel(
   }
   return p;
 }
-const REGION_PROSE = { metro: "都市部", city: "地方都市", rural: "郊外の町" };
+const REGION_PROSE = { metro: "都市部", city: "地方の中心都市", rural: "地方の町" };
 // Narrative wording; residenceName keeps the selectable region label for UI.
 function residenceProse(g) {
   const name = residenceName(g);
