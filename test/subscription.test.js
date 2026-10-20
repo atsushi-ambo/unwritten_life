@@ -17,7 +17,7 @@ test("CLI environment drops paid credentials, endpoints and startup injection; a
   for (const arg of ["--ignore-user-config", "--ignore-rules", "--ephemeral", "read-only", 'forced_login_method="chatgpt"', 'web_search="disabled"']) assert.ok(c.includes(arg), arg);
   assert.equal(a[a.indexOf("--tools") + 1], "");
   assert.equal(a[a.indexOf("--max-turns") + 1], "1");
-  assert.equal(env.CLAUDE_CODE_MAX_OUTPUT_TOKENS, "4096");
+  assert.equal(env.CLAUDE_CODE_MAX_OUTPUT_TOKENS, "8192");
   assert.equal(env.CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK, "1");
   assert.ok(a.includes("--strict-mcp-config"));
   assert.ok(a.includes('{"disableAllHooks":true}'));
@@ -27,7 +27,12 @@ test("CLI environment drops paid credentials, endpoints and startup injection; a
 test("only completed text replies are accepted; tool operations and partial or repeated turns are rejected", () => {
   assert.equal(parseSubscriptionReply("claude-cli", claude()).content, "完成");
   assert.equal(parseSubscriptionReply("codex-cli", codex()).outputTokens, 20);
-  for (const patch of [{ is_error: true }, { num_turns: 2 }, { permission_denials: [{}] }, { subtype: "error_max_budget_usd" }]) assert.throws(() => parseSubscriptionReply("claude-cli", claude(patch)));
+  for (const patch of [{ is_error: true }, { num_turns: 0 }, { num_turns: 4 }, { num_turns: "2" }, { permission_denials: [{}] }, { subtype: "error_max_budget_usd" }, { result: null }]) assert.throws(() => parseSubscriptionReply("claude-cli", claude(patch)), /Claude Codeの生成が完了しませんでした。./);
+  // Regression (2026-10-20): Haiku thought past the output cap and the CLI finished the reply in a 2nd turn.
+  assert.equal(parseSubscriptionReply("claude-cli", claude({ num_turns: 2 })).content, "完成");
+  assert.throws(() => parseSubscriptionReply("claude-cli", claude({ subtype: "error_max_budget_usd", is_error: true })), /予算の上限/);
+  assert.throws(() => parseSubscriptionReply("claude-cli", claude({ num_turns: 4 })), /ターン数（4）/);
+  assert.throws(() => parseSubscriptionReply("claude-cli", claude({ subtype: "error <script>", is_error: true })), /終了種別: 不明/);
   assert.throws(() => parseSubscriptionReply("codex-cli", codex([{ type: "command_execution", command: "bad" }])));
   assert.throws(() => parseSubscriptionReply("codex-cli", codex() + '\n{"type":"turn.failed"}'));
   assert.throws(() => parseSubscriptionReply("codex-cli", codex() + '\n{"type":"turn.completed"}'));
@@ -176,7 +181,7 @@ test("CLI verification uses the selected model, a short deadline and bounded out
       if (options.captureStatus) return provider === "codex-cli" ? "Logged in using ChatGPT" : JSON.stringify({ loggedIn: true, authMethod: "claude.ai", subscriptionType: "pro" });
       assert.equal(args[args.indexOf("--model") + 1], SUBSCRIPTIONS[provider].model);
       assert.equal(options.timeout, 90000);
-      assert.equal(options.maxOutputTokens, 128);
+      assert.equal(options.maxOutputTokens, 1024);
       assert.equal(options.maxBytes, 16000);
       return provider === "codex-cli" ? codex([{ type: "agent_message", text: '{"ok":false}' }]) : claude({ result: '{"ok":false}' });
     } });
