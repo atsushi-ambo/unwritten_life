@@ -4,7 +4,7 @@ import { makeAI, configFrom } from "../lib/ai.mjs";
 import { publicAddress, destination, requestText } from "../lib/network.mjs";
 import { appPort } from "../lib/port.mjs";
 import { createGame, encodeSave, advance } from "../public/engine.js";
-import { storyRequest } from "../public/story.js";
+import { SCENE_STYLE, storyRequest } from "../public/story.js";
 import { replyFor, isVerification, readyAI, ollamaText, chatText } from "./fixtures/ai-replies.js";
 import http from "node:http";
 import { readFileSync } from "node:fs";
@@ -57,7 +57,10 @@ test("every narration mode follows the career arc while preserving safety and ou
       ]) assert.match(system, rule, `${mode}: ${rule}`);
       assert.match(system, /pastCandidates.*繰り返さず/u);
       {
-        assert.match(system, /body":"120〜200文字/u);
+        assert.match(system, /body":"140〜240文字/u);
+        // The style guide reaches every mode, after the content rules.
+        assert.ok(system.includes(SCENE_STYLE), `${mode}: style guide`);
+        assert.ok(system.indexOf(SCENE_STYLE) > system.indexOf("本文に金額・割合を書かない"));
         assert.match(system, /選択肢は必ず4個/u);
         if (mode === "life") {
           assert.match(system, /4択すべてを転職や仕事の案で埋めない/u);
