@@ -580,11 +580,15 @@ export function lifeStory(game, ranks = {}) {
     if (r.choice === "switch" && r.employer?.kind !== "seeking")
       events.push({ ...at, kind: "work", text: `${r.employer.name}へ転職` });
     if (r.choice === "startup") events.push({ ...at, kind: "work", text: `${r.employer.name}を起業` });
+    // Automatic re-employment is a move too (2026-10-21), not a promotion.
+    const reemployed = r.outcome?.kind === "reemployed";
+    if (reemployed) events.push({ ...at, kind: "work", text: `${r.employer?.name ?? "新しい勤務先"}に再就職` });
     if (r.position && r.position.rank !== rank) {
       if (level(r.position.rank) > level(peakRank)) peakRank = r.position.rank;
-      if (r.choice !== "switch")
+      const moved = r.choice === "switch" || reemployed;
+      if (!moved && level(r.position.rank) >= level(rank))
         events.push({ ...at, kind: "rise", text: `${ranks[r.position.rank]?.label ?? r.position.rank}に昇格` });
-      else if (level(r.position.rank) > level(rank))
+      else if (moved && level(r.position.rank) > level(rank))
         events.push({ ...at, kind: "rise", text: `${ranks[r.position.rank]?.label ?? r.position.rank}として迎えられる` });
       rank = r.position.rank;
     }

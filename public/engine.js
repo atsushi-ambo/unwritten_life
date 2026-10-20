@@ -137,6 +137,7 @@ export const directionSpan = (g) =>
 // Realistic pay applies to the years from payRealismFrom (older saves keep
 // their recorded years).
 export const payRealism = (g) => g.decisions.length >= (g.payRealismFrom ?? 0);
+export const lifeRealism = (g) => g.decisions.length >= (g.lifeRealismFrom ?? 0);
 // Stages a job move may target: the current one, or one above once the
 // current stage has lasted three years (people rarely climb at every move).
 export function switchRanks(g) {
@@ -882,6 +883,10 @@ function nextEmployer(g, decision) {
       summary: v.label,
       facts: null,
       started: g.year,
+      ...(lifeRealism(g) ? {
+        lastSalary: g.salary || g.employer.lastSalary || g.profile.income,
+        lastRole: g.employer.lastRole ?? g.employer.role,
+      } : {}),
     };
   }
   if (decision.target === "custom")
@@ -952,6 +957,7 @@ export function createGame(
   careerPathFrom = 0,
   careerEndFrom = 0,
   payRealismFrom = 0,
+  lifeRealismFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -991,7 +997,10 @@ export function createGame(
     careerEndFrom > MAX_AGE ||
     !Number.isInteger(payRealismFrom) ||
     payRealismFrom < 0 ||
-    payRealismFrom > MAX_AGE
+    payRealismFrom > MAX_AGE ||
+    !Number.isInteger(lifeRealismFrom) ||
+    lifeRealismFrom < 0 ||
+    lifeRealismFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -1013,6 +1022,7 @@ export function createGame(
     careerPathFrom,
     careerEndFrom,
     payRealismFrom,
+    lifeRealismFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -1095,6 +1105,21 @@ export function inCompany(g) {
       ["student", "notWorking", "independent"].includes(g.profile.occupation)
     )
   );
+}
+// Conditions for an AI business proposal, not a promise of success or an
+// extra restriction on the player's direct actions. All amounts are game
+// assumptions: setup, one year of overhead and a year's living reserve.
+export function startupReadiness(g) {
+  const hasExperience = g.age >= 25 && g.skill >= 30 &&
+    (!["student", "notWorking"].includes(g.profile.occupation) ||
+      g.history.some((h) => !["initial", "seeking"].includes(h.employer.kind)));
+  const livingReserve = (g.livingCost + g.rent) * 12;
+  return {
+    hasExperience,
+    livingReserve: Math.round(livingReserve),
+    eligibleVentures: Object.entries(VENTURES).filter(([, v]) => hasExperience &&
+      g.cash >= v.setup + v.overhead + livingReserve).map(([id]) => id),
+  };
 }
 export function availableChoices(g) {
   const retired = isRetiredAt(g);
@@ -1600,6 +1625,17 @@ function yearlyOutcome(g, choice, employer, decision = null) {
       extraCost: 0,
     };
   if (employer.kind === "venture") {
+    // Game calibration (2026-10-21), not a Japanese business failure statistic:
+    // closures can happen before a second setback, including the first year.
+    if (lifeRealism(g) && randomAt(g.seed, i, 161) <
+      0.11 + (g.cash < g.livingCost * 12 ? 0.04 : 0))
+      return {
+        kind: "failure",
+        title: "事業が続かず、いったん撤退。",
+        body: "受注や資金の見通しが立たず、事業を閉じることになった。事業収入と運営費を止め、次の仕事と暮らしを立て直す。",
+        salaryFactor: 0,
+        extraCost: 15,
+      };
     const risk = clamp(
       0.18 +
         (g.cash < g.livingCost * 12 ? 0.12 : 0) +
@@ -1970,6 +2006,16 @@ export function validateScene(raw, g) {
     options,
   };
 }
+function validateLifeOptions(scene, g, mode) {
+  if (mode === "life" && lifeRealism(g) &&
+    (scene.options.filter((o) => ["learn", "studyDaily"].includes(o.id)).length > 1 ||
+      (g.employer.kind !== "seeking" && scene.options.filter((o) => o.id === "switch").length > 1) ||
+      scene.options.some((o) => o.id === "startup" &&
+        (o.decision ? !startupReadiness(g).eligibleVentures.includes(o.decision.venture)
+          : !startupReadiness(g).eligibleVentures.length))))
+    fail();
+  return scene;
+}
 export function validateGeneratedScene(
   raw,
   g,
@@ -1977,7 +2023,7 @@ export function validateGeneratedScene(
 ) {
   if (!personalized) {
     if (raw?.options?.some((o) => o.decision !== undefined)) fail();
-    return validateScene(raw, g);
+    return validateLifeOptions(validateScene(raw, g), g, mode);
   }
   if (!raw || !Array.isArray(raw.options) || raw.options.length !== 4)
     throw new Error(
@@ -2054,7 +2100,7 @@ export function validateGeneratedScene(
     // AI may propose an employer, never mark its invented facts as verified.
     return { ...o, decision };
   });
-  const scene = validateScene({ ...raw, options }, g);
+  const scene = validateLifeOptions(validateScene({ ...raw, options }, g), g, mode);
   // While working for an employer, staying and building a career there is
   // always one of the four paths, next to moving, learning and living.
   if (
@@ -2864,6 +2910,11 @@ export function annualEpisode(before, record) {
     body = `${record.note.replace(`${record.outcome?.title} `, "")}働くための時間、手元の余裕、これから守りたい暮らしを、改めて考える。`;
     nextTitle = "この暮らしに合う、働き方は？";
   }
+  if (record.outcome?.kind === "reemployed") {
+    title = record.outcome.title;
+    body = `${["learn", "studyDaily"].includes(id) ? "学びにも取り組みながら、求職を続けた。" : "選んだ方針に取り組みながら、求職も続けた。"}${record.outcome.body}`;
+    nextTitle = "新しい勤務先で、どう働いていこう。";
+  }
   if (deficit) {
     // Learning or resting in a loss-making venture year still shows the loss.
     if (!ventureTold)
@@ -3038,7 +3089,8 @@ export function advanceDirection(game, decision, { years = 5 } = {}) {
       const allowed = availableChoices(next);
       const working = !isRetiredAt(next) && next.employer.kind !== "seeking" &&
         !(next.employer.kind === "initial" && ["student", "notWorking"].includes(next.profile.occupation));
-      const preferred = ["learn", "studyDaily"].includes(id) ? ["studyDaily", "learn"]
+      const preferred = ["learn", "studyDaily"].includes(id)
+        ? lifeRealism(next) && working ? ["focus"] : ["studyDaily", "learn"]
         : ["rest", "recover", "careLeave", "connect", "explore"].includes(id) ? [id]
           : ["familyPlan", "reconsiderFamily", "meet"].includes(id) ? ["connect", "rest"]
             : working ? ["focus"] : ["rest"];
@@ -3063,6 +3115,8 @@ export function advanceDirection(game, decision, { years = 5 } = {}) {
       stopReason = "働き方の節目です。ここからの方針を選び直せます。";
     } else if (entry.incident?.tone === "hard") {
       stopReason = "思いがけない出来事がありました。ここからの方針を選び直せます。";
+    } else if (entry.outcome?.kind === "reemployed") {
+      stopReason = "次の仕事が決まりました。新しい職場での方針を選び直せます。";
     } else if (next.employer.kind === "seeking" && i < years - 1) {
       // Years without work are chosen one at a time, so finding a job is
       // never skipped over by a follow-through.
@@ -3090,14 +3144,43 @@ export function previousDirectionStep(game) {
   const block = game.directionBlocks?.at(-1);
   return block?.[1] === game.decisions.length ? block[0] : Math.max(0, game.decisions.length - 1);
 }
+function reemploymentOutcome(g, choice) {
+  if (!lifeRealism(g) || g.employer.kind !== "seeking" || isRetiredAt(g) ||
+    ["switch", "startup", "retire", "rest", "recover", "careLeave"].includes(choice))
+    return null;
+  const lastWorking = g.history.findLastIndex((h) => h.employer.kind !== "seeking");
+  const yearsSeeking = g.history.length - lastWorking - 1;
+  // Annual game assumption, not an estimated personal hazard. JILPT No.168
+  // (2017) observes both short searches and long unemployment; MHLW's 2022
+  // labour white paper notes that 雇用動向調査's 転職入職者 excludes gaps >1y.
+  // Thus those hires cannot prove that all jobseekers find work within a year.
+  // https://www.jil.go.jp/institute/research/2017/168.html
+  // 65% first search year, then 75%; older ages have fewer opportunities.
+  const chance = (yearsSeeking <= 1 ? 0.65 : 0.75) * (g.age >= 60 ? 0.3 : g.age >= 55 ? 0.6 : 1);
+  if (randomAt(g.seed, g.decisions.length, 171) >= chance) return null;
+  return {
+    kind: "reemployed",
+    title: "次の仕事が決まった",
+    body: "求職を続ける中で次の勤務先が決まった。前の仕事の経験を生かし、新しい職場で働き始めた。給与や役割は前職と同じとは限らない。",
+    chance,
+    salaryFactor: 0.8 + randomAt(g.seed, g.decisions.length, 172) * 0.2,
+    extraCost: 0,
+  };
+}
 export function advance(g, rawDecision) {
   if (g.ended || g.decisions.length >= MAX_AGE)
     throw new Error("キャリアと人生の物語は完結しました。");
   const decision = validateDecision(rawDecision, g),
     choice = decisionId(decision);
   let employer = nextEmployer(g, decision);
+  const reemployment = reemploymentOutcome(g, choice);
+  if (reemployment)
+    employer = {
+      kind: "legacy", id: "reemployed", name: "新しい勤務先",
+      role: g.employer.lastRole ?? g.profile.job, companyType: "unknown", facts: null,
+    };
   const familyChange = familyTurn(g, choice);
-  const workOutcome = yearlyOutcome(
+  const workOutcome = reemployment ?? yearlyOutcome(
     g,
     choice,
     employer,
@@ -3105,7 +3188,7 @@ export function advance(g, rawDecision) {
   );
   // Family events do not suspend business risk. Both can happen in one year.
   let outcome =
-    employer.kind === "venture"
+    employer.kind === "venture" || reemployment
       ? workOutcome
       : (familyChange.outcome ?? workOutcome);
   const world = worldEnabled(g) ? worldAt(g, employer) : null;
@@ -3118,8 +3201,12 @@ export function advance(g, rawDecision) {
       companyType: "unknown",
       facts: null,
       summary: "事業を終え、働き方を組み直している",
+      ...(lifeRealism(g) ? {
+        lastSalary: employer.lastSalary ?? g.profile.income,
+        lastRole: employer.lastRole ?? g.profile.job,
+      } : {}),
     };
-  const incident = incidentAt(g, choice, employer);
+  const incident = incidentAt(g, reemployment ? "switch" : choice, employer);
   if (incident?.effects.layoff) {
     // No pay while looking for work; severance and benefits arrive as cash,
     // and the next job starts from the previous pay rather than from zero.
@@ -3140,6 +3227,12 @@ export function advance(g, rawDecision) {
   // In-company stage. A move keeps the stage reached (people usually join at a
   // similar level) and starts a new tenure; the old one stays in the history.
   let position = g.position;
+  if (reemployment) {
+    const lower = { lead: "staff", manager: "lead", specialist: "lead", director: "manager", principal: "specialist" };
+    const rank = randomAt(g.seed, g.decisions.length, 173) < 0.5
+      ? lower[position.rank] ?? position.rank : position.rank;
+    position = { rank, unit: "", joined: g.year, since: rank === position.rank ? position.since : g.year };
+  }
   if (choice === "switch" && typeof decision === "object")
     position =
       decision.rank && decision.rank !== position.rank
@@ -3250,7 +3343,12 @@ export function advance(g, rawDecision) {
     (choice === "startup" ? 0.3 + randomAt(g.seed, i, 22) * 0.55 : 1) * rehire;
   const salary = retired
     ? 0
-    : i >= g.salaryCapFrom
+    : reemployment
+      // A new salary is 80–100% of the pre-loss salary, without an extra
+      // raise or a restoration of the old temporary leave reduction.
+      ? (g.employer.lastSalary ?? g.profile.income) * reemployment.salaryFactor *
+        (incident?.effects.salaryFactor ?? 1)
+      : i >= g.salaryCapFrom
       ? cappedSalary(
           g,
           employer,
@@ -3625,6 +3723,7 @@ export function replay(
   careerPathFrom = 0,
   careerEndFrom = 0,
   payRealismFrom = 0,
+  lifeRealismFrom = 0,
   directionBlocks,
 ) {
   if (
@@ -3651,6 +3750,7 @@ export function replay(
     careerPathFrom,
     careerEndFrom,
     payRealismFrom,
+    lifeRealismFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -3700,6 +3800,7 @@ export function compareWorlds(g) {
       g.careerPathFrom,
       g.careerEndFrom,
       g.payRealismFrom,
+      g.lifeRealismFrom,
       g.directionBlocks,
     ),
   );
@@ -3726,7 +3827,10 @@ export function encodeSave(g) {
     g.careerEndFrom > MAX_AGE ||
     !Number.isInteger(g.payRealismFrom) ||
     g.payRealismFrom < 0 ||
-    g.payRealismFrom > MAX_AGE
+    g.payRealismFrom > MAX_AGE ||
+    !Number.isInteger(g.lifeRealismFrom) ||
+    g.lifeRealismFrom < 0 ||
+    g.lifeRealismFrom > MAX_AGE
   )
     fail();
   const value = JSON.stringify({
@@ -3742,6 +3846,7 @@ export function encodeSave(g) {
     careerPathFrom: g.careerPathFrom,
     careerEndFrom: g.careerEndFrom,
     payRealismFrom: g.payRealismFrom,
+    lifeRealismFrom: g.lifeRealismFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
@@ -3791,6 +3896,10 @@ export function decodeSave(value) {
     // move rules, so that year keeps them too.
     Object.hasOwn(d, "payRealismFrom")
       ? d.payRealismFrom
+      : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
+    // Keep both recorded years and an already presented current scene.
+    Object.hasOwn(d, "lifeRealismFrom")
+      ? d.lifeRealismFrom
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
   );
   if (Object.hasOwn(d, "directionBlocks"))
