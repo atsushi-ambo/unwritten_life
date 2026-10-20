@@ -11,7 +11,8 @@
 Node.js 24 LTS を推奨。24〜26に対応します。
 
 ```sh
-cd /Users/atsushiambo/personal/app/unwritten_life
+git clone https://github.com/atsushi-ambo/unwritten_life.git
+cd unwritten_life
 npm ci --ignore-scripts
 npm run play
 ```
