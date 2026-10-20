@@ -4,6 +4,7 @@ import {
   createGame, advance, availableChoices, encodeSave, decodeSave, replay,
   validateGeneratedScene, RANKS, STAY_ACTIONS, MAX_AGE,
   optionalProfileInputs, profileInputForLevel,
+  switchRanks, applyScene,
 } from "../public/engine.js";
 import { careerMap, careerRecord, careerRecordText } from "../public/careers.js";
 import { storyRequest, sceneSchema } from "../public/story.js";
@@ -198,8 +199,26 @@ test("a supportive boss raises the odds of the next promotion and a difficult on
   assert.ok(odds("difficultBoss") < odds(null));
 });
 
+test("a move one stage up waits three years at the current stage", () => {
+  const fresh = quiet(profile({ rank: "lead" }), 2);
+  const move = (rank) => ({
+    id: "switch", target: "custom", name: "合成エグゼクティブ社", role: "tech",
+    companyType: "unknown", facts: null, rank,
+  });
+  assert.deepEqual(switchRanks(fresh), ["lead"]);
+  assert.throws(() => advance(fresh, move("manager")));
+  assert.deepEqual(Object.keys(storyRequest(fresh, { mode: "career" }).context.switchRanks), ["lead"]);
+  let g = fresh;
+  for (let k = 0; k < 3; k++) g = advance(g, "focus");
+  assert.deepEqual(switchRanks(g), ["lead", "manager", "specialist"]);
+  // Saves from before the rule keep the former one-stage-up moves.
+  assert.deepEqual(switchRanks({ ...fresh, payRealismFrom: MAX_AGE }), ["lead", "manager", "specialist"]);
+});
+
 test("a move can be one stage up at another company, never two", () => {
-  const lead = quiet(profile({ rank: "lead" }), 2);
+  // Three years at the current stage, so a move one stage up is open.
+  let lead = quiet(profile({ rank: "lead" }), 2);
+  for (let k = 0; k < 3; k++) lead = advance(lead, "focus");
   const move = (rank) => ({
     id: "switch", target: "custom", name: "合成エグゼクティブ社", role: "tech",
     companyType: "unknown", facts: null, rank,
@@ -209,10 +228,28 @@ test("a move can be one stage up at another company, never two", () => {
   assert.equal(up.position.since, lead.year);
   assert.equal(up.position.joined, lead.year);
   assert.throws(() => advance(lead, move("director")));
-  assert.throws(() => advance(quiet(profile({ rank: "staff" }), 2), move("manager")));
+  assert.throws(() => advance({ ...lead, position: { ...lead.position, rank: "staff" } }, move("manager")));
   const same = advance(lead, move("lead"));
   assert.equal(same.position.rank, "lead");
   const context = storyRequest(lead, { mode: "career" }).context;
   assert.deepEqual(Object.keys(context.switchRanks), ["lead", "manager", "specialist"]);
   assert.match(storyRequest(lead, { mode: "career" }).messages[0].content, /switchRanksのキーから選ぶ/);
+});
+
+test("an old save whose shown scene offers a move one stage up still loads", () => {
+  // Saved before the three-year rule: a lead in their first year, with this
+  // year's scene already offering a manager role elsewhere.
+  const old = createGame(profile({ rank: "lead" }), "steady", 2, 0, 0, 0, 0, 0, 0, 0, MAX_AGE, 0, 0, MAX_AGE);
+  const move = { id: "switch", target: "custom", name: "合成エグゼクティブ社", role: "tech", companyType: "unknown", candidateKind: "real", workModel: "unknown", proposal: "経験を生かす架空の仮定", rank: "manager", intent: "管理職として移る" };
+  const scene = {
+    title: "次の一年", body: "仕事と暮らしを考え、次の一年を選ぶ。直前の結果から考える。", insight: "架空の場面。",
+    options: [option("learn"), option("connect"), option("focus"), option("switch", move)],
+  };
+  const shown = applyScene(old, scene);
+  const save = JSON.parse(encodeSave(shown));
+  delete save.payRealismFrom;
+  const restored = decodeSave(JSON.stringify(save));
+  // The shown year keeps the former rules; the realistic curve starts after it.
+  assert.equal(restored.payRealismFrom, 1);
+  assert.equal(advance(restored, move).position.rank, "manager");
 });

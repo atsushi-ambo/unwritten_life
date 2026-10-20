@@ -945,6 +945,7 @@ function renderGame() {
         game.incidentFrom,
         game.careerPathFrom,
         game.careerEndFrom,
+        game.payRealismFrom,
       );
       showGame(true);
     });
@@ -1365,6 +1366,7 @@ $("undo-button").addEventListener("click", () => {
     game.incidentFrom,
     game.careerPathFrom,
     game.careerEndFrom,
+    game.payRealismFrom,
   );
   const reached = new Set(careerMilestones(game).map((m) => m.id));
   game.reflections = Object.fromEntries(Object.entries(reflections).filter(([id]) => reached.has(id)));

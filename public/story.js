@@ -11,6 +11,7 @@ import {
   RANKS,
   STAY_ACTIONS,
   nextRank,
+  switchRanks,
   inCompany,
   SCENARIOS,
   REGIONS,
@@ -149,15 +150,9 @@ export function storyRequest(
           note: "社内の段階はゲーム内の一般的な区分で、実際の会社の等級・役職名ではない。在籍年数はゲーム開始または入社から数える。",
         }
       : null,
-    // Stages a move may target: the current one or one above (keys for decision.rank).
-    switchRanks: Object.fromEntries(
-      [
-        ...new Set([
-          game.position.rank,
-          ...["manager", "specialist"].map((t) => nextRank(game.position.rank, t)).filter(Boolean),
-        ]),
-      ].map((r) => [r, RANKS[r].label]),
-    ),
+    // Stages a move may target: the current one, or one above after three
+    // years at the current stage (keys for decision.rank).
+    switchRanks: Object.fromEntries(switchRanks(game).map((r) => [r, RANKS[r].label])),
     career: {
       kind: game.employer.kind,
       role: JOBS[game.employer.role].label,
@@ -383,17 +378,7 @@ export function sceneSchema(game, { mode = "life" } = {}) {
           },
           workModel: { type: "string", enum: Object.keys(WORK_MODELS) },
           proposal: text(300),
-          rank: {
-            type: "string",
-            enum: [
-              ...new Set([
-                game.position.rank,
-                ...["manager", "specialist"]
-                  .map((t) => nextRank(game.position.rank, t))
-                  .filter(Boolean),
-              ]),
-            ],
-          },
+          rank: { type: "string", enum: switchRanks(game) },
         }),
       ),
     );
