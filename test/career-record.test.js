@@ -116,8 +116,10 @@ test("resume groups consecutive employers and roles, counts every year once, and
   assert.equal(record.tenures.reduce((a, t) => a + t.years, 0), game.decisions.length);
   assert.equal(record.reflections[0].text, "次の仕事にも、余白を。");
   const text = careerRecordText(game, { tech: { label: "技術職" } });
-  for (const expected of ["職務経歴書", "Microsoft / 技術職", "退職後の暮らし", "次の仕事にも、余白を。", "キャリアマップ", "1マスが1年"])
+  for (const expected of ["わたしの履歴書", "勤務先と役割", "Microsoft / 技術職", "退職後の暮らし", "次の仕事にも、余白を。", "キャリアマップ", "1マスが1年"])
     assert.ok(text.includes(expected), expected);
+  // The turning points live in the story's decades only.
+  for (const repeated of ["選んだ転機", "職務経歴書"]) assert.ok(!text.includes(repeated), repeated);
   assert.equal(encodeSave(game), before);
   assert.equal(careerRecordText(decodeSave(before)), careerRecordText(game));
   assert.deepEqual(careerRecord(createGame(profile)).tenures, []);
