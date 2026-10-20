@@ -19,7 +19,7 @@ const seeking = (seed, age = 35) => ({ ...quiet(seed, { age, rank: "manager" }),
 const replayGame = (g, decisions = g.decisions, scenes = g.scenes) => replay(
   g.profile, g.scenario, g.seed, decisions, scenes, false, g.dynamicFrom, g.worldFrom,
   g.retirementFrom, g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom,
-  g.incidentFrom, g.careerPathFrom, g.careerEndFrom, g.payRealismFrom, g.lifeRealismFrom,
+  g.incidentFrom, g.careerPathFrom, g.careerEndFrom, g.payRealismFrom, g.lifeRealismFrom, g.offersFrom,
   decisions.length === g.decisions.length ? g.directionBlocks : undefined);
 const within = (value, low, high, label) => assert.ok(value >= low && value <= high, `${label}: ${value}`);
 

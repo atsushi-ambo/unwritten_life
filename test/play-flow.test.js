@@ -131,7 +131,7 @@ test("one-time actions and major family/work changes pause multi-year progress f
 test("multi-year progress stops at the first retired year and respects the saved migration boundary", () => {
   // These cases check retirement under the earlier rules, where play went on.
   const before = createGame({ ...p, age: 64, retirementAge: 65 }, "steady", 42,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 110);
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 110, 0, 0, 110);
   const journey = advanceYears(before, "rest", 5);
   assert.equal(journey.entries.length, 1);
   assert.equal(journey.game.age, 65);

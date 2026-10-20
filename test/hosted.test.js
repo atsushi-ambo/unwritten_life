@@ -509,7 +509,7 @@ test("hosted generation preserves old-client debt rules and rejects invalid boun
     },
   });
   const auth = await session(api),
-    before = createGame({ ...profile, savings: -2000 }, "steady", 42, 0, 0, 0, 0, 0, 110),
+    before = { ...createGame({ ...profile, savings: -2000 }, "steady", 42, 0, 0, 0, 0, 0, 110), offersFrom: 110 },
     saved = JSON.parse(encodeSave(advance(before, "rest")));
   for (const debtRepayFrom of [null, -1, 1.5, 111, "0"]) {
     const invalid = await api.scene(request(auth, {
@@ -562,6 +562,31 @@ test("hosted generation accepts saves without a salary cap boundary and rejects 
     const response = await api.scene(request(auth, {
       save: JSON.stringify({ ...saved, ...(salaryCapFrom === undefined ? {} : { salaryCapFrom }) }),
     }), user);
+    assert.equal(response.status, 200);
+  }
+  assert.equal(calls, 3);
+});
+
+test("hosted offer boundaries reject invalid saves before requests, attempt records or budget reservations", async (t) => {
+  const { db, sql } = database(t);
+  let calls = 0;
+  const api = makeHostedAPI({
+    db, origin, apiKey: "synthetic-key", now: () => 1000,
+    fetchAI: async (_url, options) => {
+      calls++;
+      return Response.json({ choices: [{ message: { content: JSON.stringify(replyFor(options)) } }] });
+    },
+  });
+  const auth = await session(api), saved = JSON.parse(encodeSave(createGame(profile)));
+  for (const offersFrom of [null, -1, 1.5, 111, "0"]) {
+    const response = await api.scene(request(auth, { save: JSON.stringify({ ...saved, offersFrom }) }), user);
+    assert.equal(response.status, 400);
+    assert.equal(calls, 0);
+    assert.equal(sql.prepare("SELECT count(*) AS n FROM ai_attempts").get().n, 0);
+    assert.equal(sql.prepare("SELECT count(*) AS n FROM ai_budget").get().n, 0);
+  }
+  for (const offersFrom of [0, 1, 110]) {
+    const response = await api.scene(request(auth, { save: JSON.stringify({ ...saved, offersFrom }) }), user);
     assert.equal(response.status, 200);
   }
   assert.equal(calls, 3);

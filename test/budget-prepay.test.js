@@ -42,7 +42,7 @@ function checkBudget(before, next) {
 function replayAt(g, length, scenes = {}) {
   return replay(g.profile, g.scenario, g.seed, g.decisions.slice(0, length),
     scenes, false, g.dynamicFrom, g.worldFrom, g.retirementFrom,
-    g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom, g.payRealismFrom, g.lifeRealismFrom);
+    g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom, g.payRealismFrom, g.lifeRealismFrom, g.offersFrom);
 }
 const scene = {
   title: "住まいと手元の備えを考える",
@@ -143,7 +143,7 @@ test("shortfall borrowing is repaid from later surpluses before interest with a 
 });
 
 test("debt repayment migration preserves old histories and starts at the next decision", () => {
-  let old = createGame({ ...profile, savings: -2000 }, "steady", 42, 0, 0, 0, 0, 0, 110);
+  let old = { ...createGame({ ...profile, savings: -2000 }, "steady", 42, 0, 0, 0, 0, 0, 110), offersFrom: MAX_AGE };
   for (let i = 0; i < 3; i++) {
     const before = old;
     old = advance(old, "rest");
@@ -219,7 +219,7 @@ test("prepayment requires a mortgage, surplus cash and the migration boundary", 
 
 test("prepayment lowers this year's and future interest, keeps the term and cash buffer, and stops at one year", () => {
   for (const seed of [0, 1, 42, 2026]) {
-    const g = createGame(owner, "steady", seed),
+    const g = { ...createGame(owner, "steady", seed), incidentFrom: MAX_AGE },
       paid = advance(g, "prepay"),
       regular = advance(g, "invest"),
       h = paid.history[0],
@@ -326,7 +326,7 @@ test("old fixture histories keep the former action catalogue, new boundaries and
       }
     }
   }
-  let g = advance(createGame(owner, "steady", 42), "rest");
+  let g = advance({ ...createGame(owner, "steady", 42), offersFrom: MAX_AGE }, "rest");
   const old = JSON.parse(encodeSave(g));
   delete old.prepayFrom;
   g = decodeSave(JSON.stringify(old));

@@ -681,7 +681,8 @@ function appendTimelineYear(h, index) {
   row.dataset.year = h.year;
   row.append(
     node("p", `${h.year}年 / ${h.age}歳`, "eyebrow"),
-    node("h3", h.incident?.id === "layoff" && index >= game.lifeRealismFrom
+    node("h3", (h.incident?.id === "layoff" && index >= game.lifeRealismFrom) ||
+      (["scout", "promotionOffer", "burnout", "leaveContinues", "returnToWork"].includes(h.incident?.id) && index >= game.offersFrom)
       ? h.incident.title : h.outcome?.title ?? h.episode?.title ?? h.title),
   );
   if (index === 0 || game.directionBlocks?.some(([start]) => start === index))
@@ -1013,6 +1014,7 @@ function renderGame() {
         game.careerEndFrom,
         game.payRealismFrom,
         game.lifeRealismFrom,
+        game.offersFrom,
       );
       showGame(true);
     });
@@ -1447,6 +1449,7 @@ $("undo-button").addEventListener("click", () => {
     game.careerEndFrom,
     game.payRealismFrom,
     game.lifeRealismFrom,
+    game.offersFrom,
     blocks,
   );
   const reached = new Set(careerMilestones(game).map((m) => m.id));

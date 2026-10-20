@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createContext, runInContext } from "node:vm";
 import {
-  createGame, advanceDirection, previousDirectionStep, availableChoices, decisionId, directionSpan, incidentAt,
+  createGame, advance, advanceDirection, previousDirectionStep, availableChoices, decisionId, directionSpan, incidentAt,
   recordCareerReflection, careerSeenUntil, replay, encodeSave, RANKS, REGIONS, MAX_AGE,
 } from "../public/engine.js";
 import { careerMilestones, careerMap, CAREER_STATES } from "../public/careers.js";
@@ -238,6 +238,28 @@ test("timeline summaries remove repeated learning prose, intentions and detours 
   entry.outcome.body = " 1日1時間、 年間365時間。";
   entry.episode.body = previous.episode.body;
   assert.equal(runInContext("timelineSummary(entry, previous)", h.context), "");
+});
+
+test("timeline card headings expose scout and promotion offers above the routine work outcome", () => {
+  const h = harness();
+  for (const id of ["scout", "promotionOffer"]) {
+    let result;
+    for (let seed = 1; seed < 3000 && !result; seed++) {
+      let g = createGame({ ...base().profile, age: 30, rank: "staff" }, "steady", seed);
+      for (let year = 0; year < 10 && !g.ended; year++) {
+        g = advance(g, "rest");
+        if (g.history.at(-1).incident?.id === id) { result = g; break; }
+      }
+    }
+    assert.ok(result, id);
+    h.context.game = result;
+    h.context.entry = result.history.at(-1);
+    h.context.index = result.history.length - 1;
+    runInContext("appendTimelineYear(entry, index)", h.context);
+    const row = h.$("journey-years").children.at(-1);
+    assert.equal(row.children.find((n) => n.tag === "h3").textContent, result.history.at(-1).incident.title);
+    assert.ok(row.textContent.includes(id === "scout" ? "スカウト" : "昇進の打診"));
+  }
 });
 
 test("cards expose only a short summary, with original prose and budget inside one collapsed details", () => {
