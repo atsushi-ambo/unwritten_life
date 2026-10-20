@@ -30,6 +30,7 @@
         ><span class="version">LOCAL EDITION / 0.3</span>
       </nav>
     </header>
+    <p id="server-update-notice" class="notice-box" role="alert" hidden></p>
     <main id="main" class="wrap">
       <div id="setup">
         <section class="hero" aria-labelledby="hero-title">
@@ -957,26 +958,30 @@
         このゲームは、あなたの入力から毎年の場面と選択肢をAIで作ります。はじめる前に、使うAIを1つ接続してください。
       </p>
       <p id="ai-description">
-        接続設定・APIキーはこの起動中だけ保持します。APIは従量課金です。CLI連携は公式CLIのログインを使い、普段の利用枠と共有します。このアプリはクレジットの購入・チャージを行いません。
+        動作した接続先とモデルはこのブラウザに記憶します。APIキーはサーバーのメモリにこの起動中だけ保持します。APIは従量課金です。CLI連携は公式CLIのログインを使い、普段の利用枠と共有します。このアプリはクレジットの購入・チャージを行いません。
       </p>
       <form id="ai-form" method="post" action="/">
+        <fieldset id="ai-type-choice">
+          <legend>はじめに接続方式を選んでください</legend>
+          <label class="check-row"><input id="ai-type-local" type="radio" name="ai-type" value="local" required />PC内（ローカル）</label>
+          <label class="check-row"><input id="ai-type-subscription" type="radio" name="ai-type" value="subscription" required />サブスク（CLI）</label>
+          <label class="check-row"><input id="ai-type-api" type="radio" name="ai-type" value="api" required />API（従量課金）</label>
+        </fieldset>
         <div class="form-grid">
           <label
-            ><span class="field-label">接続方式</span
-            ><select id="ai-provider">
-              <option value="ollama">Ollama（PC内・API課金なし）</option>
-              <option value="lmstudio">LM Studio（PC内）</option>
-              <option value="codex-cli">Codex CLI（ChatGPTサブスク）</option>
-              <option value="claude-cli">Claude Code（サブスク）</option>
-              <option value="openai">OpenAI API</option>
-              <option value="openrouter">OpenRouter</option>
-              <option value="custom">OpenAI互換API</option>
+            ><span class="field-label">接続先</span
+            ><select id="ai-provider" required disabled>
+              <option value="">接続方式を先に選んでください</option>
             </select></label
           >
           <label id="manual-model-field"
             ><span class="field-label">モデルID</span
             ><input id="ai-model" value="qwen3:8b" maxlength="150" required
           /></label>
+          <label id="subscription-model-field" hidden
+            ><span class="field-label">サブスクのモデル</span
+            ><select id="ai-subscription-model" required disabled></select
+          ></label>
           <label id="local-model-field"
             ><span class="field-label">ダウンロード済みモデル</span
             ><select id="ai-local-model" required></select
@@ -1049,11 +1054,11 @@
               value="100"
           /></label>
         </div>
-        <p class="field-note">
+        <p id="api-cost-note" class="field-note">
           単価は利用モデルの公式料金に合わせてください。費用上限は設定単価からの保守的な見積りで、提供者の請求額を保証する上限ではありません。提供者側の残高や自動チャージ設定は、このアプリから確認・変更しません。API接続の出力は1回1500トークンまで。提供者側の利用制限も併用できます。
         </p>
         <p id="subscription-note" class="field-note" hidden>
-          公式CLIにサブスクのアカウントでログインしてから使います。1回120秒まで、回数は下の上限まで。APIキーへの自動切り替えはしません。追加利用や自動チャージが有効な場合は提供者側で無効にしてください。このアプリから契約側の課金設定は変更できません。
+          公式CLIにサブスクのアカウントでログインしてから使います。契約の利用枠（5時間枠など）まで使えます。暴走防止の上限は起動中1000回（最大5000回）、同時1件・生成1回120秒まで。APIキーへの自動切り替えはしません。追加利用や自動チャージが有効な場合は提供者側で無効にしてください。このアプリから契約側の課金設定は変更できません。
         </p>
         <div id="model-list-controls">
           <button id="refresh-models" type="button" class="text-button">
@@ -1112,17 +1117,16 @@
           <summary>サブスクのAI・CLIは使える？</summary>
           <p class="field-note">
             使えます。上の接続先で「Codex
-            CLI（ChatGPTサブスク）」か「Claude Code（サブスク）」を選びます。先に公式CLIでサブスクのアカウントにログインしてください。APIキーは使わず、普段のCLIと同じ利用枠を使います。モデルはCodexが
-            gpt-6.1-sol、Claude Codeが
-            haikuに固定です。毎年自動で生成し、1回120秒・同時1件、起動中は設定した回数までです。アプリはサブスクの残量を取得できず、上限時に有料APIへ自動で切り替えません。追加利用・自動購入が契約側で有効だと課金される場合があるため、各社の設定で無効にしてください。CLI経由でも、場面の情報はその提供者へ送られます。
+            CLI（ChatGPTサブスク）」か「Claude Code（サブスク）」を選びます。先に公式CLIでサブスクのアカウントにログインしてください。APIキーは使わず、普段のCLIと同じ利用枠を使います。Claude CodeはHaiku・Sonnet・Opusから選べ、初期値はSonnetです。CodexはローカルCLIのモデル一覧で確認した候補から選べ、初期値はgpt-6.1-solです。契約の利用枠まで使い、暴走防止に起動中1000回（最大5000回）・同時1件の上限を設けます。接続時は短いJSONの生成を確認します。アプリはサブスクの残量を取得できず、上限時に有料APIへ自動で切り替えません。追加利用・自動購入が契約側で有効だと課金される場合があるため、各社の設定で無効にしてください。CLI経由でも、場面の情報はその提供者へ送られます。
           </p>
         </details>
         <label id="ai-consent-label" class="check-row" hidden
           ><input id="ai-consent" type="checkbox" />このクラウドAIへ、毎年の場面づくりのために年齢・家計・勤務先・家族・選択履歴を送ることに同意します</label
         >
         <p id="ai-accounting" class="field-note"></p>
+        <p id="ai-test-status" class="field-note" role="status"></p>
         <p id="ai-error" class="error" role="alert"></p>
-        <button class="button primary" type="submit">この接続先を使う ↗</button>
+        <button id="ai-submit" class="button primary" type="submit" disabled>接続を確認して使う ↗</button>
       </form>
     </dialog>
     <dialog id="career-dialog" aria-labelledby="career-title">

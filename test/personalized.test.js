@@ -1,3 +1,4 @@
+import { isVerification, chatText } from "./fixtures/ai-replies.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -241,6 +242,7 @@ test("personalized API uses separate caches for life/career, validates exactly f
   const ai = makeAI({
     validateDestination: async () => {},
     transport: async (_url, options) => {
+      if (isVerification(options)) return { status: 200, text: chatText({ ok: true }) };
       const payload = JSON.parse(options.body);
       requests.push(payload);
       const mode = JSON.parse(payload.messages[1].content).generationMode;
@@ -346,6 +348,7 @@ test("actual local HTTP route forwards the personalized career contract and reje
   const ai = makeAI({
     validateDestination: async () => {},
     transport: async (_url, options) => {
+      if (isVerification(options)) return { status: 200, text: chatText({ ok: true }) };
       const request = JSON.parse(options.body);
       const context = JSON.parse(request.messages[1].content);
       assert.equal(context.life.municipality, "合成県あおば市");

@@ -412,7 +412,12 @@ test("without a connected AI the game asks for one before it starts", async ({ p
   await expect(page.locator("#ai-required-note")).toBeVisible();
   await expect(page.locator("#ai-provider option[value=disabled]")).toHaveCount(0);
   await expect(page.locator("#game")).toBeHidden();
+  await expect(page.locator("#ai-type-local")).not.toBeChecked();
+  await expect(page.locator("#ai-submit")).toBeDisabled();
   await page.unroute("**/api/status");
+  await page.locator("#ai-type-local").check();
+  await page.locator("#ai-provider").selectOption("ollama");
+  await expect(page.locator("#ai-local-model option")).toHaveCount(1);
   await page.locator("#ai-form button[type=submit]").click();
   await expect(page.locator("#ai-dialog")).toBeHidden();
   await expect(page.locator("#game")).toBeVisible();

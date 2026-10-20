@@ -76,6 +76,8 @@ let game = null,
   companySources = [],
   apiToken = "",
   aiState = null,
+  serverStale = false,
+  aiTesting = false,
   generating = false,
   revision = 0,
   customCost = false,
@@ -110,6 +112,7 @@ function toast(text) {
     $("notice").textContent = "";
   }, 5500);
 }
+const staleNotice = "アプリが更新されています。ターミナルでサーバーを止めて start.command（npm run play）で起動し直してください。";
 async function status() {
   const res = await fetch("/api/status");
   if (!res.ok)
@@ -121,11 +124,15 @@ async function status() {
   const data = await res.json();
   apiToken = data.token;
   aiState = data.ai;
+  serverStale = !hosted && (data.stale === true || !data.serverRevision);
+  $("server-update-notice").hidden = !serverStale;
+  $("server-update-notice").textContent = serverStale ? staleNotice : "";
   renderAI();
   return data;
 }
 async function api(path, body) {
   if (!apiToken) await status();
+  if (!hosted && serverStale) throw new Error(staleNotice);
   if (hosted && path !== "/api/scene")
     throw new Error("このスマホ版では接続設定と企業ページの取得は使えません。");
   const res = await fetch(path, {
@@ -220,6 +227,7 @@ function readProfile() {
   return p;
 }
 function showGame(focus = false) {
+  if (serverStale) { toast(staleNotice); return; }
   if (!aiReady()) {
     if (hosted) {
       toast("OpenAIの接続準備ができていません。少し待って再読み込みしてください。");
@@ -1094,29 +1102,32 @@ function renderGame() {
   persist();
 }
 function aiReady() {
-  return Boolean(aiState?.ready && (!aiState.cloud || hosted || cloudConsented));
+  return Boolean(!serverStale && !aiTesting && aiState?.ready && (!aiState.cloud || hosted || cloudConsented));
 }
 function renderAI() {
   if (!aiState) return;
   const local = !aiState.cloud;
   const ready = aiReady();
-  $("year-step").disabled = generating;
+  for (const id of ["quick-start", "demo-button", "resume-button"]) $(id).disabled = serverStale;
+  if (serverStale) $("ai-submit").disabled = true;
+  $("year-step").disabled = generating || serverStale;
   $("ai-status").classList.toggle("is-generating", generating);
   $("event-card").setAttribute("aria-busy", String(generating));
-  $("ai-status").textContent = generating
+  $("ai-status").textContent = serverStale ? staleNotice : generating
     ? `${local ? "PC内のAI" : "接続したAI"}が、この結果から次の場面と選択肢を考えています…`
     : !ready
       ? "AIが未接続です。「AIの接続」から使うAIを選んでください。"
       : aiState.subscription
-        ? `サブスク：${aiState.provider === "codex-cli" ? "Codex CLI" : "Claude Code"} / ${aiState.model} · ${aiState.calls}/${aiState.requestCap}回（起動中）`
+        ? `サブスク：${aiState.provider === "codex-cli" ? "Codex CLI" : "Claude Code"} / ${aiState.model} · ${aiState.calls}回（暴走防止上限 ${aiState.requestCap}回）`
+        : local ? `PC内：${aiState.provider} / ${aiState.model} · ${aiState.calls}/${aiState.requestCap}回（API課金なし）`
         : `${local ? "PC内" : "クラウド"}：${aiState.provider} / ${aiState.model} · ${aiState.calls}/${aiState.requestCap}回 · 見積り予約 $${aiState.reservedUSD.toFixed(4)} / $${aiState.usdCap}${hosted ? "（累計）" : ""}`;
   $("ai-setup-banner").classList.toggle("is-ready", ready);
-  $("ai-setup-status").textContent = ready
+  $("ai-setup-status").textContent = serverStale ? staleNotice : ready
     ? `✓ AI接続済み：${aiState.subscription ? (aiState.provider === "codex-cli" ? "Codex CLI" : "Claude Code") : aiState.provider} / ${aiState.model}`
     : hosted
       ? "OpenAIの接続準備ができていません。少し待って再読み込みしてください。"
       : "はじめる前に、場面と選択肢をつくるAIを接続してください。";
-  $("ai-setup-button").hidden = hosted;
+  $("ai-setup-button").hidden = hosted || serverStale;
   $("ai-setup-button").textContent = ready ? "接続を変える ↗" : "AIを接続する ↗";
   $("career-generate").disabled =
     generating || !ready || !game || game.ended || isRetiredAt(game);
@@ -1124,8 +1135,9 @@ function renderAI() {
     generating || !game || game.ended || isRetiredAt(game);
   $("back-setup").disabled = generating;
   $("ai-accounting").textContent = aiState.subscription
-    ? `普段のCLIとサブスク枠を共有。この起動中 ${aiState.calls}/${aiState.requestCap}回（失敗も含む）。APIキーでの再試行やモデルの自動切り替えは行いません。`
-    : `${hosted ? "このスマホ版の累計" : "この起動中"}：${aiState.calls}/${aiState.requestCap}回、見積り予約 $${aiState.reservedUSD.toFixed(4)} / $${aiState.usdCap}。失敗した呼び出しも数えます。${hosted ? " 再読み込みでも上限は戻りません。" : ""}`;
+    ? `普段のCLIと契約の利用枠を共有。この起動中 ${aiState.calls}回（失敗も含む）、暴走防止上限 ${aiState.requestCap}回。接続確認は回数に含みません。APIキーでの再試行やモデルの自動切り替えは行いません。`
+    : local ? `この起動中：${aiState.calls}/${aiState.requestCap}回。API課金なし。接続確認は回数に含みません。`
+    : `${hosted ? "このスマホ版の累計" : "この起動中"}：${aiState.calls}/${aiState.requestCap}回、見積り予約 $${aiState.reservedUSD.toFixed(4)} / $${aiState.usdCap}。失敗した呼び出しも数えます。${hosted ? "" : " 接続確認も見積り費用を予約します（回数には含みません）。"}${hosted ? " 再読み込みでも上限は戻りません。" : ""}`;
   renderAITiming();
 }
 function renderAITiming() {
@@ -2091,18 +2103,30 @@ async function refreshModels() {
   const local = ["ollama", "lmstudio"].includes(provider);
   const subscription = ["codex-cli", "claude-cli"].includes(provider);
   $("subscription-note").hidden = !subscription;
+  $("api-cost-note").hidden = local || subscription || !provider;
   for (const id of ["ai-base-url", "ai-key", "ai-input-rate", "ai-output-rate", "ai-usd-cap"]) {
-    $(id).closest("label").hidden = subscription;
-    $(id).disabled = subscription;
+    $(id).closest("label").hidden = local || subscription || !provider;
+    $(id).disabled = local || subscription || !provider;
   }
-  $("ai-model").readOnly = subscription;
-  $("ai-request-cap").max = subscription ? "20" : "300";
-  if (subscription) $("ai-request-cap").value = Math.min(Number($("ai-request-cap").value) || 20, 20);
+  $("ai-request-cap").max = local || subscription ? "5000" : "300";
   $("local-model-field").hidden = !local;
-  $("manual-model-field").hidden = local;
+  $("manual-model-field").hidden = local || subscription || !provider;
+  $("subscription-model-field").hidden = !subscription;
   $("model-list-controls").hidden = !local;
-  $("ai-model").disabled = local;
+  $("ai-model").disabled = local || subscription || !provider;
   $("ai-local-model").disabled = !local;
+  $("ai-subscription-model").disabled = !subscription;
+  $("ai-submit").disabled = aiTesting || !provider || !selectedConnectionType();
+  if (subscription) {
+    const selected = $("ai-model").value;
+    $("ai-subscription-model").replaceChildren();
+    for (const id of aiState?.subscriptionModels?.[provider] ?? []) {
+      const option = node("option", id);
+      option.value = id;
+      $("ai-subscription-model").append(option);
+    }
+    if ((aiState?.subscriptionModels?.[provider] ?? []).includes(selected)) $("ai-subscription-model").value = selected;
+  }
   if (!local) return;
   const previous = $("ai-local-model").value || aiState?.model;
   $("ai-local-model").replaceChildren();
@@ -2141,23 +2165,58 @@ const presets = {
   ollama: ["http://127.0.0.1:11434", "qwen3:8b", 0, 0],
   lmstudio: ["http://127.0.0.1:1234/v1", "local-model", 0, 0],
   "codex-cli": ["https://chatgpt.com", "gpt-6.1-sol", 0, 0],
-  "claude-cli": ["https://claude.ai", "haiku", 0, 0],
+  "claude-cli": ["https://claude.ai", "sonnet", 0, 0],
   openai: ["https://api.openai.com/v1", "gpt-6-luna", 0.1, 0.5],
   openrouter: ["https://openrouter.ai/api/v1", "openrouter/free", 0, 0],
 };
+const providerChoices = {
+  local: [["ollama", "Ollama"], ["lmstudio", "LM Studio"]],
+  subscription: [["codex-cli", "Codex CLI（ChatGPT）"], ["claude-cli", "Claude Code"]],
+  api: [["openai", "OpenAI API"], ["openrouter", "OpenRouter"], ["custom", "OpenAI互換API"]],
+};
+function connectionType(provider) {
+  return Object.keys(providerChoices).find((type) => providerChoices[type].some(([id]) => id === provider)) ?? "";
+}
+function selectedConnectionType() {
+  return ["local", "subscription", "api"].find((type) => $("ai-type-" + type).checked) ?? "";
+}
+function selectConnectionType(type, provider = "") {
+  for (const id of ["local", "subscription", "api"]) $("ai-type-" + id).checked = id === type;
+  $("ai-provider").replaceChildren();
+  const empty = node("option", type ? "接続先を選んでください" : "接続方式を先に選んでください");
+  empty.value = "";
+  $("ai-provider").append(empty);
+  for (const [id, label] of providerChoices[type] ?? []) {
+    const option = node("option", label);
+    option.value = id;
+    $("ai-provider").append(option);
+  }
+  $("ai-provider").disabled = !type;
+  $("ai-provider").value = provider;
+}
+for (const type of ["local", "subscription", "api"]) $("ai-type-" + type).addEventListener("change", () => {
+  selectConnectionType(type);
+  $("ai-key").value = "";
+  $("ai-consent").checked = false;
+  $("ai-request-cap").value = type === "api" ? 100 : 1000;
+  renderConsent();
+  void refreshModels();
+});
 function readAISettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(aiSettingsKey) ?? "null");
-    return saved && typeof saved === "object" && !Array.isArray(saved)
-      ? saved
-      : null;
+    if (!saved || typeof saved !== "object" || Array.isArray(saved)) return null;
+    // Older settings forced every subscription to at most 20 calls.
+    if (!saved.type && ["codex-cli", "claude-cli"].includes(saved.provider) && saved.requestCap <= 20)
+      saved.requestCap = 1000;
+    return saved;
   } catch {
     return null;
   }
 }
 function cloudChoice() {
   const provider = $("ai-provider").value;
-  if (["ollama", "lmstudio"].includes(provider)) return false;
+  if (!provider || ["ollama", "lmstudio"].includes(provider)) return false;
   if (provider !== "custom") return true;
   try {
     return !["127.0.0.1", "localhost"].includes(
@@ -2174,12 +2233,13 @@ function renderConsent() {
 async function openAISettings(required = false) {
   try {
     await status();
+    if (serverStale) throw new Error(staleNotice);
     $("ai-required-note").hidden = !required;
     if (!hosted) {
       const saved = aiState.ready ? null : readAISettings();
-      const source = saved && Object.hasOwn(presets, saved.provider) || saved?.provider === "custom" ? saved : aiState;
+      const source = saved && (Object.hasOwn(presets, saved.provider) || saved.provider === "custom") ? saved : aiState.ready ? aiState : {};
+      selectConnectionType(connectionType(source.provider), source.provider ?? "");
       for (const [field, key] of [
-        ["ai-provider", "provider"],
         ["ai-model", "model"],
         ["ai-base-url", "baseURL"],
         ["ai-input-rate", "inputRate"],
@@ -2188,6 +2248,8 @@ async function openAISettings(required = false) {
         ["ai-request-cap", "requestCap"],
       ])
         $(field).value = source[key] ?? aiState[key] ?? "";
+      $("ai-request-cap").value = source.requestCap ?? (connectionType(source.provider) === "api" ? 100 : 1000);
+      $("ai-local-model").value = source.model ?? "";
       $("ai-base-url").readOnly = $("ai-provider").value !== "custom";
       $("ai-consent").checked = cloudConsented;
       renderConsent();
@@ -2209,6 +2271,8 @@ $("ai-dialog").addEventListener("close", () => {
 $("ai-base-url").addEventListener("input", renderConsent);
 $("ai-provider").addEventListener("change", () => {
   const preset = presets[$("ai-provider").value];
+  $("ai-request-cap").value = selectedConnectionType() === "api" ? 100 : 1000;
+  $("ai-test-status").textContent = "";
   if (preset) {
     $("ai-base-url").value = preset[0];
     $("ai-model").value = preset[1];
@@ -2222,41 +2286,56 @@ $("ai-provider").addEventListener("change", () => {
   void refreshModels();
 });
 async function configureAI(settings) {
-  const data = await api("/api/ai/config", settings);
-  aiState = data.ai;
-  cloudConsented = Boolean(aiState.cloud && settings.consent);
-  const { apiKey, ...remembered } = settings;
+  if (aiTesting) throw new Error("接続を確認しています。完了までお待ちください。");
+  aiTesting = true;
+  $("ai-submit").disabled = true;
+  $("ai-type-choice").disabled = true;
+  $("ai-test-status").textContent = "接続を確認しています…AIに短い文章を作ってもらっています";
   try {
-    localStorage.setItem(aiSettingsKey, JSON.stringify(remembered));
-  } catch {}
-  renderAI();
-  return aiState;
+    await status();
+    if (serverStale) throw new Error(staleNotice);
+    const data = await api("/api/ai/config", settings);
+    aiState = data.ai;
+    if (!aiState.ready || !aiState.verifiedAt) throw new Error("AIの生成を確認できませんでした。");
+    cloudConsented = Boolean(aiState.cloud && settings.consent);
+    const { apiKey, ...remembered } = settings;
+    try { localStorage.setItem(aiSettingsKey, JSON.stringify(remembered)); } catch {}
+    $("ai-test-status").textContent = `✓ ${aiState.model} の生成を確認しました（${Number(aiState.verificationSeconds ?? 0).toFixed(1)}秒）`;
+    return aiState;
+  } catch (error) {
+    if (aiState) aiState.ready = false;
+    $("ai-test-status").textContent = "";
+    throw error;
+  } finally {
+    aiTesting = false;
+    $("ai-submit").disabled = serverStale || !selectedConnectionType() || !$("ai-provider").value;
+    $("ai-type-choice").disabled = false;
+    renderAI();
+  }
 }
 $("ai-form").addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (aiTesting) return;
   $("ai-error").textContent = "";
   try {
+    const type = selectedConnectionType(), provider = $("ai-provider").value;
+    if (!type || connectionType(provider) !== type) throw new Error("接続方式と接続先を選んでください。");
     if (cloudChoice() && !$("ai-consent").checked)
-      throw new Error(
-        "クラウドのAIへ送る内容への同意を入れてください。PC内のAI（Ollama・LM Studio）なら外部へ送りません。",
-      );
+      throw new Error("クラウドのAIへ送る内容への同意を入れてください。PC内のAI（Ollama・LM Studio）なら外部へ送りません。");
     await configureAI({
-      provider: $("ai-provider").value,
-      model: ["ollama", "lmstudio"].includes($("ai-provider").value)
-        ? $("ai-local-model").value
-        : $("ai-model").value,
+      type, provider,
+      model: type === "local" ? $("ai-local-model").value : type === "subscription" ? $("ai-subscription-model").value : $("ai-model").value,
       baseURL: $("ai-base-url").value,
-      apiKey: $("ai-key").value,
-      inputRate: Number($("ai-input-rate").value),
-      outputRate: Number($("ai-output-rate").value),
-      usdCap: Number($("ai-usd-cap").value),
+      apiKey: type === "api" ? $("ai-key").value : "",
+      inputRate: type === "api" ? Number($("ai-input-rate").value) : 0,
+      outputRate: type === "api" ? Number($("ai-output-rate").value) : 0,
+      usdCap: Number($("ai-usd-cap").value) || 1,
       requestCap: Number($("ai-request-cap").value),
       consent: cloudChoice() && $("ai-consent").checked,
     });
-    $("ai-key").value = "";
     const start = pendingStart;
     $("ai-dialog").close();
-    toast("AIを接続しました。");
+    toast($("ai-test-status").textContent);
     if (start) start();
     else if (game && !$("game").hidden) {
       generationError = "";
@@ -2265,6 +2344,8 @@ $("ai-form").addEventListener("submit", async (e) => {
     }
   } catch (error) {
     $("ai-error").textContent = error.message;
+  } finally {
+    $("ai-key").value = "";
   }
 });
 // Local AI and subscription CLIs need no secret, so the last working choice
@@ -2272,14 +2353,12 @@ $("ai-form").addEventListener("submit", async (e) => {
 async function restoreAI() {
   if (hosted) return;
   const saved = readAISettings();
-  if (aiState?.ready) {
-    // The running server kept its connection across a page reload; keep the
-    // consent given for that same cloud connection.
-    cloudConsented = Boolean(
-      aiState.cloud && saved?.consent &&
-        saved.provider === aiState.provider && saved.model === aiState.model,
-    );
-    renderAI();
+  if (serverStale) return;
+  if (aiState?.ready && !["ollama", "lmstudio", "codex-cli", "claude-cli"].includes(aiState.provider)) {
+    // An API key can stay in the running server, but is never persisted in the browser.
+    if (!saved || saved.provider !== aiState.provider || saved.model !== aiState.model || aiState.cloud && !saved.consent) return;
+    try { await configureAI({ ...saved, apiKey: "" }); }
+    catch (error) { $("ai-setup-status").textContent = error.message; }
     return;
   }
   if (
@@ -2291,8 +2370,10 @@ async function restoreAI() {
     const { consent, ...settings } = saved;
     if (["codex-cli", "claude-cli"].includes(saved.provider) && !consent) return;
     await configureAI({ ...settings, consent });
-  } catch {
+  } catch (error) {
     renderAI();
+    $("ai-setup-status").textContent = error.message;
+    $("ai-error").textContent = error.message;
   }
 }
 function downloadSave(raw, filename) {
@@ -2412,3 +2493,5 @@ status()
     $("ai-status").textContent = error.message;
     $("ai-setup-status").textContent = error.message;
   });
+
+if (!hosted) setInterval(() => { if (!aiTesting) void status().catch(() => {}); }, 5000);

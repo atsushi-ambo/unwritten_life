@@ -5,7 +5,9 @@ import { fileURLToPath } from "node:url";
 import { makeAI } from "./lib/ai.mjs";
 import { makeCompanySearch } from "./lib/company.mjs";
 import { companyPage } from "./lib/network.mjs";
+import { makeServerRevision, STALE_NOTICE } from "./lib/server-revision.mjs";
 
+const serverRevision = await makeServerRevision();
 const assets = new Map([
   ["/", ["index.html", "text/html"]],
   ["/index.html", ["index.html", "text/html"]],
@@ -34,6 +36,7 @@ async function bodyJSON(req) {
 }
 export function makeServer({
   ai = makeAI(),
+  revision = serverRevision,
   research = companyPage,
   searchCompanies = makeCompanySearch(),
 } = {}) {
@@ -68,6 +71,7 @@ export function makeServer({
       }
       return json(res, 200, {
         token,
+        ...await revision(),
         ai: ai.status(),
         engineRevision: "career-offers-v1",
         choicesRevision: "personalized-four-v1",
@@ -98,6 +102,7 @@ export function makeServer({
           error: "操作が多いため、少し時間をおいてください。",
         });
       try {
+        if ((await revision()).stale) return json(res, 409, { error: STALE_NOTICE });
         const body = await bodyJSON(req);
         if (!body || typeof body !== "object" || Array.isArray(body))
           throw new Error("JSONオブジェクトを指定してください。");

@@ -60,7 +60,7 @@ function harness({ game = null, remember = false, stored = {} } = {}) {
     toast: (message) => notices.push(message),
     window: { scrollTo() {} },
     maybeGenerateScene() {},
-    aiReady: () => true, hosted: false, generationError: "",
+    aiReady: () => true, hosted: false, serverStale: false, generationError: "",
     moveToStory() {},
     renderGame() { rendered++; runInContext("persist()", context); },
   });

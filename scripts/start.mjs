@@ -1,5 +1,6 @@
 import { spawn, execFile } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
+import { STALE_NOTICE } from "../lib/server-revision.mjs";
 import { makeServer } from "../server.mjs";
 
 const port = Number(process.env.PORT ?? 4317);
@@ -21,6 +22,10 @@ try {
   });
   const data = await res.json();
   if (!data.token || !data.ai) throw new Error("Port in use");
+  if (data.stale || !data.serverRevision) {
+    console.error(STALE_NOTICE);
+    process.exit(1);
+  }
   console.log(`起動済みのゲームを開きます: ${url}`);
   browser();
   process.exit(0);
@@ -46,7 +51,7 @@ try {
     stdio: "ignore",
   });
   ownedOllama.on("error", () =>
-    console.log("Ollamaが見つかりません。AIを接続せずに遊ぶこともできます。"),
+    console.log("Ollamaが見つかりません。ゲームのAI設定で別の接続先を選んでください。"),
   );
   for (let i = 0; i < 20; i++) {
     try {
