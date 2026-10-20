@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  createGame,
+  onMentalLeave, createGame,
   advance,
   availableChoices,
   workSuccessChance,
@@ -88,13 +88,13 @@ test("effort raises later success odds without guaranteeing evaluation or income
     )
       successWithLoss++;
     if (
-      !study.ended &&
-      advance(study, "focus").history[1].outcome.kind === "success"
+      !study.ended && !onMentalLeave(study) &&
+      advance(study, "focus").history[1].outcome?.kind === "success"
     )
       trained++;
     if (
-      !rest.ended &&
-      advance(rest, "focus").history[1].outcome.kind === "success"
+      !rest.ended && !onMentalLeave(rest) &&
+      advance(rest, "focus").history[1].outcome?.kind === "success"
     )
       rested++;
   }

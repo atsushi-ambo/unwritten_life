@@ -13,9 +13,9 @@ const move = (name) => ({
   id: "switch", target: "custom", name, role: "tech", companyType: "unknown", facts: null,
 });
 // The first seed whose opening year draws the wanted incident.
-function seedFor(id, { action = "focus", severe, p = profile } = {}) {
+function seedFor(id, { action = "focus", severe, p = profile, offersFrom = 0 } = {}) {
   for (let seed = 0; seed < 20000; seed++) {
-    const g = createGame(p, "steady", seed);
+    const g = { ...createGame(p, "steady", seed), offersFrom };
     const incident = incidentAt(g, typeof action === "string" ? action : action.id);
     if (incident?.id === id && (severe === undefined || incident.severe === severe)) return seed;
   }
@@ -44,7 +44,7 @@ test("rates stay in the game's assumed range and at most one incident happens a 
         any++;
         counts[incident.id] = (counts[incident.id] ?? 0) + 1;
         assert.ok(Object.hasOwn(INCIDENTS, incident.id));
-        assert.ok(incident.chance > 0 && incident.chance <= incident.yearChance && incident.yearChance < 0.6);
+        assert.ok(incident.chance > 0 && incident.chance <= incident.yearChance && (incident.yearChance < 0.6 || ["leaveContinues", "returnToWork"].includes(incident.id)));
       }
     }
   }
@@ -78,9 +78,9 @@ test("a layoff ends pay for the year, pays severance as cash, and the next job s
   assert.ok(hired.salary > 400, `${hired.salary}`);
 });
 
-test("a leave of absence lowers pay for one year and the following year returns to the earlier level", () => {
-  const seed = seedFor("harassment", { severe: true });
-  const g = createGame(profile, "steady", seed);
+test("a pre-offers leave lowers pay for one year and then returns to the earlier level", () => {
+  const seed = seedFor("harassment", { severe: true, offersFrom: MAX_AGE });
+  const g = { ...createGame(profile, "steady", seed), offersFrom: MAX_AGE };
   const leave = advance(g, "focus");
   assert.equal(leave.history[0].incident.severe, true);
   assert.match(leave.history[0].incident.title, /休職/);

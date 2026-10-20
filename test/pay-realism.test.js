@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createGame, advance, availableChoices, switchRanks, salaryCeiling,
-  optionalProfileInputs, profileInputForLevel, PROFILE_DEFAULTS, MAX_AGE,
+  onMentalLeave, optionalProfileInputs, profileInputForLevel, PROFILE_DEFAULTS, MAX_AGE,
 } from "../public/engine.js";
 
 // The reported case: 30, IT, regional city, 500万円, at a large company.
@@ -17,7 +17,7 @@ function salariesAt(p, pick, seeds = 60) {
   for (let seed = 1; seed <= seeds; seed++) {
     let g = createGame(p, "steady", seed * 7919);
     for (let y = 0; y < 32 && !g.ended; y++) {
-      g = advance(g, pick(g, y));
+      g = advance(g, onMentalLeave(g) ? "rest" : pick(g, y));
       (at[g.age] ??= []).push(g.salary);
     }
   }

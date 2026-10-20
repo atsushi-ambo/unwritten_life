@@ -36,9 +36,23 @@ export function fourReply(context, { career = context.generationMode === "career
             decision: { id: "switch", target: "custom", name: "合成クラウド社", role: "tech", companyType: "unknown",
               candidateKind: "real", workModel: "services", proposal: "経験を生かす架空の役割", intent: "次の仕事を探す" } }
           : o);
+  const offer = context.careerOffer;
+  if (offer?.id === "scout") {
+    options[career ? 0 : 3] = {
+      id: "switch", label: "スカウトの企業を検討する", hint: "採用は未定", reason: "経験との接点を調べる",
+      decision: { id: "switch", target: "custom", name: "合成クラウド社", role: "tech", companyType: "unknown",
+        candidateKind: "real", workModel: "services", proposal: "経験を生かす架空の役割", intent: "スカウトに応じる" },
+    };
+  } else if (offer?.id === "promotionOffer") {
+    options[3] = { id: "promote", label: "昇進の打診を受ける", hint: "責任が増える", reason: "今の会社での経験",
+      decision: { id: "promote", intent: "打診を受諾する",
+        ...(["manager", "specialist"].includes(offer.targetRank) ? { track: offer.targetRank } : {}) } };
+  }
+  const offerBody = (context.recordedCareerOffers ?? []).map((o) =>
+    o.id === "scout" ? "スカウトの連絡が届いた。" : "上司から昇進の打診があった。").join("");
   return {
     title: "学びを仕事へ",
-    body: "会社と暮らしを考え、次の一年を選ぶ。直前の結果を受けて、何を続けるかを考える。",
+    body: offerBody + "会社と暮らしを考え、次の一年を選ぶ。直前の結果を受けて、何を続けるかを考える。",
     insight: "これは仮想の場面。",
     options,
     ...overrides,
