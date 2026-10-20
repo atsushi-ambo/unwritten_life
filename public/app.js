@@ -28,6 +28,7 @@ import {
   recordCareerReflection,
   recordCareerSeen,
   careerSeenUntil,
+  directionSpan,
 } from "./engine.js";
 import {
   VENTURES,
@@ -769,7 +770,7 @@ function renderTimelineControls() {
   $("timeline-speed").value = String(timelineSpeed);
   $("timeline-status").textContent = revealing
     ? `${timelineShown - (game.history.length - lastJourney.entries.length)} / ${lastJourney.entries.length}年${timelinePaused ? " · 一時停止中" : " · 年月が流れています"}`
-    : lastJourney?.stopReason || "ここまでの年月を振り返り、次の5年の方針を選べます。";
+    : lastJourney?.stopReason || `ここまでの年月を振り返り、${directionSpan(game)}の方針を選べます。`;
 }
 function scheduleYear() {
   clearTimeout(timelineTimer);
@@ -1024,7 +1025,7 @@ function renderGame() {
     card.append(node("p", `AIが考える場面 / ${game.year}`, "eyebrow"));
     if (generating) {
       card.append(
-        node("h2", "次の5年を考えています…"),
+        node("h2", `${directionSpan(game)}を考えています…`),
         node(
           "p",
           "これまでの選択と結果、仕事・家計・家族の条件から、AIが場面と4つの選択肢をつくっています。",
@@ -1159,6 +1160,7 @@ function renderGame() {
     }
   }
   $("choice-title").parentElement.hidden = revealing || complete || !eventFor(game).generated;
+  $("choice-title").textContent = `コマンド / ${directionSpan(game)}の方針`;
   $("undo-button").disabled = game.decisions.length === 0 || generating;
   renderHistory();
   $("context-preview").textContent = JSON.stringify(
@@ -1248,6 +1250,7 @@ async function generateScene() {
   }
   const current = revision;
   const timingKey = connectionKey(aiState);
+  let retry = false;
   generationStarted = performance.now();
   generating = true;
   generationError = "";
@@ -1273,7 +1276,14 @@ async function generateScene() {
       }
     }
   } catch (error) {
-    if (current === revision)
+    // A local model costs nothing to ask again, and small ones often miss the
+    // reply format: retry once on a rejected reply. Paid connections, network
+    // errors and timeouts still wait for the player.
+    retry = current === revision && generateScene.retried !== revision &&
+      aiState && !aiState.cloud && !aiState.subscription &&
+      /採用しませんでした|有効な文章|JSON形式になりませんでした/.test(error.message);
+    if (retry) generateScene.retried = revision;
+    else if (current === revision)
       generationError = `AIで場面を作れませんでした。${error.message}`;
     try {
       await status();
@@ -1283,6 +1293,7 @@ async function generateScene() {
     generating = false;
     if (game) renderGame();
   }
+  if (retry) await generateScene();
 }
 function openComparison() {
   $("compare-caption").textContent =

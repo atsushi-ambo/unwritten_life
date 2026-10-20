@@ -219,3 +219,37 @@ test("legacy forced subscription cap is raised while explicit new preferences ar
     assert.equal(runInContext("readAISettings().requestCap", context), expected);
   }
 });
+
+test("a rejected reply from a local model is asked again once; paid and network failures are not", async () => {
+  const game = advance(createGame({
+    age: 29, region: "city", job: "tech", ai: "daily", priority: "balance",
+    gender: "undisclosed", household: "solo", companyType: "small",
+  }), "rest");
+  const rejected = "AIの提案がゲームの条件（実在企業の名前・選択肢の形式など）を満たさなかったため、採用しませんでした。";
+  for (const [aiState, error, expected] of [
+    [{ provider: "ollama", cloud: false }, rejected, 2],
+    [{ provider: "lmstudio", cloud: false }, "AIの返答が指定のJSON形式になりませんでした。接続やモデルを調整して再度お試しください。", 2],
+    [{ provider: "claude-cli", cloud: true, subscription: true }, rejected, 1],
+    [{ provider: "openai", cloud: true }, rejected, 1],
+    [{ provider: "ollama", cloud: false }, "AIの応答が120秒以内に終わりませんでした。", 1],
+  ]) {
+    const $ = elements(), requests = [];
+    const context = createContext({
+      $, game, aiState, serverStale: false, isRetiredAt, encodeSave, recordCareerSeen, generating: false, revision: 1,
+      hosted: false, apiToken: "synthetic-csrf",
+      aiReady: () => true, generationError: "", persist() {},
+      performance: { now: () => 0 }, setInterval: () => 0, clearInterval() {},
+      connectionKey: () => "synthetic", document: { querySelectorAll: () => [] },
+      renderAI() {}, renderGame() {}, renderAITiming() {}, toast() {}, status: async () => {},
+      fetch: async (path, options) => {
+        requests.push({ path, options });
+        return { ok: false, json: async () => ({ error }) };
+      },
+    });
+    loadHandler(context, "async function api(", "function readStoredGame(");
+    loadHandler(context, "async function generateScene()", "function openComparison()");
+    await runInContext("generateScene()", context);
+    assert.equal(requests.length, expected, `${aiState.provider}: ${error}`);
+    assert.match(runInContext("generationError", context), /場面を作れませんでした/);
+  }
+});

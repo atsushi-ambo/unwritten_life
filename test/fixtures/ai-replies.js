@@ -29,7 +29,13 @@ export function fourReply(context, { career = context.generationMode === "career
         .map((id) => ({
           id, label: `合成の${id}`, hint: "時間の配分", reason: "本人の条件",
           decision: { id, intent: `${id}を試す` },
-        }));
+        }))
+        // Between jobs one path looks for the next job, as the game requires.
+        .map((o, i, all) => context.currentEmployer === "次の仕事を探している" && ids.includes("switch") && i === all.length - 1
+          ? { id: "switch", label: "次の仕事を探す", hint: "条件が合うとは限らない", reason: "これまでの経験",
+            decision: { id: "switch", target: "custom", name: "合成クラウド社", role: "tech", companyType: "unknown",
+              candidateKind: "real", workModel: "services", proposal: "経験を生かす架空の役割", intent: "次の仕事を探す" } }
+          : o);
   return {
     title: "学びを仕事へ",
     body: "会社と暮らしを考え、次の一年を選ぶ。直前の結果を受けて、何を続けるかを考える。",
