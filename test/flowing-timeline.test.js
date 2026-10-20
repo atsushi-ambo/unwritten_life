@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createContext, runInContext } from "node:vm";
 import {
-  createGame, advanceDirection, previousDirectionStep, availableChoices, decisionId,
+  createGame, advanceDirection, previousDirectionStep, availableChoices, decisionId, directionSpan,
   recordCareerReflection, careerSeenUntil, replay, encodeSave, RANKS, REGIONS, MAX_AGE,
 } from "../public/engine.js";
 import { careerMilestones, careerMap, CAREER_STATES } from "../public/careers.js";
@@ -42,7 +42,7 @@ function harness({ storedSpeed = null, storageDenied = false, reducedMotion = fa
     return elements.get(key);
   };
   const context = createContext({
-    $, node, game: base(), RANKS, REGIONS, MAX_AGE, careerMap, CAREER_STATES, createGame, advanceDirection, previousDirectionStep,
+    $, node, game: base(), RANKS, REGIONS, MAX_AGE, careerMap, CAREER_STATES, createGame, advanceDirection, previousDirectionStep, directionSpan,
     availableChoices, decisionId, recordCareerReflection, careerMilestones, careerSeenUntil, replay,
     timelineShown: 0, timelinePaused: false, timelineTimer: undefined, lastJourney: null,
     generating: false, revision: 1, favoriteYears: new Set(),

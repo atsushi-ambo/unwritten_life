@@ -2,9 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createGame, advance, advanceDirection, previousDirectionStep, decisionId,
-  replay, encodeSave, decodeSave, availableChoices, compareWorlds,
+  replay, encodeSave, decodeSave, availableChoices, compareWorlds, validateGeneratedScene, directionYears, directionSpan,
 } from "../public/engine.js";
-import { readyAI, replyFor, ollamaText } from "./fixtures/ai-replies.js";
+import { readyAI, replyFor, ollamaText, fourReply } from "./fixtures/ai-replies.js";
 import { storyRequest } from "../public/story.js";
 
 const profile = { age: 28, job: "tech", company: "合成SI社", income: 500,
@@ -138,4 +138,54 @@ test("scene caching distinguishes different direction boundaries with the same a
   let legacy = quiet();
   for (let i = 0; i < 20; i++) legacy = advance(legacy, "rest");
   assert.equal(storyRequest(legacy).context.yearsSincePreviousDecision.length, 5);
+});
+
+test("while job-hunting a direction runs one year at a time; finding a job resumes the five-year run", () => {
+  // Chance incidents on, so a layoff can happen; take the first seed that has one.
+  let seeking;
+  for (let seed = 1; seed < 400 && !seeking; seed++) {
+    let g = createGame(profile, "steady", seed);
+    for (let k = 0; k < 15 && !g.ended; k++) {
+      g = advance(g, "focus");
+      if (g.employer.kind === "seeking") { seeking = g; break; }
+    }
+  }
+  assert.ok(seeking, "no seed reached a layoff");
+  const study = advanceDirection(seeking, "studyDaily");
+  assert.equal(study.entries.length, 1);
+  assert.equal(study.stopReason, "仕事を探している間は、1年ごとに選び直せます。");
+  assert.match(study.entries[0].episode.title, /次の仕事/);
+  assert.doesNotMatch(study.entries[0].episode.body, /取り組みが評価につながった|目に見える評価/);
+  const move = { id: "switch", target: "custom", name: "合成クラウド社", role: "tech", companyType: "unknown", facts: null };
+  const hired = advanceDirection(seeking, move);
+  assert.notEqual(hired.game.employer.kind, "seeking");
+  assert.ok(hired.entries.length > 1, "a new job continues the direction");
+});
+
+test("between jobs an AI scene must offer looking for the next job", () => {
+  let seeking;
+  for (let seed = 1; seed < 400 && !seeking; seed++) {
+    let g = createGame(profile, "steady", seed);
+    for (let k = 0; k < 15 && !g.ended; k++) {
+      g = advance(g, "focus");
+      if (g.employer.kind === "seeking") { seeking = g; break; }
+    }
+  }
+  const context = storyRequest(seeking, { mode: "life" }).context;
+  const reply = fourReply(context);
+  assert.ok(reply.options.some((o) => o.id === "switch"));
+  validateGeneratedScene(reply, seeking, { mode: "life" });
+  const without = { ...reply, options: reply.options.map((o) => o.id === "switch"
+    ? { ...o, id: "rest", decision: { id: "rest", intent: "休む" } } : o) };
+  assert.throws(() => validateGeneratedScene(without, seeking, { mode: "life" }));
+  // A save from before the rule keeps its shown scene.
+  validateGeneratedScene(without, { ...seeking, payRealismFrom: 110 }, { mode: "life" });
+});
+
+test("the last direction before retirement covers only the years left", () => {
+  const g = quiet({ ...profile, age: 62, retirementAge: 65 });
+  assert.equal(directionYears(g), 3);
+  assert.equal(directionSpan(g), "定年までの3年");
+  assert.equal(directionSpan(quiet()), "次の5年");
+  assert.match(storyRequest(g, { mode: "life" }).messages[0].content, /今回は定年までの3年の方針を選ぶ場面/);
 });

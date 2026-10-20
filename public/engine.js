@@ -126,6 +126,14 @@ export function nextRank(rank, track = "manager") {
   if (rank === "specialist") return "principal";
   return null;
 }
+// How many years the next direction covers: five, or the years left before
+// retirement when fewer remain (the run stops at retirement anyway).
+export function directionYears(g) {
+  const left = g.profile.retirementAge - g.age;
+  return isRetiredAt(g) || left >= 5 ? 5 : Math.max(1, left);
+}
+export const directionSpan = (g) =>
+  directionYears(g) === 5 ? "次の5年" : `定年までの${directionYears(g)}年`;
 // Realistic pay applies to the years from payRealismFrom (older saves keep
 // their recorded years).
 export const payRealism = (g) => g.decisions.length >= (g.payRealismFrom ?? 0);
@@ -2057,6 +2065,17 @@ export function validateGeneratedScene(
     !scene.options.some((o) => STAY_ACTIONS.includes(o.id))
   )
     fail();
+  // Between jobs, looking for the next one is always one of the paths
+  // (scenes saved before this rule keep loading: same boundary as pay).
+  if (
+    mode === "life" &&
+    payRealism(g) &&
+    g.employer.kind === "seeking" &&
+    !isRetiredAt(g) &&
+    availableChoices(g).includes("switch") &&
+    !scene.options.some((o) => o.id === "switch")
+  )
+    fail();
   if (mode === "career") {
     const moves = scene.options.filter((o) => o.id === "switch");
     const stay = scene.options.filter(
@@ -2744,10 +2763,14 @@ export function annualEpisode(before, record) {
   ][variation];
   let next =
     "経験を深めるか、働き方や暮らしを見直すか。仕事を離れた後の時間も含め、次の一年の重点を選ぼう。";
+  // Studying between jobs is not judged at work (2026-10-20).
+  const seeking = before.employer.kind === "seeking";
   if (["learn", "studyDaily"].includes(id)) {
-    title = ok
-      ? "学んだことが、現場の言葉になった。"
-      : "ノートは増えた。評価はまだ、追いつかない。";
+    title = seeking
+      ? ok ? "学んだことが、次の仕事の話になった。" : "学びは続く。次の仕事は、まだ見えない。"
+      : ok
+        ? "学んだことが、現場の言葉になった。"
+        : "ノートは増えた。評価はまだ、追いつかない。";
     const studiedYears = before.history.filter((h) =>
       ["learn", "studyDaily"].includes(h.choice),
     ).length;
@@ -2759,7 +2782,7 @@ export function annualEpisode(before, record) {
           : studiedYears === 2
             ? "続けてみて、次に学びたい課題も見えてきた。"
             : "積み重ねた時間を、どこで使うか考えるようになった。";
-    body = `${progress}${learning}${id === "studyDaily" ? "1日1時間、年間365時間。" : "学びに使った時間が積み重なる。"}${ok ? `${setting}で、取り組みが評価につながった。` : `${setting}に生かしたいが、今年は目に見える評価につながらなかった。学んだ力は残る。`}`;
+    body = `${progress}${learning}${id === "studyDaily" ? "1日1時間、年間365時間。" : "学びに使った時間が積み重なる。"}${seeking ? ok ? "面接で話せる経験が一つ増えた。" : "まだ次の仕事にはつながっていない。学んだ力は残る。" : ok ? `${setting}で、取り組みが評価につながった。` : `${setting}に生かしたいが、今年は目に見える評価につながらなかった。学んだ力は残る。`}`;
     nextTitle = ok
       ? "この手応えを、次はどこで試す？"
       : "続ける？ やり方を変えてみる？";
@@ -3040,6 +3063,10 @@ export function advanceDirection(game, decision, { years = 5 } = {}) {
       stopReason = "働き方の節目です。ここからの方針を選び直せます。";
     } else if (entry.incident?.tone === "hard") {
       stopReason = "思いがけない出来事がありました。ここからの方針を選び直せます。";
+    } else if (next.employer.kind === "seeking" && i < years - 1) {
+      // Years without work are chosen one at a time, so finding a job is
+      // never skipped over by a follow-through.
+      stopReason = "仕事を探している間は、1年ごとに選び直せます。";
     }
     if (stopReason) break;
   }
