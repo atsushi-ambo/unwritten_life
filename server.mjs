@@ -40,6 +40,8 @@ export function makeServer({
   revision = serverRevision,
   research = companyPage,
   searchCompanies = makeCompanySearch(),
+  // POSTs per minute for this one local player.
+  requestsPerMinute = 60,
 } = {}) {
   const token = randomBytes(32).toString("hex");
   let windowStart = Date.now(),
@@ -98,7 +100,7 @@ export function makeServer({
         windowStart = Date.now();
         requests = 0;
       }
-      if (++requests > 60)
+      if (++requests > requestsPerMinute)
         return json(res, 429, {
           error: "操作が多いため、少し時間をおいてください。",
         });

@@ -712,7 +712,7 @@
               </button>
             </div>
             <p class="model-note">
-              人生の終わりまで進む架空のゲームです。寿命・収入・資産の個人予測ではありません。場面と選択肢は、接続したAIがあなたの入力から毎年つくります。
+              人生の終わりまで進む架空のゲームです。寿命・収入・資産の個人予測ではありません。場面と選択肢は、接続したAIがあなたの入力から5年ごとにつくります。
             </p>
             <p class="error" id="form-error" role="alert"></p>
           </form>
@@ -783,22 +783,6 @@
               <button id="career-compare-button" class="button secondary small">
                 転職・残るの4択を見る ↗
               </button>
-              <label
-                >この方針で進める期間
-                <select id="year-step">
-                  <option value="1">1年ずつ</option>
-                  <option value="5">最大5年（節目で止まる）</option>
-                  <option value="10">最大10年（節目で止まる）</option>
-                </select></label
-              >
-              <button
-                id="journey-review"
-                type="button"
-                class="text-button"
-                hidden
-              >
-                直前のキャリア記録を振り返る ↗
-              </button>
             </div>
             <div class="ai-row">
               <p id="ai-status" class="field-note" role="status"></p>
@@ -808,22 +792,27 @@
                 <pre id="context-preview"></pre>
               </details>
             </div>
-            <div
-              id="year-result"
-              class="year-result"
-              hidden
-              aria-live="polite"
-            ></div>
+            <section id="timeline" class="timeline" aria-labelledby="timeline-title" tabindex="-1" hidden>
+              <h2 id="timeline-title">流れていく、キャリアと暮らし。</h2>
+              <p id="reflection-note" class="field-note">節目の一行は任意です。セーブに残り、AIには送りません。書かなくても年月は進みます。</p>
+              <div id="timeline-controls" class="timeline-controls">
+                <button id="timeline-pause" type="button" class="button secondary small" aria-pressed="false">一時停止</button>
+                <label>速さ <select id="timeline-speed"><option value="1">等速</option><option value="2">2倍</option></select></label>
+                <div class="journey-footer"><button id="journey-next" type="button" class="button secondary small">次の決断まで進む</button></div>
+              </div>
+              <p id="timeline-status" class="field-note" role="status"></p>
+              <div id="journey-years" class="journey-years" aria-live="polite" aria-relevant="additions"></div>
+            </section>
             <div id="event-card" class="event-card"></div>
             <div class="choice-heading">
-              <h2 id="choice-title">コマンド / 今年のキャリアと暮らし</h2>
-              <span id="command-help">↑↓で移動 · Enterで決定</span>
+              <h2 id="choice-title">コマンド / 次の5年の方針</h2>
+              <span id="command-help">↑↓で移動 · Enterで決定 · Spaceで一時停止</span>
             </div>
             <div id="choices" class="choices" role="group" aria-labelledby="choice-title" aria-describedby="command-help"></div>
             <div id="career-actions" class="career-actions"></div>
             <div class="game-controls">
               <button id="undo-button" class="text-button">
-                ↶ ひとつ前の年に戻る</button
+                ↶ ひとつ前の方針に戻る</button
               ><span id="save-status"></span>
             </div>
             <div class="save-transfer">
@@ -861,21 +850,6 @@
         前提とプライバシー ↗
       </button>
     </footer>
-    <dialog id="reflection-dialog" aria-labelledby="reflection-title" aria-describedby="reflection-question reflection-note">
-      <div class="dialog-top">
-        <p class="eyebrow">CAREER CHECKPOINT / ひと息つこう</p>
-        <button type="button" class="close-button" data-close aria-label="今は書かずに進む">×</button>
-      </div>
-      <h2 id="reflection-title"></h2>
-      <p id="reflection-question"></p>
-      <form id="reflection-form">
-        <label for="reflection-line" class="field-label">いまの気持ちを一行（任意・80文字まで）</label>
-        <input id="reflection-line" name="reflection" type="text" maxlength="80" autocomplete="off" aria-describedby="reflection-note" />
-        <p id="reflection-note" class="field-note">セーブに残る自分用の記録です。AIには送りません。空欄やEscでも進めます。</p>
-        <p id="reflection-error" class="error" role="alert"></p>
-        <button type="submit" class="button primary">この一行を残して進む →</button>
-      </form>
-    </dialog>
     <dialog id="save-import-dialog" aria-labelledby="save-import-title">
       <div class="dialog-top">
         <h2 id="save-import-title">セーブを読み込みますか？</h2>
@@ -901,7 +875,7 @@
         Code（サブスク）に接続でき、ChatGPTやOpenCodeなどへ手動で依頼して返答を取り込むこともできます。接続しなくても遊べます。
       </p>
       <p>
-        1年ずつ、または5年・10年を同じ重点で進められます。複数年進行は途中の年をルールで処理し、勝手にAIを呼びません。いつでも巻き戻して選びなおせます。
+        5年ごとに方針を選び、各年の出来事を同じ画面で読み進めます。年の表示中に次の場面をAIで作ります。一時停止・倍速・まとめ表示ができ、ひとつ前の方針に戻して選びなおせます。
       </p>
     </dialog>
     <dialog id="assumptions-dialog">
@@ -944,7 +918,7 @@
       </div>
       <h2 id="ai-dialog-title">好きなAIを、つなぐ。</h2>
       <p id="ai-required-note" class="notice-box" hidden>
-        このゲームは、あなたの入力から毎年の場面と選択肢をAIで作ります。はじめる前に、使うAIを1つ接続してください。
+        このゲームは、あなたの入力から5年ごとの場面と方針をAIで作ります。はじめる前に、使うAIを1つ接続してください。
       </p>
       <p id="ai-description">
         動作した接続先とモデルはこのブラウザに記憶します。APIキーはサーバーのメモリにこの起動中だけ保持します。APIは従量課金です。CLI連携は公式CLIのログインを使い、普段の利用枠と共有します。このアプリはクレジットの購入・チャージを行いません。
@@ -1110,7 +1084,7 @@
           </p>
         </details>
         <label id="ai-consent-label" class="check-row" hidden
-          ><input id="ai-consent" type="checkbox" />このクラウドAIへ、毎年の場面づくりのために年齢・家計・勤務先・家族・選択履歴を送ることに同意します</label
+          ><input id="ai-consent" type="checkbox" />このクラウドAIへ、5年ごとの場面づくりのために年齢・家計・勤務先・家族・選択履歴を送ることに同意します</label
         >
         <p id="ai-accounting" class="field-note"></p>
         <p id="ai-test-status" class="field-note" role="status"></p>
@@ -1252,34 +1226,5 @@
         このゲームはJavaScriptを有効にすると遊べます。入力はブラウザ内で処理します。
       </p></noscript
     >
-
-    <dialog
-      id="journey-dialog"
-      class="journey-dialog"
-      aria-labelledby="journey-title"
-    >
-      <div class="dialog-heading">
-        <p class="eyebrow">THE YEARS YOU LIVED</p>
-        <button
-          type="button"
-          class="text-button"
-          data-close
-          aria-label="年ごとのキャリア記録を閉じる"
-        >
-          閉じる ×
-        </button>
-      </div>
-      <h2 id="journey-title"></h2>
-      <p id="journey-caption"></p>
-      <p class="field-note">
-        キャリアの選択と暮らしをたどる、ゲーム内の記録です。各年の結果をもとに組み立てています。
-      </p>
-      <div id="journey-years" class="journey-years"></div>
-      <div class="journey-footer">
-        <button type="button" id="journey-next" class="button primary">
-          次の選択へ →
-        </button>
-      </div>
-    </dialog>
   </body>
 </html>

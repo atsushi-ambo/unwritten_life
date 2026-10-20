@@ -5,7 +5,7 @@ import { File } from "node:buffer";
 import { createContext, runInContext } from "node:vm";
 import { parse } from "parse5";
 import {
-  createGame, advance, advanceYears, optionalProfileInputs, profileInputForLevel,
+  createGame, advance, advanceYears, advanceDirection, previousDirectionStep, optionalProfileInputs, profileInputForLevel,
   encodeSave, decodeSave, availableChoices, decisionId, replay, recordCareerReflection, careerSeenUntil,
 } from "../public/engine.js";
 import { careerMilestones, pendingCareerReflection } from "../public/careers.js";
@@ -42,7 +42,7 @@ function harness({ game = null, remember = false, stored = {} } = {}) {
   const context = createContext({
     $, game, remember, savedGame: null, corruptSave: null,
     pendingImportedGame: null, saveImportRevision: 0,
-    generating: false, revision: 0, lastJourney: null, activeReflection: null, favoriteYears: new Set(), favoritesOnly: false,
+    generating: false, revision: 0, lastJourney: null, favoriteYears: new Set(), favoritesOnly: false,
     saveKey, encodeSave, decodeSave, Blob, careerMilestones, pendingCareerReflection, recordCareerReflection,
     localStorage: {
       getItem: (key) => storage.get(key) ?? null,
@@ -61,13 +61,12 @@ function harness({ game = null, remember = false, stored = {} } = {}) {
     window: { scrollTo() {} },
     maybeGenerateScene() {},
     aiReady: () => true, hosted: false, serverStale: false, generationError: "",
-    moveToStory() {},
+    moveToStory() {}, resetTimeline() {}, timelineRevealing: () => false, scheduleYear() {},
     renderGame() { rendered++; runInContext("persist()", context); },
   });
   for (const [start, end] of [
     ["function readStoredGame()", "function readProfile()"],
     ["function showGame(", "function stat("],
-    ["function showReflection()", '$("journey-review").addEventListener'],
     ["function downloadSave(", 'if (hosted) {\n  $("ai-form").hidden'],
   ]) runInContext(app.slice(app.indexOf(start), app.indexOf(end)), context);
   return {
@@ -111,24 +110,15 @@ test("current and stored saves export JSON and round-trip through the actual fil
   assert.equal(await stored.downloads[0].blob.text(), raw);
 });
 
-test("import at a checkpoint asks once, persists a line, and treats closing as an optional skip", async () => {
+test("import at a checkpoint does not open a blocking dialog or prevent the next scene", async () => {
   const game = advance(createGame({ ...initial().profile, age: 29 }), "rest");
   const h = harness({ remember: true });
+  let requests = 0;
+  h.context.maybeGenerateScene = () => { requests++; };
   await h.importFile(file(encodeSave(game)));
-  assert.equal(h.$("reflection-dialog").open, true);
-  h.$("reflection-line").value = "これからも学びたい";
-  h.$("reflection-form").listeners.submit({ preventDefault() {} });
+  assert.equal(requests, 1);
   assert.equal(h.$("reflection-dialog").open, false);
-  assert.equal(decodeSave(h.storage.get(saveKey)).reflections["age-30"], "これからも学びたい");
-  runInContext("showGame()", h.context);
-  assert.equal(h.$("reflection-dialog").open, false);
-
-  const skipped = harness({ remember: true });
-  await skipped.importFile(file(encodeSave(game)));
-  skipped.$("reflection-dialog").close();
-  assert.equal(decodeSave(skipped.storage.get(saveKey)).reflections["age-30"], "");
-  runInContext("showGame()", skipped.context);
-  assert.equal(skipped.$("reflection-dialog").open, false);
+  assert.deepEqual(decodeSave(h.storage.get(saveKey)), game);
 });
 
 test("import persists only with the existing remember option and requires confirmation before replacing a game", async () => {
@@ -229,36 +219,30 @@ test("a newer file selection wins over a delayed read", async () => {
   assert.equal(h.rendered, 1);
 });
 
-test("career dialog decisions always advance one year while ordinary choices respect the year selector", () => {
-  for (const years of [5, 10]) {
-    const h = harness();
-    Object.assign(h.context, {
-      game: initial(), advanceYears, availableChoices, decisionId,
-      showJourney() {},
-    });
-    h.$("year-step").value = String(years);
-    for (const [start, end] of [
-      ["function commitChoice(", "function showJourney("],
-      ["function takeCareerDecision(", "function renderCareerOffers()"],
-    ]) runInContext(app.slice(app.indexOf(start), app.indexOf(end)), h.context);
-    for (const decision of ["rest", { id: "switch", target: "toyota", role: "tech" }]) {
-      h.context.game = initial();
-      h.context.decision = decision;
-      runInContext("takeCareerDecision(decision)", h.context);
-      assert.equal(h.context.game.decisions.length, 1);
-      assert.equal(h.context.game.age, 31);
-    }
+test("career and ordinary direction choices both advance five years", () => {
+  const h = harness();
+  Object.assign(h.context, { game: initial(), advanceDirection, availableChoices, decisionId });
+  for (const [start, end] of [
+    ["function commitChoice(", "function selectCommand("],
+    ["function takeCareerDecision(", "function renderCareerOffers()"],
+  ]) runInContext(app.slice(app.indexOf(start), app.indexOf(end)), h.context);
+  for (const decision of ["rest", { id: "switch", target: "toyota", role: "tech" }]) {
     h.context.game = initial();
-    runInContext('commitChoice("rest")', h.context);
-    assert.equal(h.context.game.decisions.length, years);
+    h.context.decision = decision;
+    runInContext("takeCareerDecision(decision)", h.context);
+    assert.equal(h.context.game.decisions.length, 5);
+    assert.equal(h.context.game.age, 35);
   }
+  h.context.game = initial();
+  runInContext('commitChoice("rest")', h.context);
+  assert.equal(h.context.game.decisions.length, 5);
 });
 
 test("undo retains the care-leave salary migration boundary and can repeat the recorded investment", async () => {
   const { save } = JSON.parse(await readFile(new URL("./fixtures/care-leave-save.json", import.meta.url), "utf8"));
   const game = decodeSave(JSON.stringify(save));
   const h = harness({ game });
-  Object.assign(h.context, { replay, careerSeenUntil, moveToStory() {} });
+  Object.assign(h.context, { replay, previousDirectionStep, careerSeenUntil, moveToStory() {} });
   runInContext(app.slice(
     app.indexOf('$("undo-button").addEventListener'),
     app.indexOf('$("compare-button").addEventListener'),

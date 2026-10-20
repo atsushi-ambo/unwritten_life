@@ -13,8 +13,8 @@ import {
   availableChoices,
   isRetiredAt,
   createGame,
-  advance,
-  advanceYears,
+  advanceDirection,
+  previousDirectionStep,
   optionalProfileInputs,
   PROFILE_DEFAULTS,
   profileInputForLevel,
@@ -39,7 +39,6 @@ import {
   CAREER_STATES,
   careerMap,
   careerMilestones,
-  pendingCareerReflection,
   careerRecord,
   careerRecordText,
   lifeStory,
@@ -57,7 +56,7 @@ import {
 import { storyRequest } from "./story.js";
 let knowledgeCatalog = KNOWLEDGE;
 let lastJourney = null;
-let activeReflection = null;
+let timelineShown = 0, timelinePaused = false, timelineTimer;
 let favoriteYears = new Set();
 let favoritesOnly = false;
 let profileLevel = "quick";
@@ -254,6 +253,7 @@ function showGame(focus = false) {
   favoriteYears = new Set();
   favoritesOnly = false;
   revision++;
+  resetTimeline();
   $("setup").hidden = true;
   $("game").hidden = false;
   renderGame();
@@ -261,7 +261,7 @@ function showGame(focus = false) {
     window.scrollTo({ top: 0, behavior: "instant" });
     $("chapter-title").focus({ preventScroll: true });
   }
-  if (!showReflection()) void maybeGenerateScene();
+  void maybeGenerateScene();
 }
 function stat(label, value, unit, delta, metric) {
   const el = node("div", undefined, "stat"),
@@ -280,8 +280,8 @@ function stat(label, value, unit, delta, metric) {
   if (delta) el.append(node("div", delta, "stat-delta"));
   return el;
 }
-function renderCareerMap(container) {
-  const tiles = careerMap(game);
+function renderCareerMap(container, state = game) {
+  const tiles = careerMap(state);
   container.replaceChildren(
     node("h3", "キャリアマップ"),
     node("p", `過ごした${tiles.length}年 · 1マスが1年`, "field-note"),
@@ -494,14 +494,17 @@ function moveToStory() {
     $("event-card").scrollIntoView({ block: "start", behavior: "instant" });
   $("chapter-title").focus({ preventScroll: true });
 }
-function commitChoice(decision, years = Number($("year-step").value)) {
+function commitChoice(decision) {
+  if (generating || timelineRevealing()) return;
   try {
-    const journey = advanceYears(game, decision, years, { pauseAtMilestones: true });
+    const journey = advanceDirection(game, decision);
     game = journey.game;
     lastJourney = journey;
     revision++;
+    timelinePaused = false;
     renderGame();
-    showJourney(journey);
+    scheduleYear();
+    void maybeGenerateScene();
   } catch (error) {
     toast(error.message);
   }
@@ -606,112 +609,258 @@ function incidentNote(h) {
   );
   return box;
 }
-function showJourney(journey) {
-  const first = journey.entries[0],
-    last = journey.entries.at(-1);
-  $("journey-title").textContent =
-    journey.entries.length === 1
-      ? `${first.year}年のキャリア記録。`
-      : `${first.year}〜${last.year}年、キャリアと暮らしの記録。`;
-  $("journey-caption").textContent =
-    `選んだ方針：${first.choiceLabel}。${journey.stopReason || `${journey.entries.length}年分のキャリアと暮らしを振り返り、次の方針を選べます。`}`;
-  const list = $("journey-years");
-  list.replaceChildren();
-  let previousIncome =
-    game.history.at(-journey.entries.length - 1)?.income ?? game.profile.income;
-  for (const h of journey.entries) {
-    const row = node("article", undefined, "journey-year");
-    row.append(
-      node("p", `${h.year} / ${h.age}歳`, "eyebrow"),
-      node("h3", h.episode?.title ?? h.outcome?.title ?? h.title),
-      node("p", h.episode?.body ?? h.note),
-    );
-    const incident = incidentNote(h);
-    if (incident) row.append(incident);
-    const delta = Math.round(h.income) - Math.round(previousIncome);
-    row.append(
-      node(
-        "small",
-        `年収 ${nf.format(Math.round(h.income))}万円（${delta >= 0 ? "+" : ""}${delta}） · 純資産 ${nf.format(Math.round(h.savings))}万円 · スキル ${Math.round(h.skill)} · ゆとり ${Math.round(h.health)}`,
-      ),
-    );
-    previousIncome = h.income;
-    appendBudget(row, h);
-    list.append(row);
-  }
-  $("journey-next").textContent = game.ended
-    ? "キャリアの歩みを振り返る →"
-    : `${game.year}年の選択へ →`;
-  $("journey-dialog").showModal();
+function timelineRevealing() {
+  return !!game && timelineShown < game.history.length;
 }
+// The engine has already finished the block. Only these status fields and map
+// tiles follow the reveal cursor; saves and AI requests keep using game.
+function revealedTimelineState(current, shown) {
+  if (shown >= current.history.length) return current;
+  const initial = createGame(current.profile, current.scenario, current.seed);
+  const entry = current.history[shown - 1];
+  // Cards carry the age during their year. Before the block's first card is
+  // out, show where the player stood when choosing: the year after the last
+  // earlier card.
+  const before = entry && shown <= (current.directionBlocks?.at(-1)?.[0] ?? -1)
+    ? { year: entry.year + 1, age: entry.age + 1 } : {};
+  return {
+    ...initial,
+    ...entry,
+    ...before,
+    history: current.history.slice(0, shown),
+    decisions: current.decisions.slice(0, shown),
+    retired: entry ? entry.choice === "retire" || entry.age >= current.profile.retirementAge : initial.retired,
+    ended: false,
+  };
+}
+function renderRevealedStatus() {
+  const state = revealedTimelineState(game, timelineShown),
+    initial = createGame(game.profile, game.scenario, game.seed),
+    previous = state.history.at(-2) ?? initial;
+  renderCareerMap($("career-map"), state);
+  $("chapter-label").textContent = state.ended
+    ? "A CAREER, A LIFE OF CHOICES."
+    : `${state.decisions.length}年が経過 / ${state.retired ? "仕事の先の暮らし" : "積み重なる、あなたのキャリア"}`;
+  $("chapter-title").textContent = state.ended
+    ? `${state.age}歳。キャリアと暮らしの歩みを振り返る。`
+    : `${state.year}年、${state.age}歳のキャリアと暮らし。`;
+  $("progress").value = state.decisions.length;
+  $("progress").max = MAX_AGE - game.profile.age;
+  $("hud-year").textContent = `${state.year}年`;
+  $("hud-age").textContent = `${state.age}歳`;
+  for (const [id, key, caption] of [["hud-income", "income", "年金等を含む"], ["hud-savings", "savings", "借入を差し引いた額"]]) {
+    const delta = Math.round((state[key] - previous[key]) / 10) * 10;
+    $(id).textContent = `約${money(state[key])}万円`;
+    $(id).title = caption + (state.history.length
+      ? `（${delta ? `${delta > 0 ? "+" : "−"}${nf.format(Math.abs(delta))}万円 / 前年比` : "前年とほぼ同じ"}）` : "");
+  }
+}
+function timelineSentences(text = "") {
+  return (text.replace(/選んだ方針は「[^」]*」。?/gu, "").match(/[^。！？\n]+[。！？]?/gu) ?? [])
+    .map((sentence) => sentence.trim()).filter(Boolean);
+}
+function timelineSummary(entry, previous) {
+  const used = new Set([previous?.outcome?.body, previous?.episode?.body, previous?.note]
+    .flatMap((text) => timelineSentences(text)).map((text) => text.replace(/\s/gu, "")));
+  // Episode openings describe the year; its later detours and intentions are
+  // invitations for another choice, so they belong in the full text only.
+  const candidates = [...timelineSentences(entry.outcome?.body),
+    ...timelineSentences(entry.episode?.body ?? entry.note).slice(0, 1)];
+  const summary = [];
+  for (const sentence of candidates) {
+    const key = sentence.replace(/\s/gu, "");
+    if (used.has(key)) continue;
+    used.add(key);
+    summary.push(sentence);
+    if (summary.length === 2) break;
+  }
+  return summary.join("");
+}
+function appendTimelineYear(h, index) {
+  const before = game.history[index - 1] ?? createGame(game.profile, game.scenario, game.seed);
+  const row = node("article", undefined, "journey-year");
+  row.dataset.year = h.year;
+  row.append(
+    node("p", `${h.year}年 / ${h.age}歳`, "eyebrow"),
+    node("h3", h.outcome?.title ?? h.episode?.title ?? h.title),
+  );
+  if (index === 0 || game.directionBlocks?.some(([start]) => start === index))
+    row.append(node("p", `選んだ方針は「${h.intention ?? h.choiceLabel}」。`, "timeline-direction"));
+  const summary = timelineSummary(h, game.history[index - 1]);
+  if (summary) row.append(node("p", summary, "timeline-summary"));
+  const incident = incidentNote(h);
+  if (incident) row.append(incident);
+  const signed = (n) => `${n >= 0 ? "+" : "−"}${nf.format(Math.abs(n))}`;
+  row.append(node("small",
+    `年収 ${nf.format(Math.round(h.income))}万円（${signed(Math.round(h.income) - Math.round(before.income))}） · 純資産 ${nf.format(Math.round(h.savings))}万円（${signed(Math.round(h.savings) - Math.round(before.savings))}）`,
+  ));
+  const details = node("details", undefined, "timeline-details"),
+    original = h.episode?.body ?? h.outcome?.body ?? h.note;
+  details.append(node("summary", "詳しく見る"), node("p", original, "timeline-original"));
+  if (h.outcome?.body && !original.includes(h.outcome.body))
+    details.append(node("p", h.outcome.body));
+  if (h.employer.name !== before.employer.name)
+    details.append(node("p", `勤務先：${before.employer.name} → ${h.employer.name}`));
+  if (h.position && before.position && h.position.rank !== before.position.rank)
+    details.append(node("p", `役割：${RANKS[before.position.rank].label} → ${RANKS[h.position.rank].label}`));
+  if (h.choice === "move") {
+    const decision = game.decisions[index];
+    details.append(node("p", `住まいの移動：${typeof decision === "object" && decision.region ? REGIONS[decision.region].label : h.note}`));
+  }
+  if (h.familyOutcome && h.familyOutcome !== h.outcome)
+    details.append(node("p", `${h.familyOutcome.title} ${h.familyOutcome.body}`));
+  appendBudget(details, h);
+  row.append(details);
+  for (const milestone of careerMilestones(game).filter((m) => m.step === index + 1))
+    appendReflection(row, milestone);
+  $("journey-years").append(row);
+  return row;
+}
+function appendReflection(row, milestone) {
+  const box = node("section", undefined, "timeline-reflection");
+  box.dataset.milestone = milestone.id;
+  box.append(node("h4", `${milestone.age}歳、ひと息の一行`), node("p", milestone.question));
+  if (Object.hasOwn(game.reflections, milestone.id)) {
+    box.append(node("p", game.reflections[milestone.id] || "この節目は、書かずに通り過ぎました。", "field-note"));
+  } else {
+    const form = node("form"), label = node("label", "いまの気持ち（任意・80文字まで）", "field-label"),
+      input = node("input"), save = node("button", "一行を残す", "button secondary small"),
+      skip = node("button", "今は書かない", "text-button"), error = node("p", "", "error");
+    input.id = `reflection-${milestone.id}`;
+    input.type = "text";
+    input.maxLength = 80;
+    input.autocomplete = "off";
+    input.setAttribute("aria-describedby", "reflection-note");
+    label.htmlFor = input.id;
+    save.type = "submit";
+    skip.type = "button";
+    error.setAttribute("role", "alert");
+    const finish = (text) => {
+      if (!box.isConnected) return;
+      try {
+        game = recordCareerReflection(game, milestone.id, text);
+        form.replaceChildren(node("p", text || "この節目は、書かずに通り過ぎました。", "field-note"));
+        persist();
+        // The ending résumé (and its copy text) was built before this line.
+        $("ending-resume")?.replaceWith(renderCareerResume());
+      } catch (e) { error.textContent = e.message; }
+    };
+    form.addEventListener("submit", (event) => { event.preventDefault(); finish(input.value); });
+    skip.addEventListener("click", () => finish(""));
+    form.append(label, input, save, skip, error);
+    box.append(form);
+  }
+  row.append(box);
+}
+function resetTimeline() {
+  clearTimeout(timelineTimer);
+  timelinePaused = false;
+  timelineUserScrolledUpAt = -Infinity;
+  timelineShown = game?.history.length ?? 0;
+  $("journey-years").replaceChildren();
+  for (const [index, h] of (game?.history ?? []).entries()) appendTimelineYear(h, index);
+}
+function renderTimelineControls() {
+  const revealing = timelineRevealing();
+  $("timeline").hidden = !game.history.length;
+  $("timeline-controls").hidden = !revealing;
+  $("timeline-pause").textContent = timelinePaused ? "再開" : "一時停止";
+  $("timeline-pause").setAttribute("aria-pressed", String(timelinePaused));
+  $("timeline-speed").value = String(timelineSpeed);
+  $("timeline-status").textContent = revealing
+    ? `${timelineShown - (game.history.length - lastJourney.entries.length)} / ${lastJourney.entries.length}年${timelinePaused ? " · 一時停止中" : " · 年月が流れています"}`
+    : lastJourney?.stopReason || "ここまでの年月を振り返り、次の5年の方針を選べます。";
+}
+function scheduleYear() {
+  clearTimeout(timelineTimer);
+  if (timelinePaused || !timelineRevealing()) return;
+  timelineTimer = setTimeout(() => {
+    const row = appendTimelineYear(game.history[timelineShown], timelineShown);
+    timelineShown++;
+    renderRevealedStatus();
+    if (timelineRevealing()) {
+      renderTimelineControls();
+      scrollTimelineTo(row);
+      scheduleYear();
+    } else {
+      renderGame();
+      scrollTimelineTo($("event-card"));
+    }
+  }, 6000 / timelineSpeed);
+}
+function toggleTimelinePause() {
+  if (!timelineRevealing()) return;
+  timelinePaused = !timelinePaused;
+  renderTimelineControls();
+  scheduleYear();
+}
+// Only real input counts as reading back: a scroll event alone may be a dialog
+// restoring its position or the layout shifting, not the player.
+let timelineUserScrolledUpAt = -Infinity, timelineTouchY = null,
+  timelineScrollbarHeld = false, timelineLastScrollY = window.scrollY;
+function scrollTimelineTo(element) {
+  const now = performance.now();
+  if (now - timelineUserScrolledUpAt < 4000 || document.querySelector("dialog[open]") ||
+    document.activeElement?.closest("input, textarea, select, [contenteditable]")) return;
+  element.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+}
+// A scrollbar drag has no wheel or touch event: count an upward scroll only
+// while the pointer is held on the scrollbar (beyond the page's width).
+window.addEventListener("pointerdown", (event) => {
+  timelineScrollbarHeld = event.clientX >= document.documentElement.clientWidth;
+}, { passive: true });
+window.addEventListener("pointerup", () => { timelineScrollbarHeld = false; }, { passive: true });
+window.addEventListener("scroll", () => {
+  const y = window.scrollY;
+  if (timelineScrollbarHeld && y < timelineLastScrollY) timelineUserScrolledUpAt = performance.now();
+  timelineLastScrollY = y;
+}, { passive: true });
+window.addEventListener("wheel", (event) => {
+  if (event.deltaY < 0) timelineUserScrolledUpAt = performance.now();
+}, { passive: true });
+window.addEventListener("touchstart", (event) => { timelineTouchY = event.touches[0]?.clientY ?? null; }, { passive: true });
+window.addEventListener("touchmove", (event) => {
+  const y = event.touches[0]?.clientY;
+  if (timelineTouchY !== null && y > timelineTouchY) timelineUserScrolledUpAt = performance.now();
+  timelineTouchY = y ?? null;
+}, { passive: true });
+document.addEventListener("keydown", (event) => {
+  if (["ArrowUp", "PageUp", "Home"].includes(event.key) &&
+    !event.target.closest("input, textarea, select, button, [contenteditable]"))
+    timelineUserScrolledUpAt = performance.now();
+});
+let timelineSpeed = 1;
+try { if (localStorage.getItem("unwritten-life:timeline-speed") === "2") timelineSpeed = 2; } catch {}
+$("timeline-pause").addEventListener("click", toggleTimelinePause);
+$("timeline-speed").addEventListener("change", () => {
+  timelineSpeed = $("timeline-speed").value === "2" ? 2 : 1;
+  try { localStorage.setItem("unwritten-life:timeline-speed", String(timelineSpeed)); } catch {}
+  scheduleYear();
+});
 $("journey-next").addEventListener("click", () => {
-  $("journey-dialog").close();
-});
-$("journey-dialog").addEventListener("close", () => {
-  if (!showReflection()) {
-    moveToStory();
-    void maybeGenerateScene();
+  clearTimeout(timelineTimer);
+  while (timelineRevealing()) {
+    appendTimelineYear(game.history[timelineShown], timelineShown);
+    timelineShown++;
   }
-});
-function showReflection() {
-  const milestone = game && pendingCareerReflection(game);
-  if (!milestone) return false;
-  if ($("reflection-dialog").open) return true;
-  activeReflection = { ...milestone, revision };
-  $("reflection-title").textContent = `${milestone.age}歳、${milestone.id === "retirement" ? "仕事の区切りに" : "キャリアの途中で"}。`;
-  $("reflection-question").textContent = milestone.question;
-  $("reflection-line").value = "";
-  $("reflection-error").textContent = "";
-  $("reflection-dialog").showModal();
-  syncReflectionViewport();
-  $("reflection-line").focus({ preventScroll: true });
-  return true;
-}
-function syncReflectionViewport() {
-  const dialog = $("reflection-dialog"), viewport = window.visualViewport;
-  if (!dialog.open || !viewport) return;
-  if (!window.matchMedia("(max-width: 640px)").matches) {
-    dialog.style.removeProperty("top");
-    dialog.style.removeProperty("max-height");
-    return;
-  }
-  // The keyboard can shrink only the visual viewport, leaving vh/dvh unchanged.
-  dialog.style.top = `max(${viewport.offsetTop + 12}px, env(safe-area-inset-top))`;
-  dialog.style.maxHeight = `calc(${Math.max(0, viewport.height - 24)}px - env(safe-area-inset-top) - env(safe-area-inset-bottom))`;
-  if (document.activeElement === $("reflection-line")) {
-    const input = $("reflection-line").getBoundingClientRect();
-    const bottom = viewport.offsetTop + viewport.height - 92;
-    if (input.bottom > bottom) dialog.scrollTop += input.bottom - bottom;
-    else if (input.top < viewport.offsetTop + 24) dialog.scrollTop -= viewport.offsetTop + 24 - input.top;
-  }
-}
-function finishReflection(text) {
-  if (!activeReflection || activeReflection.revision !== revision) return;
-  try {
-    game = recordCareerReflection(game, activeReflection.id, text);
-  } catch (error) {
-    $("reflection-error").textContent = error.message;
-    return;
-  }
-  activeReflection = null;
-  $("reflection-dialog").close();
+  timelinePaused = false;
   renderGame();
-  moveToStory();
-  void maybeGenerateScene();
-}
-$("reflection-form").addEventListener("submit", (event) => {
+  scrollTimelineTo($("event-card"));
+});
+document.addEventListener("keydown", (event) => {
+  if (event.code !== "Space" || event.repeat || event.altKey || event.ctrlKey || event.metaKey ||
+    !timelineRevealing() || document.querySelector("dialog[open]") ||
+    event.target.closest("input, textarea, select, button, [contenteditable]")) return;
   event.preventDefault();
-  finishReflection($("reflection-line").value);
-});
-$("reflection-dialog").addEventListener("close", () => {
-  if (activeReflection) finishReflection("");
-});
-$("journey-review").addEventListener("click", () => {
-  if (lastJourney) showJourney(lastJourney);
+  toggleTimelinePause();
 });
 function renderGame() {
-  renderCareerMap($("career-map"));
-  $("journey-review").hidden = !lastJourney;
+  renderRevealedStatus();
+  renderTimelineControls();
+  const revealing = timelineRevealing();
+  $("event-card").hidden = revealing;
+  $("choices").hidden = revealing;
+  $("career-actions").hidden = revealing;
   const complete = game.ended,
     initial = createGame(game.profile, game.scenario, game.seed),
     previous = game.history.length > 1 ? game.history.at(-2) : initial;
@@ -723,12 +872,6 @@ function renderGame() {
       ? "前年とほぼ同じ"
       : `${n > 0 ? "+" : "−"}${nf.format(Math.abs(n))}${monetary ? "万円" : ""} / 前年比`;
   };
-  $("chapter-label").textContent = complete
-    ? "A CAREER, A LIFE OF CHOICES."
-    : `${game.decisions.length}年が経過 / ${game.retired ? "仕事の先の暮らし" : "積み重なる、あなたのキャリア"}`;
-  $("chapter-title").textContent = complete
-    ? `${game.age}歳。キャリアと暮らしの歩みを振り返る。`
-    : `${game.year}年、${game.age}歳のキャリアと暮らし。`;
   $("profile-caption").textContent = [
     residenceName(game),
     JOBS[game.employer.role].label,
@@ -755,14 +898,6 @@ function renderGame() {
     .filter(Boolean)
     .join(" / ");
   $("world-badge").textContent = `AIの未来：${SCENARIOS[game.scenario].label}`;
-  $("progress").value = game.decisions.length;
-  $("progress").max = MAX_AGE - game.profile.age;
-  $("hud-year").textContent = `${game.year}年`;
-  $("hud-age").textContent = `${game.age}歳`;
-  $("hud-income").textContent = `約${money(game.income)}万円`;
-  $("hud-income").title = "年金等を含む" + (change("income", true) && `（${change("income", true)}）`);
-  $("hud-savings").textContent = `約${money(game.savings)}万円`;
-  $("hud-savings").title = "借入を差し引いた額" + (change("savings", true) && `（${change("savings", true)}）`);
   // Income and net worth sit in the top band; the sidebar keeps the four
   // indicators and folds the money breakdown away.
   const breakdown = node("details", undefined, "money-breakdown");
@@ -832,75 +967,6 @@ function renderGame() {
   }
   const card = $("event-card");
   card.replaceChildren();
-  const resultCard = $("year-result");
-  resultCard.replaceChildren();
-  resultCard.hidden = !game.history.length || !!lastJourney;
-  if (game.history.length) {
-    const h = game.history.at(-1),
-      before = game.history.at(-2) ?? initial;
-    resultCard.append(
-      node("p", `${h.year}年のキャリアと暮らし → この一年の結果`, "eyebrow"),
-      node("p", `選んだこと：${h.choiceLabel}`, "result-choice"),
-      node("h2", h.outcome?.title ?? h.choiceLabel),
-      node("p", h.outcome?.body ?? h.note),
-    );
-    const incident = incidentNote(h);
-    if (incident) resultCard.append(incident);
-    const changes = node("div", undefined, "result-changes");
-    for (const [label, key, unit] of [
-      ["年収", "income", "万円"],
-      ["純資産", "savings", "万円"],
-      ["ゆとり", "health", ""],
-      ["つながり", "connection", ""],
-      ["仕事・AIスキル", "skill", ""],
-    ]) {
-      const from = Math.round(before[key]),
-        to = Math.round(game[key]),
-        delta = to - from;
-      changes.append(
-        node(
-          "span",
-          `${label} ${nf.format(from)} → ${nf.format(to)}${unit}（${delta >= 0 ? "+" : ""}${nf.format(delta)}）`,
-        ),
-      );
-    }
-    resultCard.append(changes);
-    appendBudget(resultCard, h);
-    if (h.familyOutcome && h.familyOutcome !== h.outcome)
-      resultCard.append(
-        node(
-          "p",
-          `${h.familyOutcome.title} ${h.familyOutcome.body}`,
-          "result-factors",
-        ),
-      );
-    if (h.world) {
-      const learning = h.studyHours - (game.history.at(-2)?.studyHours ?? 0);
-      resultCard.append(
-        node(
-          "p",
-          `外からの影響：${h.world.economy.label} / ${h.world.company.label} / ${h.world.shock.label}。収入・株式・生活費に反映。${learning ? ` 学びに${learning}時間を使い、スキルは蓄積。評価の結果は別に抽選。` : ""}${h.familyCost ? ` 新しく迎えた家族の追加費用：年${h.familyCost}万円。` : ""}`,
-          "result-factors",
-        ),
-      );
-      if (h.outcome?.chance !== undefined)
-        resultCard.append(
-          node(
-            "p",
-            `今回の取り組みが評価につながる抽選確率：${Math.round(h.outcome.chance * 100)}%（スキル・ゆとり・需要から決めたゲームの仮定）`,
-            "field-note",
-          ),
-        );
-    }
-    if (h.businessSetup || h.businessOverhead || h.outcome?.extraCost)
-      resultCard.append(
-        node(
-          "p",
-          `開業費 ${h.businessSetup}万円 / 年間運営費 ${h.businessOverhead}万円 / 結果による追加費用 ${h.outcome?.extraCost ?? 0}万円`,
-          "field-note",
-        ),
-      );
-  }
   const choices = $("choices");
   choices.replaceChildren();
   $("career-actions").replaceChildren();
@@ -958,7 +1024,7 @@ function renderGame() {
     card.append(node("p", `AIが考える場面 / ${game.year}`, "eyebrow"));
     if (generating) {
       card.append(
-        node("h2", "次の一年を考えています…"),
+        node("h2", "次の5年を考えています…"),
         node(
           "p",
           "これまでの選択と結果、仕事・家計・家族の条件から、AIが場面と4つの選択肢をつくっています。",
@@ -976,7 +1042,7 @@ function renderGame() {
           ready
             ? generationError ||
                 "AIの返答を待っています。もう一度生成してください。"
-            : "このゲームは毎年の場面と選択肢をAIで作ります。AIを接続すると、この年から続けられます。",
+            : "このゲームは5年ごとの場面と方針をAIで作ります。AIを接続すると、この年から続けられます。",
         ),
       );
       const actions = node("div", undefined, "scene-retry");
@@ -1092,7 +1158,7 @@ function renderGame() {
       choices.append(button);
     }
   }
-  $("choice-title").parentElement.hidden = complete || !eventFor(game).generated;
+  $("choice-title").parentElement.hidden = revealing || complete || !eventFor(game).generated;
   $("undo-button").disabled = game.decisions.length === 0 || generating;
   renderHistory();
   $("context-preview").textContent = JSON.stringify(
@@ -1102,6 +1168,8 @@ function renderGame() {
   );
   renderKnowledge();
   renderAI();
+  for (const button of $("career-offers").querySelectorAll(".career-offer-button"))
+    button.disabled = generating || revealing;
   persist();
 }
 function aiReady() {
@@ -1113,7 +1181,6 @@ function renderAI() {
   const ready = aiReady();
   for (const id of ["quick-start", "demo-button", "resume-button"]) $(id).disabled = serverStale;
   if (serverStale) $("ai-submit").disabled = true;
-  $("year-step").disabled = generating || serverStale;
   $("ai-status").classList.toggle("is-generating", generating);
   $("event-card").setAttribute("aria-busy", String(generating));
   $("ai-status").textContent = serverStale ? staleNotice : generating
@@ -1167,7 +1234,6 @@ async function maybeGenerateScene() {
     !game ||
     game.ended ||
     generating ||
-    pendingCareerReflection(game) ||
     !aiReady() ||
     eventFor(game).generated
   )
@@ -1335,6 +1401,7 @@ $("game-delete-save").addEventListener("click", removeSave);
 $("back-setup").addEventListener("click", () => {
   if (generating) return;
   revision++;
+  clearTimeout(timelineTimer);
   $("game").hidden = true;
   $("setup").hidden = false;
   readStoredGame();
@@ -1345,7 +1412,8 @@ $("undo-button").addEventListener("click", () => {
   lastJourney = null;
   const reflections = game.reflections,
     seen = game.careerSeen;
-  const length = game.decisions.length - 1,
+  const length = previousDirectionStep(game),
+    blocks = game.directionBlocks?.filter(([, end]) => end <= length),
     scenes = Object.fromEntries(
       Object.entries(game.scenes).filter(([k]) => Number(k) <= length),
     );
@@ -1353,7 +1421,7 @@ $("undo-button").addEventListener("click", () => {
     game.profile,
     game.scenario,
     game.seed,
-    game.decisions.slice(0, -1),
+    game.decisions.slice(0, length),
     scenes,
     false,
     game.dynamicFrom,
@@ -1367,13 +1435,16 @@ $("undo-button").addEventListener("click", () => {
     game.careerPathFrom,
     game.careerEndFrom,
     game.payRealismFrom,
+    blocks,
   );
   const reached = new Set(careerMilestones(game).map((m) => m.id));
   game.reflections = Object.fromEntries(Object.entries(reflections).filter(([id]) => reached.has(id)));
   game.careerSeen = careerSeenUntil({ careerSeen: seen }, game.decisions.length);
   favoriteYears = new Set([...favoriteYears].filter((year) => year < game.year));
   revision++;
+  resetTimeline();
   renderGame();
+  void maybeGenerateScene();
   moveToStory();
 });
 $("compare-button").addEventListener("click", openComparison);
@@ -1740,10 +1811,10 @@ async function generateCareerChoices() {
 }
 $("career-generate").addEventListener("click", generateCareerChoices);
 function takeCareerDecision(decision) {
-  if (generating || !availableChoices(game).includes(decisionId(decision)))
+  if (generating || timelineRevealing() || !availableChoices(game).includes(decisionId(decision)))
     throw new Error("今の状態では選べません。");
   $("career-dialog").close();
-  commitChoice(decision, 1);
+  commitChoice(decision);
 }
 function renderCareerOffers() {
   const container = $("career-offers");
@@ -1771,7 +1842,7 @@ function renderCareerOffers() {
     const card = node("article", undefined, "career-offer");
     const button = node("button", undefined, "career-offer-button");
     button.type = "button";
-    button.disabled = generating;
+    button.disabled = generating || timelineRevealing();
     button.append(
       node("small", offer.label, "career-offer-label"),
       node("strong", offer.company),
@@ -2515,8 +2586,6 @@ if (hosted) {
   for (const el of document.querySelectorAll("[data-pc-only]"))
     el.hidden = true;
 }
-window.visualViewport?.addEventListener("resize", syncReflectionViewport);
-window.visualViewport?.addEventListener("scroll", syncReflectionViewport);
 readStoredGame();
 updateMunicipalityRegion();
 status()

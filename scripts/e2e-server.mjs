@@ -21,7 +21,9 @@ let calls = 0;
 const accounting = (cloud) => ({
   provider: cloud ? "openai" : "ollama", model: "e2e-synthetic", ready: true, verifiedAt: "2026-10-19T00:00:00.000Z", verificationSeconds: 0.01, cloud,
   baseURL: cloud ? "https://api.openai.com/v1" : "http://127.0.0.1:11434",
-  calls, reservedUSD: 0, requestCap: cloud ? 2000 : 100, usdCap: cloud ? 5 : 1, inputRate: 0, outputRate: 0, busy: false,
+  // The suite shares one synthetic server, and the timeline prefetches the next
+  // scene, so the local cap is far above what a single test uses.
+  calls, reservedUSD: 0, requestCap: cloud ? 2000 : 5000, usdCap: cloud ? 5 : 1, inputRate: 0, outputRate: 0, busy: false,
 });
 const ai = {
   status: () => accounting(false),
@@ -32,7 +34,8 @@ const ai = {
     return { ...fakeScene(save, mode), accounting: accounting(false) };
   },
 };
-const pc = makeServer({ ai,
+// Every browser test shares this server, so it allows more than one player does.
+const pc = makeServer({ ai, requestsPerMinute: 2000,
   research: async () => { throw Error("External research disabled in browser tests"); },
   searchCompanies: async () => [],
 });

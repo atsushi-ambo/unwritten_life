@@ -86,7 +86,7 @@ test("career renderer shows only AI offers, waits while generating, and preserve
   const context = createContext({
     $, node, revision: 1, careerMode: "switch", careerDraft: null,
     careerGenerating: false, generating: false, careerError: "",
-    game: createGame(profile),
+    game: createGame(profile), timelineRevealing: () => false,
     takeCareerDecision: (d) => decisions.push(d),
     toast: (message) => assert.fail(message),
   });
@@ -114,4 +114,7 @@ test("career renderer shows only AI offers, waits while generating, and preserve
   assert.equal($("career-offers").children.length, 1);
   $("career-offers").children[0].children[0].listeners.click();
   assert.equal(decisions[0], context.careerDraft.scene.options[0].decision);
+  context.timelineRevealing = () => true;
+  runInContext("renderCareerOffers()", context);
+  assert.equal($("career-offers").children[0].children[0].disabled, true);
 });

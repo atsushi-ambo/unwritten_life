@@ -104,25 +104,6 @@ test("command cursor follows touch even when Safari leaves keyboard focus elsewh
   assert.equal(buttons[1].dataset.active, "false");
 });
 
-test("checkpoint follows the visible keyboard viewport and keeps room below the input", () => {
-  const input = { getBoundingClientRect: () => ({ top: 250, bottom: 294 }) };
-  const dialog = { open: true, style: {}, scrollTop: 0 };
-  const viewport = { height: 300, offsetTop: 30 };
-  const context = createContext({
-    $: (id) => id === "reflection-dialog" ? dialog : input,
-    window: { visualViewport: viewport, matchMedia: () => ({ matches: true }) },
-    document: { activeElement: input },
-  });
-  runInContext(app.slice(app.indexOf("function syncReflectionViewport()"), app.indexOf("function finishReflection(")), context);
-  runInContext("syncReflectionViewport()", context);
-  assert.equal(dialog.style.top, "max(42px, env(safe-area-inset-top))");
-  assert.equal(dialog.style.maxHeight, "calc(276px - env(safe-area-inset-top) - env(safe-area-inset-bottom))");
-  assert.equal(dialog.scrollTop, 56);
-  dialog.open = false;
-  viewport.height = 800;
-  runInContext("syncReflectionViewport()", context);
-  assert.equal(dialog.style.maxHeight, "calc(276px - env(safe-area-inset-top) - env(safe-area-inset-bottom))");
-});
 
 test("favorites filter a newest-first log without changing a save, and preserve usable focus", () => {
   const game = advance(advance(createGame(profile), "rest"), "studyDaily"), before = encodeSave(game);

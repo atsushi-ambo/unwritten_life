@@ -6,7 +6,7 @@ import {
   createGame, advance, advanceYears, availableChoices, suggestedChoices,
   eventFor, amortizeYear, encodeSave, decodeSave, replay, compareWorlds,
   applyScene, validateGeneratedScene, profileStoryContext, MAX_AGE, CHOICES,
-  careerSeenUntil,
+  careerSeenUntil, previousDirectionStep,
 } from "../public/engine.js";
 import { storyRequest, sceneSchema } from "../public/story.js";
 import { careerMilestones } from "../public/careers.js";
@@ -372,9 +372,9 @@ test("the UI undo handler preserves the migrated boundary when undoing prepaymen
   const migrated = decodeSave(JSON.stringify(saved)),
     paid = advance(migrated, "prepay"), button = {},
     context = createContext({
-      game: paid, generating: false, lastJourney: {}, revision: 0, replay, careerMilestones, careerSeenUntil, favoriteYears: new Set(),
+      game: paid, generating: false, lastJourney: {}, revision: 0, replay, previousDirectionStep, careerMilestones, careerSeenUntil, favoriteYears: new Set(),
       $: () => ({ addEventListener(_type, handler) { button.click = handler; } }),
-      renderGame() {}, moveToStory() {},
+      renderGame() {}, moveToStory() {}, resetTimeline() {}, maybeGenerateScene() {},
     });
   runInContext(app.slice(app.indexOf('$("undo-button").addEventListener'),
     app.indexOf('$("compare-button").addEventListener')), context);
@@ -392,10 +392,10 @@ test("UI undo and retry preserve the debt repayment boundary", () => {
   for (let i = 0; i < 3; i++) g = advance(g, "rest");
   const paid = advance(g, "rest"), button = {},
     context = createContext({
-      game: paid, generating: false, lastJourney: {}, revision: 0, replay, createGame, careerMilestones, careerSeenUntil, favoriteYears: new Set(),
+      game: paid, generating: false, lastJourney: {}, revision: 0, replay, previousDirectionStep, createGame, careerMilestones, careerSeenUntil, favoriteYears: new Set(),
       $: () => ({ addEventListener(_type, handler) { button.click = handler; } }),
       again: { addEventListener(_type, handler) { button.retry = handler; } },
-      renderGame() {}, moveToStory() {}, showGame() {},
+      renderGame() {}, moveToStory() {}, resetTimeline() {}, maybeGenerateScene() {}, showGame() {},
     });
   assert.ok(paid.history.at(-1).debtRepayment > 0);
   runInContext(app.slice(app.indexOf('$("undo-button").addEventListener'),
@@ -431,7 +431,7 @@ test("year results and history show signed budgets safely and legacy entries wit
     }, context = createContext({ node, $, game: g,
       nf: new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 0 }) });
   runInContext(app.slice(app.indexOf("function appendBudget("),
-    app.indexOf('$("journey-next").addEventListener')), context);
+    app.indexOf("function timelineRevealing()")), context);
   const parent = node("article");
   context.parent = parent;
   context.h = h;
@@ -456,10 +456,10 @@ test("year results and history show signed budgets safely and legacy entries wit
   context.h = legacy;
   runInContext("appendBudget(parent, h)", context);
   assert.equal(parent.children.length, 1);
-  context.journey = { entries: [h, legacy], stopReason: "" };
-  runInContext("showJourney(journey)", context);
-  assert.equal($("journey-years").children.length, 2);
-  assert.match(text($("journey-years").children[0]), /家計の内訳/);
-  assert.doesNotMatch(text($("journey-years").children[1]), /家計の内訳/);
-  assert.equal($("journey-dialog").open, true);
+  // Inline timeline cards use the same budget renderer (covered by the
+  // timeline handler tests); legacy records remain readable without budgets.
+  const legacyRow = node("article");
+  context.parent = legacyRow;
+  runInContext("appendBudget(parent, h)", context);
+  assert.equal(legacyRow.children.length, 0);
 });
