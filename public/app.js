@@ -22,7 +22,6 @@ import {
   replay,
   compareWorlds,
   eventFor,
-  technologyAt,
   encodeSave,
   decodeSave,
   applyScene,
@@ -83,6 +82,7 @@ let game = null,
   revision = 0,
   customCost = false,
   regionRevealed = false,
+  moneyBreakdownOpen = false,
   manualRegion = false,
   careerMode = "switch",
   careerSources = [],
@@ -716,7 +716,7 @@ function renderGame() {
     initial = createGame(game.profile, game.scenario, game.seed),
     previous = game.history.length > 1 ? game.history.at(-2) : initial;
   const change = (key, monetary = false) => {
-    if (!game.history.length) return "あなたの現在地";
+    if (!game.history.length) return "";
     const d = game[key] - previous[key],
       n = monetary ? Math.round(d / 10) * 10 : Math.round(d);
     return n === 0
@@ -759,21 +759,17 @@ function renderGame() {
   $("progress").max = MAX_AGE - game.profile.age;
   $("hud-year").textContent = `${game.year}年`;
   $("hud-age").textContent = `${game.age}歳`;
-  $("hud-cash").textContent = `${money(game.cash)}万円`;
-  $("hud-health").textContent = `${Math.round(game.health)} / 100`;
-  $("stats").replaceChildren(
-    stat(
-      "年収（年金等含む）",
-      `約${money(game.income)}`,
-      "万円",
-      change("income", true),
-    ),
-    stat(
-      "純資産（借入控除後）",
-      `約${money(game.savings)}`,
-      "万円",
-      change("savings", true),
-    ),
+  $("hud-income").textContent = `約${money(game.income)}万円`;
+  $("hud-income").title = "年金等を含む" + (change("income", true) && `（${change("income", true)}）`);
+  $("hud-savings").textContent = `約${money(game.savings)}万円`;
+  $("hud-savings").title = "借入を差し引いた額" + (change("savings", true) && `（${change("savings", true)}）`);
+  // Income and net worth sit in the top band; the sidebar keeps the four
+  // indicators and folds the money breakdown away.
+  const breakdown = node("details", undefined, "money-breakdown");
+  breakdown.open = moneyBreakdownOpen;
+  breakdown.addEventListener("toggle", () => { moneyBreakdownOpen = breakdown.open; });
+  breakdown.append(
+    node("summary", "お金の内訳"),
     stat("手元の現金", money(game.cash), "万円"),
     stat("株式・投信", money(game.investments), "万円"),
     stat(
@@ -782,7 +778,9 @@ function renderGame() {
       "万円",
     ),
     stat("その他の借入", money(game.debt), "万円"),
-    stat("仕事とAIのスキル", String(Math.round(game.skill)), "/100"),
+  );
+  $("stats").replaceChildren(
+    stat("仕事とAIのスキル", String(Math.round(game.skill)), "/100", change("skill"), game.skill),
     stat(
       "心と体のゆとり",
       String(Math.round(game.health)),
@@ -804,15 +802,11 @@ function renderGame() {
       change("freedom"),
       game.freedom,
     ),
+    breakdown,
   );
-  const level = technologyAt(game);
-  $("ai-stage").textContent =
-    level < 0.3 ? "広がりはじめ" : level < 0.6 ? "日常の中へ" : "社会の基盤へ";
-  $("ai-progress").value = level;
   const worldPanel = $("world-context");
   worldPanel.replaceChildren();
   worldPanel.hidden = !worldEnabled(game);
-  $("capability-progress").value = worldAt(game).capability;
   if (worldEnabled(game)) {
     const w = worldAt(game),
       f = game.family;
@@ -1151,13 +1145,11 @@ function renderAI() {
 function renderAITiming() {
   const el = $("ai-timing");
   const times = generationTimes.get(connectionKey(aiState)) ?? [];
-  const last = times.length
-    ? ` この画面で同じ接続先を使った前回の生成は約${Math.ceil(times.at(-1) / 1000)}秒でした（キャッシュを除く）。`
-    : "";
-  el.hidden = !generating && times.length === 0;
+  // Only the wait is worth a line; the rest stays out of the way.
+  el.hidden = !generating;
   el.textContent = generating
-    ? `生成中 · 経過${Math.floor((performance.now() - generationStarted) / 1000)}秒。${aiState?.cloud ? "接続先のモデルや混雑で待ち時間が変わります。" : "初回のモデル読み込みや、PCのメモリ・他のアプリで待ち時間が変わります。"}${last}`
-    : `文章と実行できる行動の形式を検証して取り込んでいます。内容の正確さや予測精度を保証する検査ではありません。${last}`;
+    ? `経過${Math.floor((performance.now() - generationStarted) / 1000)}秒${times.length ? `（前回は約${Math.ceil(times.at(-1) / 1000)}秒）` : ""}`
+    : "";
 }
 async function maybeGenerateScene() {
   const current = revision;

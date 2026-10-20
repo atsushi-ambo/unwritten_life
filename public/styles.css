@@ -324,14 +324,6 @@ h1 {
   padding: 8px 13px;
   font-size: 11px;
 }
-.privacy-line {
-  font-size: 10px;
-  color: var(--muted);
-  margin: 17px 0 0;
-}
-.privacy-line span {
-  margin-right: 6px;
-}
 .future-art {
   position: relative;
   height: 439px;
@@ -462,22 +454,6 @@ h1 {
   font-size: 7px;
   letter-spacing: 0.14em;
   color: #6b7d65;
-}
-.feature-strip {
-  display: flex;
-  justify-content: space-between;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  padding: 20px 6px;
-  gap: 15px;
-  font-size: 11px;
-}
-.feature-strip b {
-  font:
-    11px Georgia,
-    serif;
-  color: #9a9e8d;
-  margin-right: 13px;
 }
 .profile-section {
   padding: 62px 0 30px;
@@ -865,23 +841,12 @@ progress::-moz-progress-bar {
 .stat progress {
   height: 3px;
 }
-.ai-meter {
-  margin-top: 26px;
+.money-breakdown {
+  margin-top: 14px;
 }
-.ai-meter span {
-  font-size: 10px;
-  display: flex;
-  justify-content: space-between;
-}
-.ai-meter p {
-  font-size: 8px;
-  color: var(--muted);
-  margin: 4px 0;
-}
-.sidebar-note {
-  font: 15px/1.9 var(--serif);
-  color: #7e8c70;
-  margin-top: 35px;
+.money-breakdown summary {
+  cursor: pointer;
+  font-size: 12px;
 }
 .event-card {
   border: 1px solid var(--line);
@@ -1281,13 +1246,6 @@ progress::-moz-progress-bar {
   .year-end {
     top: 65px;
   }
-  .feature-strip {
-    display: grid;
-    grid-template-columns: 1fr;
-    font-size: 10px;
-    gap: 7px;
-    padding: 16px 4px;
-  }
   .profile-section {
     padding-top: 36px;
   }
@@ -1434,13 +1392,6 @@ progress::-moz-progress-bar {
   .stat-delta {
     font-size: 8px;
   }
-  .ai-meter {
-    margin-top: 17px;
-  }
-  .ai-meter p,
-  .sidebar-note {
-    display: none;
-  }
   .event-card {
     padding: 23px;
   }
@@ -1559,10 +1510,22 @@ textarea:focus-visible {
   font-size: 10px;
   padding: 5px 9px;
 }
+.ai-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  margin: 10px 0 18px;
+}
+.ai-row .field-note {
+  margin: 0;
+}
 .context-preview {
-  margin: 12px 0 20px;
   font-size: 10px;
   color: var(--muted);
+}
+.context-preview[open] {
+  flex-basis: 100%;
 }
 .context-preview summary {
   cursor: pointer;
@@ -1971,8 +1934,6 @@ input:not([type="radio"], [type="checkbox"]), select, textarea, dialog {
 .map-dialog > span { color: var(--gold); font-size: 14px; }
 .map-dialog p { margin: 0; font-size: 13px; }
 .map-dialog small { display: block; font-size: 11px; color: #c4d5ce; margin-top: 3px; }
-.feature-strip { border-block: 2px solid var(--ink); color: var(--ink); }
-.feature-strip b { color: var(--accent); font-family: monospace; }
 .profile-card, .life-sidebar, .world-context, .year-result {
   border: 2px solid var(--ink);
   box-shadow: var(--pixel-shadow);
@@ -2013,7 +1974,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--green); width:
   padding: 20px;
 }
 .life-sidebar > .eyebrow { font-size: 11px; font-weight: 700; }
-.stat-name, .stat-delta, .ai-meter p { font-size: 11px; }
+.stat-name, .stat-delta { font-size: 11px; }
 .stat-name, .stat-delta { color: #465748; }
 .stat-value { font: 700 19px/1.6 Menlo, Consolas, var(--sans); }
 .stat-value small { font-size: 11px; }
@@ -2242,7 +2203,7 @@ progress::-moz-progress-bar { background: #42745a; }
 .budget-window .field-note { margin: 8px 0 0; font-size: 11px; }
 .history-choice { font-size: 12px; }
 .pill { border: 2px solid var(--green); background: #e3ebcf; font-size: 11px; }
-.game-controls > span, .model-notes, .sidebar-note { font-size: 12px; }
+.game-controls > span, .model-notes { font-size: 12px; }
 #ai-status, #ai-timing { font-size: 12px; }
 .mobile-edition-banner { background: var(--window); border-bottom: 2px solid #d5b56e; }
 dialog { border: 5px double var(--ink); box-shadow: 6px 6px 0 #203b4344; }
@@ -2265,7 +2226,6 @@ dialog p, dialog li { font-size: 14px; }
   .lead { font-size: 13px; }
   .hero-actions .button, .hero-actions .text-button { font-size: 13px; }
   .future-art { max-width: 440px; padding: 10px; }
-  .feature-strip { font-size: 12px; }
   .profile-card { padding: 20px 16px; }
   .profile-levels button { padding: 12px 8px; font-size: 12px; }
   .form-grid { grid-template-columns: 1fr; }
