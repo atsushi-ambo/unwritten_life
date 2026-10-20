@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { makeAI, configFrom } from "../lib/ai.mjs";
 import { publicAddress, destination, requestText } from "../lib/network.mjs";
+import { appPort } from "../lib/port.mjs";
 import { createGame, encodeSave, advance } from "../public/engine.js";
 import { storyRequest } from "../public/story.js";
 import { replyFor, isVerification, readyAI, ollamaText, chatText } from "./fixtures/ai-replies.js";
@@ -175,7 +176,7 @@ test("SSRF address classes, ambiguous numeric hosts and cloud config are constra
     "https://example.com:444",
   ])
     await assert.rejects(() => destination(url));
-  await assert.rejects(() => destination("http://localhost:4317", true));
+  await assert.rejects(() => destination(`http://localhost:${appPort()}`, true));
   assert.throws(() =>
     configFrom({
       provider: "openai", consent: true,
