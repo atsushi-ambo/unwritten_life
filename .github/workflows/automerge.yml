@@ -1,0 +1,89 @@
+name: Auto-merge
+# GitHub's own auto-merge and branch protection are not available for this
+# private repository on the Free plan, so this merges a PR once Check has
+# passed on its latest commit. Opt-in only: the PR needs the "automerge"
+# label, must come from a branch of this repository, be opened by the owner,
+# not be a draft and already contain the latest main (so the tested code is
+# what lands). It only calls the GitHub API and never checks out or runs the
+# PR's code, which is what makes pull_request_target safe here.
+on:
+  workflow_run:
+    workflows: [Check]
+    types: [completed]
+  # A label added, or a draft marked ready, after Check already passed.
+  pull_request_target:
+    types: [labeled, ready_for_review]
+permissions: {}
+# One merge into main at a time: a later job re-checks against the main the
+# earlier one produced. (A queued job replaced by a newer one just leaves its
+# PR open, which is safe.)
+concurrency:
+  group: automerge-main
+  cancel-in-progress: false
+jobs:
+  merge:
+    if: >-
+      (github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'pull_request' &&
+        github.event.workflow_run.head_repository.full_name == github.repository) ||
+      (github.event_name == 'pull_request_target' &&
+        github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+      # To start Check on main after the merge: a push made with this token
+      # does not trigger workflows, but a workflow_dispatch does.
+      actions: write
+    steps:
+      - name: Merge the PR if Check passed on its latest commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.event.pull_request.head.sha }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          pr=$(gh pr list --repo "$REPO" --head "$HEAD_BRANCH" --state open \
+            --json number,headRefOid,baseRefName,isDraft,author,labels,isCrossRepository \
+            --jq 'map(select(.headRefOid == env.HEAD_SHA)) | first // empty')
+          if [ -z "$pr" ]; then
+            echo "No open PR whose latest commit is $HEAD_SHA; nothing to merge."
+            exit 0
+          fi
+          number=$(jq -r .number <<<"$pr")
+          reason=$(jq -r --arg owner "$OWNER" '
+            if .isCrossRepository then "it comes from a fork"
+            elif .author.login != $owner then "it was not opened by the owner"
+            elif .isDraft then "it is a draft"
+            elif .baseRefName != "main" then "it does not target main"
+            elif ([.labels[].name] | index("automerge")) == null then "it has no automerge label"
+            else "" end' <<<"$pr")
+          if [ -n "$reason" ]; then
+            echo "Not merging #$number: $reason."
+            exit 0
+          fi
+          # The newest Check run of this PR into main, for this exact commit,
+          # must have succeeded (covers a label added after the run, a newer
+          # run that failed, and runs of another PR from the same commit).
+          check=$(PR_NUMBER="$number" gh api "repos/$REPO/actions/runs?head_sha=$HEAD_SHA&event=pull_request&per_page=50" \
+            --jq '[.workflow_runs[] | select(.name == "Check" and any(.pull_requests[]?; (.number | tostring) == env.PR_NUMBER and .base.ref == "main"))] | sort_by(.created_at) | last | "\(.status) \(.conclusion)"')
+          if [ "$check" != "completed success" ]; then
+            echo "Not merging #$number: Check on $HEAD_SHA is '$check'."
+            exit 0
+          fi
+          # Check ran against the main of that moment; only merge when the
+          # branch already contains today's main, so nothing untested lands.
+          behind=$(gh api "repos/$REPO/compare/main...$HEAD_SHA" --jq .behind_by)
+          if [ "$behind" != "0" ]; then
+            echo "Not merging #$number: the branch is $behind commit(s) behind main. Update it and Check will run again."
+            exit 0
+          fi
+          # Fails instead of merging if a newer commit was pushed meanwhile.
+          gh pr merge "$number" --repo "$REPO" --merge --match-head-commit "$HEAD_SHA"
+          echo "Merged #$number at $HEAD_SHA."
+          gh workflow run check.yml --repo "$REPO" --ref main
+          echo "Started Check on main."
