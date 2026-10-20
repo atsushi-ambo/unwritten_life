@@ -2120,8 +2120,6 @@ progress::-moz-progress-bar { background: #42745a; }
 .resume-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; font-size: 12px; }
 .resume-totals > div { border: 1px solid var(--line); padding: 8px; }
 .resume-totals dd { margin: 4px 0 0; font-weight: 700; }
-.resume-decisions { padding-left: 20px; font-size: 13px; }
-.resume-decisions li { margin-block: 8px; }
 .career-reflections blockquote { margin: 14px 0; padding-left: 14px; border-left: 3px solid var(--green); overflow-wrap: anywhere; }
 .career-reflections blockquote p { margin: 4px 0; }
 .career-resume #copy-resume { white-space: normal; max-width: 100%; }

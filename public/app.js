@@ -381,11 +381,11 @@ function renderCareerResume() {
   const card = node("section", undefined, "career-resume");
   card.id = "ending-resume";
   card.setAttribute("aria-labelledby", "resume-title");
-  const title = node("h3", "職務経歴書 / この世界で歩んだ道");
+  // One résumé: the life story above, then where and as what. The turning
+  // points are already in the story's decades, so they are not listed again.
+  const title = node("h3", "勤務先と役割");
   title.id = "resume-title";
-  card.append(renderLifeStory(), title, node("p", `${game.profile.age}歳から${game.age}歳まで・${game.decisions.length}年間`, "resume-period"),
-    node("p", "ゲーム内の架空の経歴です。実際の職務経歴を証明するものではありません。", "field-note"),
-    node("h4", "勤務先と役割"));
+  card.append(renderLifeStory(), title, node("p", `${game.profile.age}歳から${game.age}歳まで・${game.decisions.length}年間。ゲーム内の架空の経歴で、実際の職務経歴を証明するものではありません。`, "resume-period"));
   const timeline = node("ol", undefined, "resume-timeline");
   for (const t of record.tenures) {
     const row = node("li");
@@ -407,11 +407,9 @@ function renderCareerResume() {
     row.append(node("dt", CAREER_STATES[key].label), node("dd", `${years}年`));
     totals.append(row);
   }
-  const decisions = node("ul", undefined, "resume-decisions");
-  for (const d of record.decisions) decisions.append(node("li", `${d.year}年・${d.age}歳 ${d.label}`));
   card.append(timeline, node("h4", "一年の主な活動"),
     node("p", "各年を主な活動で分類しています。学びや休養の年も、勤務先との在籍期間には含まれます。", "field-note"),
-    totals, node("h4", "選んだ転機"), decisions);
+    totals);
   const map = node("section", undefined, "career-map ending-map");
   map.id = "ending-map";
   map.setAttribute("aria-label", "生涯のキャリアマップ");

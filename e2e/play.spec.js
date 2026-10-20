@@ -158,7 +158,7 @@ test("ending resume shows the career map and milestone line, copies locally, and
   await page.locator("#copy-resume")[isMobile ? "tap" : "click"]();
   await expect(page.locator("#resume-copy-status")).toHaveText("コピーしました。");
   const text = await page.evaluate(() => window.__copiedResume);
-  for (const expected of ["職務経歴書", "合成クラウド社", line, "退職後", "キャリアマップ"])
+  for (const expected of ["わたしの履歴書", "勤務先と役割", "合成クラウド社", line, "退職後", "キャリアマップ"])
     expect(text).toContain(expected);
   await page.evaluate(() => { window.__clipboardDenied = true; });
   await page.locator("#copy-resume")[isMobile ? "tap" : "click"]();
