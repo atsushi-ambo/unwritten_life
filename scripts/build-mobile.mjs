@@ -80,7 +80,6 @@ export async function buildMobile(output) {
     element.childNodes = [{ nodeName: "#text", value, parentNode: element }];
   };
   const copy = {
-    "edition-privacy": "キャリアの場面と選択肢はOpenAIで毎年自動生成 · セーブはこの端末内",
     "about-ai-copy": "現在の職歴と過去の選択から、OpenAIが毎年のキャリアの場面と4択を自動で作ります。このスマホ版は、あなた専用のOpenAI接続を使います。AIの接続が必要です。",
     "privacy-ai-copy": "毎年の場面と選択肢をつくるため、プロフィールと選択履歴をOpenAIへ送ります。APIキーはサーバー側で管理し、端末へ配布しません。セーブは任意でこのブラウザ内に保存します。節目の一行はAIへ送信しません。共有ブラウザからは保存を見られる可能性があります。",
     "privacy-research-copy": "会社の候補を検索するときだけ、企業名をWikidataへ送ります。候補は利用者が確認します。外部ページから会社情報を取り込む機能は、この版では使いません。",

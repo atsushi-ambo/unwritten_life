@@ -47,15 +47,10 @@
               もし、あの内定を受けていたら。もし、いまの会社に残ったら。<br />年収も、働き方も、家族との時間も。<br />2026年のあなたの職歴から、まだ書かれていないキャリアがはじまる。
             </p>
             <div class="hero-actions">
-              <a class="button primary" href="#profile-section"
-                >自分の職歴で試す <span>↗</span></a
-              ><button class="text-button" id="demo-button">
+              <button class="text-button" id="demo-button">
                 架空の人物で試す →
               </button>
             </div>
-            <p class="privacy-line" id="edition-privacy">
-              <span>◈</span> AIの接続先は自分で選べます · ローカルAI・サブスク・API
-            </p>
           </div>
           <div class="future-art" role="img" aria-label="家、仕事場、森へ道が分かれるドット絵の街。小さな旅人がキャリアの分かれ道に立っている。">
             <div class="map-heading"><span>WORLD 01</span><span>はじまりの街</span></div>
@@ -86,11 +81,6 @@
             <div class="map-dialog"><span aria-hidden="true">▶</span><p>ここから、あなたのキャリア。<small>転職するか、残るか。選ぶのはあなた。</small></p></div>
           </div>
         </section>
-        <div class="feature-strip">
-          <span><b>01</b> あなたの職歴が主人公</span
-          ><span><b>02</b> AIで変わる、3つの雇用の未来</span
-          ><span><b>03</b> 転職も、いまの会社で上を目指す道も</span>
-        </div>
         <section
           id="profile-section"
           class="profile-section"
@@ -752,34 +742,13 @@
         <div class="journey-hud" aria-label="現在のステータス">
           <div><span>いまの年</span><strong id="hud-year"></strong></div>
           <div><span>年齢</span><strong id="hud-age"></strong></div>
-          <div><span>手元の現金</span><strong id="hud-cash"></strong></div>
-          <div><span>心と体のゆとり</span><strong id="hud-health"></strong></div>
+          <div><span>年収</span><strong id="hud-income"></strong></div>
+          <div><span>純資産</span><strong id="hud-savings"></strong></div>
         </div>
         <div class="game-grid">
           <aside class="life-sidebar" aria-label="キャリアのステータス">
-            <p class="eyebrow">STATUS / あなたの現在地</p>
             <section id="career-map" class="career-map" aria-label="キャリアマップ"></section>
             <div id="stats"></div>
-            <div class="ai-meter">
-              <span>この世界のAI普及 <b id="ai-stage"></b></span
-              ><progress
-                aria-label="職場でのAIの浸透"
-                id="ai-progress"
-                max="1"
-                value="0"
-              ></progress>
-              <p>能力の進歩と、現場への浸透を分けたゲーム上の指標です。</p>
-              <span>AIの能力の進歩</span
-              ><progress
-                aria-label="AIの能力の進歩"
-                id="capability-progress"
-                max="1"
-                value="0"
-              ></progress>
-            </div>
-            <div class="sidebar-note">
-              キャリアがくれるものは、<br />年収だけでは測れない。
-            </div>
             <button id="game-delete-save" class="text-button" hidden>
               端末の保存を削除
             </button>
@@ -830,12 +799,14 @@
                 直前のキャリア記録を振り返る ↗
               </button>
             </div>
-            <p id="ai-status" class="field-note" role="status"></p>
-            <p id="ai-timing" class="field-note" aria-live="off" hidden></p>
-            <details class="context-preview">
-              <summary>AIに渡す情報を確認</summary>
-              <pre id="context-preview"></pre>
-            </details>
+            <div class="ai-row">
+              <p id="ai-status" class="field-note" role="status"></p>
+              <p id="ai-timing" class="field-note" aria-live="off" hidden></p>
+              <details class="context-preview">
+                <summary>AIに渡す情報</summary>
+                <pre id="context-preview"></pre>
+              </details>
+            </div>
             <div
               id="year-result"
               class="year-result"

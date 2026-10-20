@@ -106,7 +106,7 @@ test("mobile copy rewrites fail with the missing target ID instead of silently s
   const build = await readFile(new URL("../scripts/build-mobile.mjs", import.meta.url), "utf8");
   const rewrite = build.slice(build.indexOf("  const document = parse("), build.indexOf("  const versionAssets ="));
   for (const id of [
-    "edition-privacy", "about-ai-copy", "privacy-ai-copy", "privacy-research-copy",
+    "about-ai-copy", "privacy-ai-copy", "privacy-research-copy",
     "command-help", "reflection-note", "ai-description", "ai-settings-button", "ai-dialog-title", "ai-form",
   ]) {
     const context = createContext({
@@ -129,7 +129,7 @@ function checkCareerCopy(html) {
   assert.match(html, /<title>Unwritten Life — その転職の、ずっと先の未来まで。<\/title>/);
   assert.match(html, /name="description"\s+content="その転職の、ずっと先の未来まで。/);
   assert.match(html, /HOSTED CAREER \/ 0.3/);
-  for (const id of ["about-ai-copy", "privacy-ai-copy", "ai-description", "edition-privacy"]) {
+  for (const id of ["about-ai-copy", "privacy-ai-copy", "ai-description"]) {
     assert.doesNotMatch(text(elements.get(id)), /Ollama|Codex|Claude|ローカルサーバー|PC内/);
     assert.doesNotMatch(text(elements.get(id)), /未接続でも|接続しなくても|手動交換|手動生成|生成ボタン|\$0\.10|100回/);
     assert.match(text(elements.get(id)), /OpenAI/);
