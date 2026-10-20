@@ -17,12 +17,12 @@ function grind(g, years) {
 }
 // Salary rules are compared between action paths, so chance incidents (which
 // depend on the action) are off here.
-const capAt = (from, payRealismFrom = MAX_AGE) => (profile, scenario, seed) =>
-  createGame(profile, scenario, seed, 0, 0, 0, 0, 0, 0, from, MAX_AGE, 0, 0, payRealismFrom);
+const capAt = (from, payRealismFrom = MAX_AGE, lifeRealismFrom = 0) => (profile, scenario, seed) =>
+  createGame(profile, scenario, seed, 0, 0, 0, 0, 0, 0, from, MAX_AGE, 0, 0, payRealismFrom, lifeRealismFrom);
 function replayAt(g, length) {
   return replay(g.profile, g.scenario, g.seed, g.decisions.slice(0, length),
     {}, false, g.dynamicFrom, g.worldFrom, g.retirementFrom,
-    g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom, g.payRealismFrom);
+    g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom, g.payRealismFrom, g.lifeRealismFrom);
 }
 
 test("long-run salaries level off near a job and region ceiling but keep variance", () => {

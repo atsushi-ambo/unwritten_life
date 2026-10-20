@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createContext, runInContext } from "node:vm";
 import {
-  createGame, advanceDirection, previousDirectionStep, availableChoices, decisionId, directionSpan,
+  createGame, advanceDirection, previousDirectionStep, availableChoices, decisionId, directionSpan, incidentAt,
   recordCareerReflection, careerSeenUntil, replay, encodeSave, RANKS, REGIONS, MAX_AGE,
 } from "../public/engine.js";
 import { careerMilestones, careerMap, CAREER_STATES } from "../public/careers.js";
@@ -330,4 +330,23 @@ test("an ending heading stays hidden until the final recorded year has been reve
   h.$("journey-next").handlers.click();
   assert.equal(h.$("chapter-title").textContent, "65歳。キャリアと暮らしの歩みを振り返る。");
   assert.equal(h.$("hud-year").textContent, "2029年");
+});
+
+test("annual cards name the layoff and the automatic hire in consecutive years", () => {
+  const h = harness();
+  let lost, found;
+  for (let seed = 1; seed < 20000; seed++) {
+    const g = createGame(base().profile, "steady", seed);
+    if (incidentAt(g, "focus")?.id !== "layoff") continue;
+    const loss = advanceDirection(g, "focus");
+    const hire = advanceDirection(loss.game, "learn");
+    if (hire.entries[0].outcome?.kind === "reemployed") { lost = loss; found = hire; break; }
+  }
+  assert.ok(found);
+  h.context.game = found.game;
+  const lossCard = runInContext("appendTimelineYear(game.history[0], 0)", h.context);
+  const hireCard = runInContext("appendTimelineYear(game.history[1], 1)", h.context);
+  assert.equal(lossCard.children.find((n) => n.tag === "h3").textContent, lost.entries[0].incident.title);
+  assert.equal(hireCard.children.find((n) => n.tag === "h3").textContent, "次の仕事が決まった");
+  assert.match(hireCard.textContent, /勤務先：次の仕事を探している → 新しい勤務先/);
 });

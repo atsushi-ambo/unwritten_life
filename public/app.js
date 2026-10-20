@@ -683,7 +683,8 @@ function appendTimelineYear(h, index) {
   row.dataset.year = h.year;
   row.append(
     node("p", `${h.year}年 / ${h.age}歳`, "eyebrow"),
-    node("h3", h.outcome?.title ?? h.episode?.title ?? h.title),
+    node("h3", h.incident?.id === "layoff" && index >= game.lifeRealismFrom
+      ? h.incident.title : h.outcome?.title ?? h.episode?.title ?? h.title),
   );
   if (index === 0 || game.directionBlocks?.some(([start]) => start === index))
     row.append(node("p", `選んだ方針は「${h.intention ?? h.choiceLabel}」。`, "timeline-direction"));
@@ -1013,6 +1014,7 @@ function renderGame() {
         game.careerPathFrom,
         game.careerEndFrom,
         game.payRealismFrom,
+        game.lifeRealismFrom,
       );
       showGame(true);
     });
@@ -1446,6 +1448,7 @@ $("undo-button").addEventListener("click", () => {
     game.careerPathFrom,
     game.careerEndFrom,
     game.payRealismFrom,
+    game.lifeRealismFrom,
     blocks,
   );
   const reached = new Set(careerMilestones(game).map((m) => m.id));

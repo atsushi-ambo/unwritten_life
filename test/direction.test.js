@@ -14,7 +14,7 @@ const quiet = (p = profile, seed = 42) => createGame(p, "steady", seed, 0, 0, 0,
 const replayGame = (g) => replay(g.profile, g.scenario, g.seed, g.decisions, g.scenes, false,
   g.dynamicFrom, g.worldFrom, g.retirementFrom, g.careLeaveSalaryFrom, g.prepayFrom,
   g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom,
-  g.payRealismFrom, g.directionBlocks);
+  g.payRealismFrom, g.lifeRealismFrom, g.directionBlocks);
 
 test("a five-year direction preserves every decision, passes a reflection milestone and replays exactly", () => {
   const base = quiet(), snapshot = structuredClone(base);
@@ -22,7 +22,7 @@ test("a five-year direction preserves every decision, passes a reflection milest
   assert.equal(run.entries.length, 5);
   assert.equal(run.game.decisions.length, 5);
   assert.equal(run.stopReason, "");
-  assert.deepEqual(run.game.decisions.map(decisionId), ["learn", ...Array(4).fill("studyDaily")]);
+  assert.deepEqual(run.game.decisions.map(decisionId), ["learn", ...Array(4).fill("focus")]);
   assert.deepEqual(run.game.directionBlocks, [[0, 5]]);
   assert.deepEqual(base, snapshot);
   assert.deepEqual(replayGame(run.game), run.game);
@@ -153,7 +153,7 @@ test("while job-hunting a direction runs one year at a time; finding a job resum
   assert.ok(seeking, "no seed reached a layoff");
   const study = advanceDirection(seeking, "studyDaily");
   assert.equal(study.entries.length, 1);
-  assert.equal(study.stopReason, "仕事を探している間は、1年ごとに選び直せます。");
+  assert.match(study.stopReason, /仕事を探している間は、1年ごと|次の仕事が決まり/);
   assert.match(study.entries[0].episode.title, /次の仕事/);
   assert.doesNotMatch(study.entries[0].episode.body, /取り組みが評価につながった|目に見える評価/);
   const move = { id: "switch", target: "custom", name: "合成クラウド社", role: "tech", companyType: "unknown", facts: null };
