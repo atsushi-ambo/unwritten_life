@@ -4,7 +4,7 @@ import {
   createGame, advance, advanceYears, encodeSave, decodeSave, RANKS, MAX_AGE,
   optionalProfileInputs, profileInputForLevel,
 } from "../public/engine.js";
-import { lifeStory, careerRecordText, peakRankLabel, yearSpan, deathHeadline } from "../public/careers.js";
+import { lifeStory, careerRecord, careerRecordText, peakRankLabel, yearSpan, deathHeadline } from "../public/careers.js";
 
 const profile = (extra = {}) => optionalProfileInputs(profileInputForLevel(
   { occupation: "software", company: "合成ソフト社", ...extra }, "advanced",
@@ -110,4 +110,15 @@ test("a story that ends in death before retirement says so plainly", () => {
   }
   assert.ok(found);
   assert.equal(lifeStory(found, RANKS).headline, deathHeadline(found.age));
+});
+
+test("an unnamed first employer reads 最初の勤務先 in the résumé, not いまの職場", () => {
+  let g = quiet(profile({ age: 40, company: "" }), 5);
+  assert.equal(g.employer.name, "いまの職場");
+  g = advance(g, "focus");
+  g = advance(g, { id: "switch", target: "custom", name: "合成クラウド社", role: "tech", companyType: "unknown", facts: null });
+  const record = careerRecord(g);
+  assert.equal(record.tenures[0].employer, "最初の勤務先");
+  assert.equal(record.tenures.at(-1).employer, "合成クラウド社");
+  assert.doesNotMatch(careerRecordText(g, {}, RANKS), /いまの職場/);
 });
