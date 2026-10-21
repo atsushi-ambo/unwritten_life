@@ -46,6 +46,7 @@ import {
   lifeStory,
   peakRankLabel,
   yearSpan,
+  deathHeadline,
 } from "./careers.js";
 import {
   worldAt,
@@ -1011,7 +1012,7 @@ function renderGame() {
     const end = game.history.at(-1)?.careerEnd;
     card.append(
       node("p", "THE STORY OF YOUR WORKING LIFE.", "eyebrow"),
-      node("h2", end ? `${game.age}歳、${end.title}。` : "働いた年月が、あなたに残したもの。"),
+      node("h2", end ? `${game.age}歳、${end.title}。` : deathHeadline(game.age)),
     );
     const counts = Object.keys(CHOICES)
       .map((k) => [k, game.decisions.filter((x) => decisionId(x) === k).length])

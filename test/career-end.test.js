@@ -4,7 +4,7 @@ import {
   createGame, advance, advanceYears, encodeSave, decodeSave, RANKS, MAX_AGE,
   optionalProfileInputs, profileInputForLevel,
 } from "../public/engine.js";
-import { lifeStory, careerRecordText, peakRankLabel, yearSpan } from "../public/careers.js";
+import { lifeStory, careerRecordText, peakRankLabel, yearSpan, deathHeadline } from "../public/careers.js";
 
 const profile = (extra = {}) => optionalProfileInputs(profileInputForLevel(
   { occupation: "software", company: "合成ソフト社", ...extra }, "advanced",
@@ -96,4 +96,18 @@ test("an unknown starting stage with no promotion reads as no recorded promotion
   assert.doesNotMatch(text, /未入力/);
   assert.equal(yearSpan(2035, 2035), "2035年");
   assert.equal(yearSpan(2031, 2034), "2031〜2034年");
+});
+
+test("a story that ends in death before retirement says so plainly", () => {
+  assert.equal(deathHeadline(44), "44歳で、思いがけず人生の幕が下りた。");
+  assert.equal(deathHeadline(82), "82歳で、人生の幕を閉じた。");
+  // Find a seed whose story ends before retirement without a career end.
+  let found;
+  for (let seed = 1; seed <= 4000 && !found; seed++) {
+    let g = quiet(profile({ age: 55, retirementAge: 65 }), seed);
+    while (!g.ended) g = advance(g, "rest");
+    if (!g.history.at(-1).careerEnd) found = g;
+  }
+  assert.ok(found);
+  assert.equal(lifeStory(found, RANKS).headline, deathHeadline(found.age));
 });
