@@ -355,3 +355,20 @@ test("a fresh reply must name a company, not describe a move; saved scenes still
   // A scene saved before this check (replayed without fresh) still validates.
   validateGeneratedScene(scene("AIを活用する職場に転職する"), g, { mode: "life" });
 });
+
+test("a fresh reply tells the story, not the form; an unknown stage is not sent as missing input", () => {
+  const g = createGame({ age: 35, region: "city", job: "people", ai: "sometimes", priority: "balance",
+    gender: "undisclosed", household: "solo", companyType: "unknown" }, "steady", 3);
+  const scene = (body) => ({
+    title: "次の5年", body, insight: "架空の場面。",
+    options: ["focus", "learn", "connect", "rest"].map((id) => ({ id, label: `合成の${id}`, hint: "時間の配分", reason: "本人の条件", decision: { id, intent: `${id}を試す` } })),
+  });
+  for (const body of ["役職はまだ入力されていないが、在籍は五年になる。次の5年を選ぶ。", "役職は未入力のまま、店の仕事を続けている。次の5年を選ぶ。"])
+    assert.throws(() => validateGeneratedScene(scene(body), g, { mode: "life", fresh: true }), body);
+  validateGeneratedScene(scene("在籍は五年になり、店の仕事と暮らしを考えて次の5年を選ぶ。"), g, { mode: "life", fresh: true });
+  // A scene saved before this check (replayed without fresh) still validates.
+  validateGeneratedScene(scene("役職はまだ入力されていないが、在籍は五年になる。次の5年を選ぶ。"), g, { mode: "life" });
+  const { context } = storyRequest(g);
+  assert.equal(context.position.rank, null);
+  assert.match(context.position.note, /入力や未入力など/);
+});

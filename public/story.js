@@ -182,7 +182,8 @@ export function storyRequest(
       ? { firstYearOfWork: true } : {}),
     position: inCompany(game)
       ? {
-          rank: RANKS[game.position.rank].label,
+          // An unknown stage is left out rather than described as missing input.
+          rank: game.position.rank === "unspecified" ? null : RANKS[game.position.rank].label,
           unit: game.position.unit || null,
           yearsAtEmployer: game.year - game.position.joined,
           yearsInRank: game.year - game.position.since,
@@ -191,7 +192,7 @@ export function storyRequest(
               ["manager", "specialist"].map((t) => nextRank(game.position.rank, t)).filter(Boolean),
             ),
           ].map((r) => RANKS[r].label),
-          note: "社内の段階はゲーム内の一般的な区分で、実際の会社の等級・役職名ではない。在籍年数はゲーム開始または入社から数える。",
+          note: "社内の段階はゲーム内の一般的な区分で、実際の会社の等級・役職名ではない。rankがnullなら役職に触れない。在籍年数はゲーム開始または入社から数える。入力や未入力など、ゲームの入力の状況を本文や選択肢に書かない。",
         }
       : null,
     // Stages a move may target: the current one, or one above after three
