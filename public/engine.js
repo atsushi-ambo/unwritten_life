@@ -656,6 +656,11 @@ export function profileInputForLevel(
       keys.filter((k) => raw[k] !== undefined).map((k) => [k, raw[k]]),
     );
   const common = pick(["careerGoal", "tone", "scenario"]);
+  // Quick start picks a broad field of work (2026-10-21); otherwise IT.
+  if (level === "quick" && raw.job !== undefined) {
+    if (typeof raw.job !== "string" || !Object.hasOwn(JOBS, raw.job) || ["independent", "other"].includes(raw.job)) fail();
+    common.job = raw.job;
+  }
   if (level === "quick")
     return { ...base, ...quickValues, ...common };
   const p = {
@@ -3248,6 +3253,11 @@ export function advanceYears(game, decision, years = 1, { pauseAtMilestones = fa
 }
 // A direction changes course once, then continues without repeating a move,
 // purchase or business expansion. Every year still uses the ordinary rules.
+// Friction at work is part of the story, not a turning point: it does not
+// stop a direction. Losing a job, going on leave, illness, care and severe
+// harassment still do (2026-10-21).
+const mildIncident = (incident) =>
+  incident.id === "difficultBoss" || (incident.id === "harassment" && !incident.severe);
 export function advanceDirection(game, decision, { years = 5 } = {}) {
   if (!Number.isInteger(years) || years < 1 || years > 5) fail();
   const id = decisionId(decision), entries = [];
@@ -3287,7 +3297,7 @@ export function advanceDirection(game, decision, { years = 5 } = {}) {
       stopReason = "働き方の節目です。ここからの方針を選び直せます。";
     } else if (pendingCareerOffer(next)) {
       stopReason = "仕事の打診が届きました。受けるか、今の道を続けるか選べます。";
-    } else if (entry.incident?.tone === "hard") {
+    } else if (entry.incident?.tone === "hard" && !mildIncident(entry.incident)) {
       stopReason = "思いがけない出来事がありました。ここからの方針を選び直せます。";
     } else if (entry.outcome?.kind === "reemployed") {
       stopReason = "次の仕事が決まりました。新しい職場での方針を選び直せます。";

@@ -9,6 +9,7 @@ import {
   isRetiredAt,
   MAX_AGE,
   REGIONS,
+  JOBS,
   PROFILE_DEFAULTS,
   optionalProfileInputs,
   createGame,
@@ -284,7 +285,7 @@ async function formHarness() {
   const controls = form.querySelectorAll("input,select,textarea");
   form.elements = Object.fromEntries(controls.filter((el) => el.name).map((el) => [el.name, el]));
   const context = createContext({
-    $, profileInputForLevel, optionalProfileInputs, PROFILE_DEFAULTS, REGIONS, regionFromMunicipality,
+    $, profileInputForLevel, optionalProfileInputs, PROFILE_DEFAULTS, REGIONS, JOBS, regionFromMunicipality,
     profileLevel: "standard", regionRevealed: false, manualRegion: false,
     customCost: false, companySources: [],
     FormData: class {
@@ -395,4 +396,10 @@ test("quick HTML hides whole detailed sections and exposes only one start contro
         attr(n, "name") === "municipality" && attr(n, "maxlength") === "80",
     ),
   );
+});
+
+test("quick start takes a broad field of work and rejects anything else", () => {
+  assert.equal(profile({ job: "care" }, "quick", { band: "new", region: "city" }).job, "care");
+  assert.equal(profile({}, "quick", { band: "new", region: "city" }).job, "tech");
+  for (const job of ["independent", "other", "invented", 3]) assert.throws(() => profile({ job }, "quick", { band: "new", region: "city" }));
 });

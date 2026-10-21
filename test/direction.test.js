@@ -47,7 +47,8 @@ test("a hard incident stops the direction in the year it happened and records th
   for (let seed = 0; seed < 100; seed++) {
     const base = createGame(profile, "steady", seed);
     const first = advance(base, "focus");
-    if (first.history[0].incident?.tone !== "hard") continue;
+    const incident = first.history[0].incident;
+    if (incident?.tone !== "hard" || incident.id === "difficultBoss" || (incident.id === "harassment" && !incident.severe)) continue;
     const run = advanceDirection(base, "focus");
     assert.equal(run.entries.length, 1);
     assert.match(run.stopReason, /思いがけない出来事/);
@@ -188,4 +189,19 @@ test("the last direction before retirement covers only the years left", () => {
   assert.equal(directionSpan(g), "定年までの3年");
   assert.equal(directionSpan(quiet()), "次の5年");
   assert.match(storyRequest(g, { mode: "life" }).messages[0].content, /今回は定年までの3年の方針を選ぶ場面/);
+});
+
+test("friction at work is told but does not stop a direction; serious events still do", () => {
+  let mild = false;
+  for (let seed = 0; seed < 400 && !mild; seed++) {
+    const base = createGame(profile, "steady", seed);
+    const first = advance(base, "focus");
+    const incident = first.history[0].incident;
+    if (incident?.id !== "difficultBoss") continue;
+    const run = advanceDirection(base, "focus");
+    assert.ok(run.entries.length > 1, "a falling-out alone continues the direction");
+    assert.equal(run.entries[0].incident.id, "difficultBoss");
+    mild = true;
+  }
+  assert.ok(mild, "no seed had a falling-out in the first year");
 });
