@@ -4,7 +4,7 @@ import { simulationProfile } from './simulate-life-realism.mjs';
 
 const move = (n) => ({ id: 'switch', target: 'custom', name: `合成勤務先${n}`, role: 'tech', companyType: 'small' });
 const start = (seed, from) => createGame(simulationProfile({ age: 25 }), 'steady', seed * 7919,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, from);
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, from, 0);
 // This is the exact PR #49 promotion policy, with only offersFrom varied.
 export function measurePromotionOffers({ seeds = 2000, from = 0 } = {}) {
   const c = { staffLead: 0, managerSpecialist: 0, directorPrincipal: 0, endedBefore50: 0, seekingAt50: 0,

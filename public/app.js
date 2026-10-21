@@ -1015,6 +1015,7 @@ function renderGame() {
         game.payRealismFrom,
         game.lifeRealismFrom,
         game.offersFrom,
+        game.paceFrom,
       );
       showGame(true);
     });
@@ -1450,6 +1451,7 @@ $("undo-button").addEventListener("click", () => {
     game.payRealismFrom,
     game.lifeRealismFrom,
     game.offersFrom,
+    game.paceFrom,
     blocks,
   );
   const reached = new Set(careerMilestones(game).map((m) => m.id));

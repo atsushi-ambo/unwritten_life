@@ -139,6 +139,7 @@ export const directionSpan = (g) =>
 export const payRealism = (g) => g.decisions.length >= (g.payRealismFrom ?? 0);
 export const lifeRealism = (g) => g.decisions.length >= (g.lifeRealismFrom ?? 0);
 export const careerOffers = (g) => g.decisions.length >= (g.offersFrom ?? 0);
+const measuredPace = (g) => g.decisions.length >= (g.paceFrom ?? 0);
 // Offers last only until the next annual decision. Nothing is reserved or paid
 // on receipt/decline; the existing switch decision names the candidate company.
 export function pendingCareerOffer(g) {
@@ -984,6 +985,7 @@ export function createGame(
   payRealismFrom = 0,
   lifeRealismFrom = 0,
   offersFrom = 0,
+  paceFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -1029,7 +1031,10 @@ export function createGame(
     lifeRealismFrom > MAX_AGE ||
     !Number.isInteger(offersFrom) ||
     offersFrom < 0 ||
-    offersFrom > MAX_AGE
+    offersFrom > MAX_AGE ||
+    !Number.isInteger(paceFrom) ||
+    paceFrom < 0 ||
+    paceFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -1053,6 +1058,7 @@ export function createGame(
     payRealismFrom,
     lifeRealismFrom,
     offersFrom,
+    paceFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -1306,8 +1312,10 @@ export function suggestedChoices(g) {
     ...new Set([...contextual, ...rotations[g.decisions.length % 3]]),
   ].slice(0, 4);
 }
-export function workSuccessChance(g, employer = g.employer) {
+export function workSuccessChance(g, employer = g.employer, choice = "focus") {
   const w = worldAt(g, employer);
+  if (measuredPace(g) && choice === "focus" && employer.kind !== "venture")
+    return clamp(-0.02 + g.skill * 0.004 + g.health * 0.0008 + w.demand * 0.06, 0.1, 0.45);
   return clamp(
     0.24 + g.skill * 0.004 + g.health * 0.0015 + w.demand * 0.12,
     0.15,
@@ -1718,6 +1726,26 @@ export function incidentAt(g, choice, employer = g.employer, outcome = null) {
     yearChance: Math.round(total * 10000) / 10000,
   };
 }
+// Text-only channel; never consumes or shifts a financial/event roll.
+function variedYearTitle(g, titles) {
+  const previous = g.history.at(-1);
+  const fresh = titles.filter((title) => title !== previous?.outcome?.title &&
+    title !== previous?.episode?.title);
+  const pool = fresh.length ? fresh : titles;
+  return pool[Math.floor(randomAt(g.seed, g.decisions.length, 191) * pool.length)];
+}
+const REST_TITLES = [
+  "働き方と暮らしのペースを、整える一年に。",
+  "予定に余白を作り、ひと息ついた。",
+  "休む時間を取り、日々の過ごし方を見直した。",
+  "少し立ち止まり、暮らしのリズムを確かめた。",
+];
+const FOCUS_TITLES = [
+  ["積み重ねた仕事が評価された。", "続けてきた工夫に、手応えがあった。",
+    "日々の取り組みが、周囲に認められた。", "経験を生かした仕事が、成果につながった。"],
+  ["仕事を続けたが、成果につながりにくい一年。", "目の前の仕事に取り組み、経験を重ねた。",
+    "試行錯誤を続け、次の課題が見えてきた。", "日々の仕事を支えながら、手応えを探した。"],
+];
 function yearlyOutcome(g, choice, employer, decision = null) {
   const i = g.decisions.length;
   if (
@@ -1729,7 +1757,7 @@ function yearlyOutcome(g, choice, employer, decision = null) {
     return null;
   const roll = randomAt(g.seed, i, 31),
     ability = worldEnabled(g)
-      ? workSuccessChance(g, employer)
+      ? workSuccessChance(g, employer, choice)
       : clamp(0.35 + g.skill * 0.004 + g.health * 0.002, 0.2, 0.85);
   if (choice === "closeBusiness")
     return {
@@ -1934,7 +1962,9 @@ function yearlyOutcome(g, choice, employer, decision = null) {
     return {
       kind: success ? "success" : "setback",
       ...(worldEnabled(g) ? { chance: ability } : {}),
-      title: titles[choice][success ? 0 : 1],
+      title: measuredPace(g) && choice === "focus"
+        ? variedYearTitle(g, FOCUS_TITLES[success ? 0 : 1])
+        : titles[choice][success ? 0 : 1],
       body: success
         ? "取り組みが次の仕事につながった。得た成果を試す、相談するなど、次の選び方も広がる。"
         : "時間や費用をかけても、すぐに成果が出るとは限らない。経験を残して、次の方法を選び直せる。",
@@ -1952,7 +1982,7 @@ function yearlyOutcome(g, choice, employer, decision = null) {
     kind: "steady",
     title:
       choice === "rest" || choice === "recover"
-        ? "働き方と暮らしのペースを、整える一年に。"
+        ? measuredPace(g) ? variedYearTitle(g, REST_TITLES) : REST_TITLES[0]
         : ({
             invest: "お金の置き場所を、見直した。",
             prepay: "手元の備えを残し、ローンを見直した。",
@@ -2988,7 +3018,7 @@ export function annualEpisode(before, record) {
       ? "経験を深める道と、外の仕事を知る道。成果をどう使うかは、まだ選べる。"
       : "成果が見えにくい時期をどう過ごすか。学ぶ、人に会う、働く場所を変えることも考えられる。";
   } else if (id === "rest") {
-    title = [
+    title = measuredPace(before) ? record.outcome?.title ?? variedYearTitle(before, REST_TITLES) : [
       "何もしない予定を、ひとつ入れた。",
       "久しぶりに、帰り道を急がなかった。",
       "忙しさから、少し距離を置いた。",
@@ -3229,7 +3259,9 @@ export function advanceDirection(game, decision, { years = 5 } = {}) {
       const allowed = availableChoices(next);
       const working = !isRetiredAt(next) && next.employer.kind !== "seeking" &&
         !(next.employer.kind === "initial" && ["student", "notWorking"].includes(next.profile.occupation));
-      const preferred = ["learn", "studyDaily"].includes(id)
+      const resumeWork = measuredPace(next) && working && !onMentalLeave(next) &&
+        ["rest", "connect", "explore"].includes(id);
+      const preferred = resumeWork ? ["focus"] : ["learn", "studyDaily"].includes(id)
         ? lifeRealism(next) && working ? ["focus"] : ["studyDaily", "learn"]
         : ["rest", "recover", "careLeave", "connect", "explore"].includes(id) ? [id]
           : ["familyPlan", "reconsiderFamily", "meet"].includes(id) ? ["connect", "rest"]
@@ -3241,7 +3273,7 @@ export function advanceDirection(game, decision, { years = 5 } = {}) {
       }
       // Retain a continuing study/rest intention, never a one-time transaction.
       if (typeof decision === "object" && decision.intent &&
-        (action === id || ["learn", "studyDaily"].includes(id)))
+        (action === id || resumeWork || ["learn", "studyDaily"].includes(id)))
         action = { id: action, intent: decision.intent };
     }
     next = advance(next, action);
@@ -3423,7 +3455,11 @@ export function advance(g, rawDecision) {
     ? job.exposure * 0.8 + sector.exposure * 0.2
     : job.exposure;
   const volatility = (randomAt(g.seed, i) - 0.5) * 0.07;
-  const aiBenefit = tech * adoption * job.complement * (g.skill / 100) * 0.1;
+  // Ordinary employees capture only a small part of productivity as yearly
+  // pay. Keep explicit moves, promotions, negotiation and ventures unchanged.
+  const aiBenefit = tech * adoption * job.complement * (g.skill / 100) *
+    (measuredPace(g) && employer.kind !== "venture" &&
+      !["switch", "promote", "negotiate"].includes(choice) ? 0.001 : 0.1);
   const transitionCost =
     tech * adoption * exposure * (1 - g.skill / 125) * 0.075;
   let growth = clamp(
@@ -3866,6 +3902,7 @@ export function replay(
   payRealismFrom = 0,
   lifeRealismFrom = 0,
   offersFrom = 0,
+  paceFrom = 0,
   directionBlocks,
 ) {
   if (
@@ -3894,6 +3931,7 @@ export function replay(
     payRealismFrom,
     lifeRealismFrom,
     offersFrom,
+    paceFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -3945,6 +3983,7 @@ export function compareWorlds(g) {
       g.payRealismFrom,
       g.lifeRealismFrom,
       g.offersFrom,
+      g.paceFrom,
       g.directionBlocks,
     ),
   );
@@ -3977,7 +4016,10 @@ export function encodeSave(g) {
     g.lifeRealismFrom > MAX_AGE ||
     !Number.isInteger(g.offersFrom) ||
     g.offersFrom < 0 ||
-    g.offersFrom > MAX_AGE
+    g.offersFrom > MAX_AGE ||
+    !Number.isInteger(g.paceFrom) ||
+    g.paceFrom < 0 ||
+    g.paceFrom > MAX_AGE
   )
     fail();
   const value = JSON.stringify({
@@ -3995,6 +4037,7 @@ export function encodeSave(g) {
     payRealismFrom: g.payRealismFrom,
     lifeRealismFrom: g.lifeRealismFrom,
     offersFrom: g.offersFrom,
+    paceFrom: g.paceFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
@@ -4051,6 +4094,9 @@ export function decodeSave(value) {
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
     Object.hasOwn(d, "offersFrom")
       ? d.offersFrom
+      : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
+    Object.hasOwn(d, "paceFrom")
+      ? d.paceFrom
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
   );
   if (Object.hasOwn(d, "directionBlocks"))

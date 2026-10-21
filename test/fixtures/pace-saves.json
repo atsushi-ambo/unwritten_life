@@ -1,0 +1,329 @@
+[
+  {
+    "id": "directions",
+    "save": {
+      "version": 2,
+      "dynamicFrom": 0,
+      "worldFrom": 0,
+      "retirementFrom": 0,
+      "careLeaveSalaryFrom": 0,
+      "prepayFrom": 0,
+      "debtRepayFrom": 0,
+      "salaryCapFrom": 0,
+      "incidentFrom": 0,
+      "careerPathFrom": 0,
+      "careerEndFrom": 0,
+      "payRealismFrom": 0,
+      "lifeRealismFrom": 0,
+      "offersFrom": 0,
+      "profile": {
+        "region": "metro",
+        "job": "tech",
+        "priority": "balance",
+        "ai": "daily",
+        "gender": "undisclosed",
+        "household": "solo",
+        "companyType": "large",
+        "age": 32,
+        "income": 650,
+        "savings": 300,
+        "monthlyCost": 12,
+        "stocks": 0,
+        "rent": 7,
+        "homeValue": 0,
+        "mortgage": 0,
+        "mortgageYears": 25,
+        "mortgageRate": 1.5,
+        "retirementAge": 65,
+        "pension": 180,
+        "company": "",
+        "municipality": "",
+        "jobDetail": "",
+        "occupation": "infrastructure",
+        "industry": "",
+        "workModel": "unknown",
+        "rank": "unspecified",
+        "housing": "rent",
+        "tone": "realistic",
+        "partner": "unspecified",
+        "childrenWish": "undecided",
+        "careerGoal": "growth",
+        "children": 0,
+        "childStage": "school",
+        "careerNotes": "",
+        "careerInterests": "",
+        "companyFacts": null
+      },
+      "scenario": "steady",
+      "seed": 7919,
+      "decisions": [
+        "studyDaily",
+        "focus",
+        "focus",
+        "focus",
+        "focus",
+        "focus",
+        "focus",
+        "focus",
+        "focus",
+        "focus",
+        "rest",
+        "connect",
+        "explore",
+        "explore",
+        "explore",
+        "explore",
+        "explore"
+      ],
+      "scenes": {},
+      "reflections": {},
+      "careerSeen": {},
+      "directionBlocks": [
+        [
+          0,
+          5
+        ],
+        [
+          5,
+          10
+        ],
+        [
+          10,
+          11
+        ],
+        [
+          11,
+          12
+        ],
+        [
+          12,
+          17
+        ]
+      ]
+    },
+    "historyHash": "586881ecca79f8a8610013f9aa86abd46746524ae959f309062aac3b75e459f1"
+  },
+  {
+    "id": "current-scene",
+    "save": {
+      "version": 2,
+      "dynamicFrom": 0,
+      "worldFrom": 0,
+      "retirementFrom": 0,
+      "careLeaveSalaryFrom": 0,
+      "prepayFrom": 0,
+      "debtRepayFrom": 0,
+      "salaryCapFrom": 0,
+      "incidentFrom": 0,
+      "careerPathFrom": 0,
+      "careerEndFrom": 0,
+      "payRealismFrom": 0,
+      "lifeRealismFrom": 0,
+      "offersFrom": 0,
+      "profile": {
+        "region": "metro",
+        "job": "tech",
+        "priority": "balance",
+        "ai": "daily",
+        "gender": "undisclosed",
+        "household": "solo",
+        "companyType": "large",
+        "age": 32,
+        "income": 650,
+        "savings": 300,
+        "monthlyCost": 12,
+        "stocks": 0,
+        "rent": 7,
+        "homeValue": 0,
+        "mortgage": 0,
+        "mortgageYears": 25,
+        "mortgageRate": 1.5,
+        "retirementAge": 65,
+        "pension": 180,
+        "company": "",
+        "municipality": "",
+        "jobDetail": "",
+        "occupation": "infrastructure",
+        "industry": "",
+        "workModel": "unknown",
+        "rank": "unspecified",
+        "housing": "rent",
+        "tone": "realistic",
+        "partner": "unspecified",
+        "childrenWish": "undecided",
+        "careerGoal": "growth",
+        "children": 0,
+        "childStage": "school",
+        "careerNotes": "",
+        "careerInterests": "",
+        "companyFacts": null
+      },
+      "scenario": "steady",
+      "seed": 7919,
+      "decisions": [
+        "studyDaily",
+        "focus",
+        "focus",
+        "focus",
+        "focus",
+        "focus",
+        "focus",
+        "focus",
+        "focus",
+        "focus",
+        "rest",
+        "connect",
+        "explore",
+        "explore",
+        "explore",
+        "explore",
+        "explore"
+      ],
+      "scenes": {
+        "17": {
+          "title": "学びを仕事へ",
+          "body": "会社と暮らしを考え、次の一年を選ぶ。直前の結果を受けて、何を続けるかを考える。",
+          "insight": "これは仮想の場面。",
+          "options": [
+            {
+              "id": "learn",
+              "label": "合成のlearn",
+              "hint": "時間の配分",
+              "reason": "本人の条件",
+              "decision": {
+                "id": "learn",
+                "intent": "learnを試す"
+              }
+            },
+            {
+              "id": "focus",
+              "label": "合成のfocus",
+              "hint": "時間の配分",
+              "reason": "本人の条件",
+              "decision": {
+                "id": "focus",
+                "intent": "focusを試す"
+              }
+            },
+            {
+              "id": "connect",
+              "label": "合成のconnect",
+              "hint": "時間の配分",
+              "reason": "本人の条件",
+              "decision": {
+                "id": "connect",
+                "intent": "connectを試す"
+              }
+            },
+            {
+              "id": "rest",
+              "label": "合成のrest",
+              "hint": "時間の配分",
+              "reason": "本人の条件",
+              "decision": {
+                "id": "rest",
+                "intent": "restを試す"
+              }
+            }
+          ]
+        }
+      },
+      "reflections": {},
+      "careerSeen": {},
+      "directionBlocks": [
+        [
+          0,
+          5
+        ],
+        [
+          5,
+          10
+        ],
+        [
+          10,
+          11
+        ],
+        [
+          11,
+          12
+        ],
+        [
+          12,
+          17
+        ]
+      ]
+    },
+    "historyHash": "586881ecca79f8a8610013f9aa86abd46746524ae959f309062aac3b75e459f1"
+  },
+  {
+    "id": "age-pay-rules",
+    "save": {
+      "version": 2,
+      "dynamicFrom": 0,
+      "worldFrom": 0,
+      "retirementFrom": 0,
+      "careLeaveSalaryFrom": 0,
+      "prepayFrom": 0,
+      "debtRepayFrom": 0,
+      "salaryCapFrom": 0,
+      "incidentFrom": 0,
+      "careerPathFrom": 0,
+      "careerEndFrom": 0,
+      "payRealismFrom": 0,
+      "lifeRealismFrom": 0,
+      "offersFrom": 0,
+      "profile": {
+        "region": "metro",
+        "job": "tech",
+        "priority": "balance",
+        "ai": "daily",
+        "gender": "undisclosed",
+        "household": "solo",
+        "companyType": "large",
+        "age": 58,
+        "income": 650,
+        "savings": 300,
+        "monthlyCost": 12,
+        "stocks": 0,
+        "rent": 7,
+        "homeValue": 0,
+        "mortgage": 0,
+        "mortgageYears": 25,
+        "mortgageRate": 1.5,
+        "retirementAge": 65,
+        "pension": 180,
+        "company": "",
+        "municipality": "",
+        "jobDetail": "",
+        "occupation": "infrastructure",
+        "industry": "",
+        "workModel": "unknown",
+        "rank": "unspecified",
+        "housing": "rent",
+        "tone": "realistic",
+        "partner": "unspecified",
+        "childrenWish": "undecided",
+        "careerGoal": "growth",
+        "children": 0,
+        "childStage": "school",
+        "careerNotes": "",
+        "careerInterests": "",
+        "companyFacts": null
+      },
+      "scenario": "steady",
+      "seed": 42,
+      "decisions": [
+        "focus",
+        "focus",
+        "focus",
+        "focus",
+        "focus",
+        "focus"
+      ],
+      "scenes": {},
+      "reflections": {},
+      "careerSeen": {}
+    },
+    "historyHash": "7ae1527eb5c1d92d7aa2a57926296edcc18c4a07dd95895d13dbfeaad83b1ecc"
+  }
+]

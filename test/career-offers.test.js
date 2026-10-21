@@ -21,7 +21,7 @@ const replayGame = (g, decisions = g.decisions) => replay(g.profile, g.scenario,
   decisions, g.scenes, false, g.dynamicFrom, g.worldFrom, g.retirementFrom,
   g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom,
   g.incidentFrom, g.careerPathFrom, g.careerEndFrom, g.payRealismFrom,
-  g.lifeRealismFrom, g.offersFrom, decisions.length === g.decisions.length ? g.directionBlocks : undefined);
+  g.lifeRealismFrom, g.offersFrom, g.paceFrom, decisions.length === g.decisions.length ? g.directionBlocks : undefined);
 const within = (n, lo, hi, label) => assert.ok(n >= lo && n <= hi, `${label}: ${n}`);
 function findIncident(id, make = start, predicate = () => true) {
   for (let seed = 1; seed < 30000; seed++) {
