@@ -249,6 +249,7 @@ test("undo retains the care-leave salary migration boundary and can repeat the r
   ), h.context);
   h.$("undo-button").click();
   assert.equal(h.context.game.careLeaveSalaryFrom, game.careLeaveSalaryFrom);
+  assert.equal(h.context.game.familyFrom, game.familyFrom);
   assert.equal(h.context.game.decisions.length, 3);
   assert.ok(h.context.game.cash > 30);
   assert.deepEqual({ ...advance(h.context.game, "invest"), reflections: { ...h.context.game.reflections }, careerSeen: { ...h.context.game.careerSeen } }, game);
