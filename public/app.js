@@ -1164,6 +1164,9 @@ function renderGame() {
       );
       if (option.reason)
         copy.append(node("small", `あなたとの接点：${option.reason}`));
+      // Ending the career ends the story; say so in the game's own words.
+      if (option.id === "retire")
+        copy.append(node("small", "選ぶとキャリアの物語が終わります", "choice-ending-note"));
       if (option.decision?.id === "switch")
         copy.append(
           node(

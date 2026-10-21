@@ -2340,3 +2340,6 @@ dialog p, dialog li { font-size: 14px; }
 .life-story-chapter .event-hardship .life-story-icon {
   color: var(--accent);
 }
+
+/* An option that ends the story is marked by the game, not the AI. */
+.choice-ending-note { color: var(--accent); font-weight: 600; }
