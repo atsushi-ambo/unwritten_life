@@ -22,6 +22,10 @@ export function careerMap(game) {
       : record.choice === "switch" ? "change"
         : ["promote", "transfer", "internalVenture"].includes(record.choice) && record.outcome?.kind === "success" ? "promoted"
         : ["learn", "studyDaily", "demonstrate"].includes(record.choice) ? "learning"
+          // Easing off while still paid is a working year (2026-10-22: a
+          // résumé showed 15 rest years, most of them at work or the business).
+          : ["rest", "recover"].includes(record.choice) && record.salary > 0 && record.employer?.kind !== "seeking"
+            ? record.employer?.kind === "venture" ? "venture" : "employed"
           : ["rest", "careLeave", "recover"].includes(record.choice) || record.employer?.kind === "seeking" ? "rest"
             : record.employer?.kind === "venture" ? "venture"
               : !working ? (game.profile.occupation === "student" ? "learning" : "rest")
@@ -76,6 +80,8 @@ export function careerRecord(game) {
     const nonworking = h.employer?.kind === "initial" && ["student", "notWorking"].includes(game.profile.occupation);
     const employer = state === "retired" ? "退職後の暮らし"
       : nonworking ? (game.profile.occupation === "student" ? "学びを中心に過ごす" : "仕事を離れて過ごす")
+        // An unnamed first employer is 「いまの職場」 in play; in a résumé it is past.
+        : h.employer?.kind === "initial" && h.employer.name === "いまの職場" ? "最初の勤務先"
         : h.employer?.name ?? "勤務先の記録なし";
     const role = state === "retired" || nonworking || h.employer?.kind === "seeking" ? null : h.employer?.role ?? null;
     const kind = state === "retired" ? "retired" : nonworking ? "nonworking" : h.employer?.kind ?? "unknown";

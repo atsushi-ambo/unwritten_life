@@ -31,6 +31,12 @@ test("career map derives each year's main activity without changing history or s
   assert.deepEqual(tiles[1], { year: 2027, age: 30, choice: "選択1", state: "change", label: "転職", icon: "↗" });
   assert.deepEqual(game, original);
   assert.deepEqual(careerMap({ ...game, history: [] }), []);
+  // Easing off while still paid counts as work or the business; leave, care
+  // leave and job-seeking stay rest.
+  const paid = (choice, kind, salary) => ({ year: 2026, age: 29, choice, choiceLabel: "選択", employer: { kind }, salary });
+  assert.deepEqual(careerMap({ ...game, history: [paid("rest", "initial", 400), paid("recover", "venture", 200),
+    paid("rest", "initial", 0), paid("careLeave", "initial", 340), paid("rest", "seeking", 0)] }).map((t) => t.state),
+  ["employed", "venture", "rest", "rest", "rest"]);
 });
 
 test("milestone pauses happen at arrival, once, and do not change annual calculations", () => {
