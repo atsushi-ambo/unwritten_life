@@ -488,6 +488,23 @@
                   </select></label
                 >
                 <label
+                  ><span class="field-label">パートナーの年収（万円）</span
+                  ><span class="input-unit"
+                    ><input
+                      name="partnerIncome"
+                      type="number"
+                      min="0"
+                      max="10000"
+                      step="0.1"
+                      placeholder="未入力なら0万円"
+                      aria-describedby="partner-income-hint"
+                    /><span>万円 / 年</span></span
+                  ></label
+                >
+                <p class="field-note wide-field" id="partner-income-hint">
+                  共働きの夫婦が多いため、相手の収入も任意で入力できます。空欄は0万円。パートナーがいる間の家計に手取りで加え、本人の年収とは分けます。
+                </p>
+                <label
                   ><span class="field-label">いまの子どもの人数</span
                   ><select name="children">
                     <option value="0">0人 / 設定しない</option>
@@ -521,7 +538,7 @@
                 >
 
                 <p class="field-note wide-field">
-                  いまの家族の支出は生活費に含めてください。全員を選んだ代表年齢として扱い、ゲーム開始後に迎えた子には年36万円を22歳まで追加する簡略モデルです。家族を迎える確率はゲーム用で、医学的な予測ではありません。
+                  いまの家族の支出は生活費に含めてください。全員を選んだ代表年齢として扱い、入力した合計を大人と子どもの分に分けます。子どもの分は就学・進学の年代で増え、22歳で独立して支出が減る簡略モデルです。開始後に迎えた子も同じ基準で計算します。家族を迎える確率はゲーム用で、医学的な予測ではありません。
                 </p>
                 <label
                   ><span class="field-label"

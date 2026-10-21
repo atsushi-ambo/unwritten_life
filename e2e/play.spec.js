@@ -33,6 +33,48 @@ async function expectFits(page) {
   expect(overflow).toEqual({ page: false, dialogs: false });
 }
 
+for (const value of ["", "200"]) test(`advanced partner income ${value || "blank"} fits 320px and persists separately`, async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  await page.goto("/");
+  await page.locator('[data-profile-level="advanced"]').click();
+  await page.locator('[name="partner"]').selectOption("partner");
+  const income = page.getByRole("spinbutton", { name: "パートナーの年収（万円）" });
+  await expect(income).toBeVisible();
+  await expect(income).toHaveValue("");
+  await expect(page.locator("#partner-income-hint")).toContainText("空欄は0万円");
+  await income.fill(value);
+  await expectFits(page);
+  await page.locator('[data-profile-level="standard"]').click();
+  // Hidden fields leave the accessibility tree, so check this one by name.
+  const field = page.locator('[name="partnerIncome"]');
+  await expect(field).toBeDisabled();
+  await expect(field).toBeHidden();
+  await page.locator('[data-profile-level="advanced"]').click();
+  await expect(income).toHaveValue(value);
+  await page.locator("#remember").check();
+  await page.locator("#quick-start").click();
+  await expect(page.locator("#hud-year")).toHaveText("2026年");
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("unwritten-life:v2")));
+  expect(saved.profile.partnerIncome).toBe(Number(value));
+  expect(saved.profile.income).toBe(500);
+  expect(saved.familyFrom).toBe(0);
+  await expectFits(page);
+});
+
+test("partner income is a separate household budget line at 320px", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  const game = advance(quietGame({ ...syntheticProfile, partner: "partner", partnerIncome: 200 }), "rest");
+  await page.goto("/");
+  await page.locator("#import-save-file").setInputFiles(saveFile(game));
+  const budget = page.locator("#history .budget-window").first();
+  await budget.locator("summary").click();
+  const row = budget.locator(".budget-list > div").filter({ hasText: "パートナー収入（手取り）" });
+  await expect(row.locator("dd")).toHaveText("+152");
+  // The top band shows the player's own pay (not the partner's), rounded to 10万円.
+  await expect(page.locator("#hud-income")).toHaveText(`約${Math.round(game.income / 10) * 10}万円`);
+  await expectFits(page);
+});
+
 test("mental leave shows sickness allowance separately from salary in the budget", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 740 });
   const game = advance(createGame(paceProfile(), "steady", 5819), "focus");

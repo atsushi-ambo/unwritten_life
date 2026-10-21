@@ -139,6 +139,7 @@ export const directionSpan = (g) =>
 export const payRealism = (g) => g.decisions.length >= (g.payRealismFrom ?? 0);
 export const lifeRealism = (g) => g.decisions.length >= (g.lifeRealismFrom ?? 0);
 export const careerOffers = (g) => g.decisions.length >= (g.offersFrom ?? 0);
+export const familyMoney = (g) => g.decisions.length >= (g.familyFrom ?? 0);
 const symmetricDrift = (g) => g.decisions.length >= (g.driftFrom ?? 0);
 const measuredPace = (g) => g.decisions.length >= (g.paceFrom ?? 0);
 // Keep temporary leave pay out of the salary basis of a later employer.
@@ -151,7 +152,9 @@ function employmentSalary(g) {
       ? 1 / previous.effects.salaryFactor : 1;
   const careRestore = g.decisions.length - 1 >= g.worldFrom &&
     decisionId(g.decisions.at(-1)) === "careLeave" ? 1 / 0.85 : 1;
-  return g.salary * incidentRestore * careRestore;
+  return familyMoney(g) && g.history.at(-1)?.careSalary !== undefined
+    ? g.history.at(-1).careSalary * incidentRestore
+    : g.salary * incidentRestore * careRestore;
 }
 // Offers last only until the next annual decision. Nothing is reserved or paid
 // on receipt/decline; the existing switch decision names the candidate company.
@@ -505,6 +508,7 @@ export function validateProfile(raw) {
   for (const [k, lo, hi, def] of [
     ["age", 18, 100, 30],
     ["income", 0, 10000, 500],
+    ["partnerIncome", 0, 10000, 0],
     ["savings", -10000, 100000, 300],
     ["monthlyCost", 0, 500, 12],
     ["stocks", 0, 100000, 0],
@@ -572,6 +576,7 @@ export function validateProfile(raw) {
 export const PROFILE_DEFAULTS = Object.freeze({
   age: 30,
   income: 500,
+  partnerIncome: 0,
   savings: 300,
   monthlyCost: 12,
   stocks: 0,
@@ -719,6 +724,7 @@ export function profileInputForLevel(
       p,
       pick([
         "partner",
+        "partnerIncome",
         "children",
         "childStage",
         "childrenWish",
@@ -1006,6 +1012,7 @@ export function createGame(
   paceFrom = 0,
   reemploymentPayFrom = 0,
   driftFrom = 0,
+  familyFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -1060,7 +1067,10 @@ export function createGame(
     reemploymentPayFrom > MAX_AGE ||
     !Number.isInteger(driftFrom) ||
     driftFrom < 0 ||
-    driftFrom > MAX_AGE
+    driftFrom > MAX_AGE ||
+    !Number.isInteger(familyFrom) ||
+    familyFrom < 0 ||
+    familyFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -1087,6 +1097,7 @@ export function createGame(
     paceFrom,
     reemploymentPayFrom,
     driftFrom,
+    familyFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -1350,6 +1361,27 @@ export function workSuccessChance(g, employer = g.employer, choice = "focus") {
     0.88,
   );
 }
+// Scale the existing household and annual 36万円/child assumptions to the
+// entered total. The starting family's costs are included, never added twice.
+const childMonthlyCost = (age) => age < 6 ? 3 : age < 15 ? 3.75 : age < 22 ? 4.5 : 0;
+function familyLivingCost(g, ages) {
+  const p = g.profile;
+  const adult = 12 * { solo: 1, shared: 1.5, care: 1.8 }[p.household];
+  const initialAge = { young: 3, school: 10, adult: 22 }[p.childStage];
+  const scale = p.monthlyCost / (adult + p.children * childMonthlyCost(initialAge));
+  return (adult + ages.reduce((sum, age) => sum + childMonthlyCost(age), 0)) * scale *
+    REGIONS[g.region].cost / REGIONS[p.region].cost;
+}
+// Two annual periods without the entered earnings, then automatic recovery.
+// No partner occupation, age, raises or pension is inferred.
+export function partnerIncomeAt(g, incident = null) {
+  // The entered income belongs to the partner the player started with; a
+  // partner met later has no entered income, so none is invented.
+  if (!familyMoney(g) || !g.family.partner || g.profile.partner !== "partner" ||
+    incident?.id === "partnerJobLoss" ||
+    g.history.at(-1)?.incident?.id === "partnerJobLoss") return 0;
+  return g.profile.partnerIncome;
+}
 function familyTurn(g, choice) {
   const family = {
     ...g.family,
@@ -1362,7 +1394,7 @@ function familyTurn(g, choice) {
     kind: "life",
     title,
     body,
-    salaryFactor: choice === "careLeave" ? 0.85 : 1,
+    salaryFactor: choice === "careLeave" && !familyMoney(g) ? 0.85 : 1,
     extraCost: 0,
   });
   if (choice === "meet") {
@@ -1401,7 +1433,7 @@ function familyTurn(g, choice) {
       "家族を支える時間へ、比重を移した。",
       "この年の労働収入を抑え、家族との時間とゆとりを増やした。翌年も同じ働き方を続ける必要はない。",
     );
-  const cost =
+  const cost = familyMoney(g) ? 0 :
     family.childAges.slice(g.profile.children).filter((age) => age < 22)
       .length * 36;
   return { family, outcome, cost };
@@ -1689,7 +1721,7 @@ export function incidentRates(g, choice, employer = g.employer, outcome = null) 
         (success ? 1.4 : 1) * ({ growing: 1.25, stable: 1, pressure: 0.6 }[world.company.id] ?? 1);
     }
   }
-  if (g.family.partner && g.age < 70)
+  if (g.family.partner && g.age < 70 && (!familyMoney(g) || partnerIncomeAt(g) > 0))
     rates.partnerJobLoss = INCIDENTS.partnerJobLoss.rate * (downturn ? 2 : 1);
   rates.illness =
     INCIDENTS.illness.rate + (g.age >= 50 ? 0.012 : 0) + (g.age >= 65 ? 0.02 : 0);
@@ -3475,7 +3507,8 @@ export function advance(g, rawDecision) {
     position = { ...position, rank: outcome.promotion, since: g.year };
   if (outcome?.unit) position = { ...position, unit: outcome.unit };
   const previousLeaveSalary = g.history.at(-1)?.leaveSalary;
-  const salaryBase = previousLeaveSalary ?? g.salary;
+  const previousCareSalary = familyMoney(g) ? g.history.at(-1)?.careSalary : undefined;
+  const salaryBase = previousLeaveSalary ?? previousCareSalary ?? g.salary;
   const previousIncident = g.history.at(-1)?.incident;
   const incidentRestore =
     onMentalLeave(g) && !incident?.effects.mentalLeave
@@ -3586,7 +3619,7 @@ export function advance(g, rawDecision) {
       : 1;
   const transitionIncome =
     (choice === "startup" ? 0.3 + randomAt(g.seed, i, 22) * 0.55 : 1) * rehire;
-  const careRestore = world &&
+  const careRestore = familyMoney(g) && i - 1 >= g.familyFrom ? 1 : world &&
     (i < g.careLeaveSalaryFrom || g.salary > 0 || previousLeaveSalary !== undefined) &&
     decisionId(g.decisions.at(-1)) === "careLeave" ? 1 / 0.85 : 1;
   const calculatedSalary = retired
@@ -3652,7 +3685,12 @@ export function advance(g, rawDecision) {
   // Annual approximation: one full year, then half a year, then no benefit.
   const sicknessAllowance = mentalLeave
     ? leaveSalary * (2 / 3) * clamp(1.5 - priorLeaveYears, 0, 1) : 0;
-  const salary = mentalLeave ? 0 : calculatedSalary;
+  // Apply reduced hours only to this year's paid salary, after calculating
+  // ordinary full-time growth/cuts. Retain that basis for consecutive years.
+  const reducedHours = familyMoney(g) && world && choice === "careLeave" && !mentalLeave;
+  const salary = mentalLeave ? 0 : calculatedSalary * (reducedHours ? 0.85 : 1);
+  const partnerIncome = partnerIncomeAt(g, incident);
+  const partnerTakeHome = partnerIncome * 0.76;
   const pension = g.age >= 65 ? p.pension : 0;
   const income = salary + pension + sicknessAllowance;
   const businessSetup =
@@ -3680,6 +3718,7 @@ export function advance(g, rawDecision) {
     housing = "own";
     rent = 0;
   }
+  if (familyMoney(g)) livingCost = familyLivingCost(g, familyChange.family.childAges);
   if (choice === "move") {
     const order = ["metro", "city", "rural"];
     const prev = REGIONS[region].cost;
@@ -3711,7 +3750,7 @@ export function advance(g, rawDecision) {
     // force asset sales or borrowing, or consume the six-month cash buffer.
     prepayment = Math.max(
       0,
-      Math.min(mortgage, cash - buffer, cash + (income - sicknessAllowance) * 0.76 + sicknessAllowance - reserved - buffer),
+      Math.min(mortgage, cash - buffer, cash + (income - sicknessAllowance) * 0.76 + sicknessAllowance + partnerTakeHome - reserved - buffer),
     );
     cash -= prepayment;
     mortgage -= prepayment;
@@ -3723,7 +3762,7 @@ export function advance(g, rawDecision) {
   if (mortgageYears > 1) mortgageYears -= 1;
   const housingCost =
     housing === "own" ? loanPayment + homeValue * 0.01 : rent * 12;
-  const disposable = (income - sicknessAllowance) * 0.76 + sicknessAllowance,
+  const disposable = (income - sicknessAllowance) * 0.76 + sicknessAllowance + partnerTakeHome,
     bonus = choice === "explore" ? (randomAt(g.seed, i, 1) - 0.5) * 30 : 0;
   const expenses =
     livingCost * 12 * (1 + (world?.shock.costs ?? 0)) +
@@ -3857,6 +3896,8 @@ export function advance(g, rawDecision) {
     title: event.title,
     income,
     salary,
+    ...(reducedHours && salary > 0 ? { careSalary: calculatedSalary } : {}),
+    ...(familyMoney(g) ? { partnerIncome } : {}),
     ...(mentalLeave ? { leaveSalary } : {}),
     savings,
     cash,
@@ -3903,6 +3944,7 @@ export function advance(g, rawDecision) {
     // gains stay in investmentGain/propertyGain and do not enter cash flow.
     budget: {
       income: salary * 0.76,
+      ...(familyMoney(g) ? { partnerIncome: partnerTakeHome } : {}),
       pension: (symmetricDrift(g) ? pension : income - salary) * 0.76,
       ...(symmetricDrift(g) ? { sicknessAllowance } : {}),
       living: -(expenses - housingCost - cost),
@@ -3990,6 +4032,7 @@ export function replay(
   paceFrom = 0,
   reemploymentPayFrom = 0,
   driftFrom = 0,
+  familyFrom = 0,
   directionBlocks,
 ) {
   if (
@@ -4021,6 +4064,7 @@ export function replay(
     paceFrom,
     reemploymentPayFrom,
     driftFrom,
+    familyFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -4075,6 +4119,7 @@ export function compareWorlds(g) {
       g.paceFrom,
       g.reemploymentPayFrom,
       g.driftFrom,
+      g.familyFrom,
       g.directionBlocks,
     ),
   );
@@ -4116,7 +4161,10 @@ export function encodeSave(g) {
     g.reemploymentPayFrom > MAX_AGE ||
     !Number.isInteger(g.driftFrom) ||
     g.driftFrom < 0 ||
-    g.driftFrom > MAX_AGE
+    g.driftFrom > MAX_AGE ||
+    !Number.isInteger(g.familyFrom) ||
+    g.familyFrom < 0 ||
+    g.familyFrom > MAX_AGE
   )
     fail();
   const value = JSON.stringify({
@@ -4137,6 +4185,7 @@ export function encodeSave(g) {
     paceFrom: g.paceFrom,
     reemploymentPayFrom: g.reemploymentPayFrom,
     driftFrom: g.driftFrom,
+    familyFrom: g.familyFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
@@ -4203,6 +4252,9 @@ export function decodeSave(value) {
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
     Object.hasOwn(d, "driftFrom")
       ? d.driftFrom
+      : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
+    Object.hasOwn(d, "familyFrom")
+      ? d.familyFrom
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
   );
   if (Object.hasOwn(d, "directionBlocks"))

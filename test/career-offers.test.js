@@ -21,7 +21,7 @@ const replayGame = (g, decisions = g.decisions) => replay(g.profile, g.scenario,
   decisions, g.scenes, false, g.dynamicFrom, g.worldFrom, g.retirementFrom,
   g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom,
   g.incidentFrom, g.careerPathFrom, g.careerEndFrom, g.payRealismFrom,
-  g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom, g.driftFrom, decisions.length === g.decisions.length ? g.directionBlocks : undefined);
+  g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom, g.driftFrom, g.familyFrom, decisions.length === g.decisions.length ? g.directionBlocks : undefined);
 const within = (n, lo, hi, label) => assert.ok(n >= lo && n <= hi, `${label}: ${n}`);
 function findIncident(id, make = start, predicate = () => true) {
   for (let seed = 1; seed < 30000; seed++) {
@@ -215,9 +215,9 @@ test("mental leave can continue or recover in later years, without stacking pay 
   assert.match(advance(depression, "focus").history[0].incident.title, /うつ病/);
 });
 
-test("continued mental leave restores the separate family-leave reduction and retains the age-60 pay rule", () => {
+test("continued mental leave keeps its full-time basis and retains the age-60 pay rule", () => {
   for (const { extra, action, factor } of [
-    { extra: { children: 1 }, action: "careLeave", factor: 1 / 0.85 },
+    { extra: { children: 1 }, action: "careLeave", factor: 1 },
     { extra: { age: 58, retirementAge: 65 }, action: "focus", factor: 0.75 },
   ]) {
     let checked = false;

@@ -577,6 +577,7 @@ function appendBudget(parent, h, collapsed = false) {
   const list = node("dl", undefined, "budget-list");
   for (const [key, label] of [
     ["income", "労働収入（手取り）"],
+    ["partnerIncome", "パートナー収入（手取り）"],
     ["pension", "年金等（手取り）"],
     ["sicknessAllowance", "傷病手当金（給与の約2/3、最長1年6か月）"],
     ["living", "生活費・子育て等"],
@@ -1050,6 +1051,7 @@ function renderGame() {
         game.paceFrom,
         game.reemploymentPayFrom,
         game.driftFrom,
+        game.familyFrom,
       );
       showGame(true);
     });
@@ -1492,6 +1494,7 @@ $("undo-button").addEventListener("click", () => {
     game.paceFrom,
     game.reemploymentPayFrom,
     game.driftFrom,
+    game.familyFrom,
     blocks,
   );
   const reached = new Set(careerMilestones(game).map((m) => m.id));

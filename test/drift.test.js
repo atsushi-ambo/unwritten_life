@@ -19,7 +19,7 @@ const replayGame = (g, length = g.decisions.length) => replay(
   false, g.dynamicFrom, g.worldFrom, g.retirementFrom, g.careLeaveSalaryFrom,
   g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom,
   g.careerEndFrom, g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom,
-  g.reemploymentPayFrom, g.driftFrom,
+  g.reemploymentPayFrom, g.driftFrom, g.familyFrom,
 );
 
 test("yearly noise has the same slope on both sides of zero near the ceiling, with no negative mean drift", () => {

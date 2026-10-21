@@ -133,7 +133,8 @@ test("family wishes need a choice and preparation; results vary, age forward, an
     );
     if (next.family.childAges.length) {
       added++;
-      assert.equal(next.history[0].familyCost, 36);
+      assert.equal(next.history[0].familyCost, 0);
+      assert.equal(next.livingCost, p.monthlyCost + 3);
     } else waiting++;
   }
   assert.ok(added > 0 && waiting > 0);

@@ -578,16 +578,23 @@ test("hosted offer, pace and pay boundaries validate before requests, attempt re
     },
   });
   const auth = await session(api), saved = JSON.parse(encodeSave(createGame(profile)));
-  for (const field of ["offersFrom", "paceFrom", "reemploymentPayFrom", "driftFrom"]) for (const value of [null, -1, 1.5, 111, "0"]) {
+  for (const field of ["offersFrom", "paceFrom", "reemploymentPayFrom", "driftFrom", "familyFrom"]) for (const value of [null, -1, 1.5, 111, "0"]) {
     const response = await api.scene(request(auth, { save: JSON.stringify({ ...saved, [field]: value }) }), user);
     assert.equal(response.status, 400);
     assert.equal(calls, 0);
     assert.equal(sql.prepare("SELECT count(*) AS n FROM ai_attempts").get().n, 0);
     assert.equal(sql.prepare("SELECT count(*) AS n FROM ai_budget").get().n, 0);
   }
-  for (const field of ["offersFrom", "paceFrom", "reemploymentPayFrom", "driftFrom"]) for (const value of [0, 1, 110]) {
+  for (const partnerIncome of [null, -1, 10001, "200", {}]) {
+    const response = await api.scene(request(auth, { save: JSON.stringify({ ...saved, profile: { ...saved.profile, partnerIncome } }) }), user);
+    assert.equal(response.status, 400);
+    assert.equal(calls, 0);
+    assert.equal(sql.prepare("SELECT count(*) AS n FROM ai_attempts").get().n, 0);
+    assert.equal(sql.prepare("SELECT count(*) AS n FROM ai_budget").get().n, 0);
+  }
+  for (const field of ["offersFrom", "paceFrom", "reemploymentPayFrom", "driftFrom", "familyFrom"]) for (const value of [0, 1, 110]) {
     const response = await api.scene(request(auth, { save: JSON.stringify({ ...saved, [field]: value }) }), user);
     assert.equal(response.status, 200);
   }
-  assert.equal(calls, 12);
+  assert.equal(calls, 15);
 });
