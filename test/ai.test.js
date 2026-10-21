@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { makeAI, configFrom } from "../lib/ai.mjs";
 import { publicAddress, destination, requestText } from "../lib/network.mjs";
 import { appPort } from "../lib/port.mjs";
-import { createGame, encodeSave, advance } from "../public/engine.js";
+import { createGame, encodeSave, advance, optionalProfileInputs, profileInputForLevel, PROFILE_DEFAULTS } from "../public/engine.js";
 import { SCENE_STYLE, storyRequest } from "../public/story.js";
 import { replyFor, isVerification, readyAI, ollamaText, chatText } from "./fixtures/ai-replies.js";
 import http from "node:http";
@@ -705,4 +705,18 @@ test("active scene generation rejects reconfiguration and parallel calls; switch
   assert.equal((await ai.generate(save)).cached, true);
   assert.deepEqual(requestedModels, ["qwen3:8b", "next-model"]);
   assert.equal(ai.status().calls, 2);
+});
+
+test("a new graduate's first scene is told as the first year at work", () => {
+  const p = optionalProfileInputs(profileInputForLevel({}, "quick", { band: "new", region: "city" }), PROFILE_DEFAULTS);
+  const g = createGame(p, "steady", 7);
+  const first = storyRequest(g, { mode: "life" });
+  assert.equal(first.context.firstYearOfWork, true);
+  assert.match(first.messages[0].content, /firstYearOfWorkがあれば社会人1年目/);
+  assert.equal(storyRequest(advance(g, "focus"), { mode: "life" }).context.firstYearOfWork, undefined);
+  assert.equal(storyRequest(createGame({ ...p, age: 35 }, "steady", 7), { mode: "life" }).context.firstYearOfWork, undefined);
+  for (const occupation of ["student", "notWorking", "independent"]) {
+    const other = optionalProfileInputs(profileInputForLevel({ age: 22, occupation }, "standard"), PROFILE_DEFAULTS);
+    assert.equal(storyRequest(createGame(other, "steady", 7), { mode: "life" }).context.firstYearOfWork, undefined, occupation);
+  }
 });

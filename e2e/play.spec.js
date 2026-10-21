@@ -24,10 +24,12 @@ test("quick start uses age band and region estimates and starts with neutral fam
   await page.goto("/");
   await expect(page.locator("#quick-age-band")).toHaveValue("new");
   await expect(page.locator("#quick-region")).toHaveValue("city");
-  await expect(page.locator("#quick-summary")).toContainText("22歳・地方の中心都市でスタート。年収300万円・資産30万円");
+  await expect(page.locator("#quick-summary")).toContainText("22歳・地方の中心都市・IT・技術・研究でスタート。年収300万円・資産30万円");
   await page.locator("#quick-age-band").selectOption("20s");
   await page.locator("#quick-region").selectOption("metro");
-  await expect(page.locator("#quick-summary")).toHaveText("25歳・大都市圏でスタート。年収390万円・資産100万円など、年代と地域から決めたゲーム用の目安を使います。");
+  await expect(page.locator("#quick-summary")).toHaveText("25歳・大都市圏・IT・技術・研究でスタート。年収390万円・資産100万円など、年代と地域から決めたゲーム用の目安を使います。");
+  await page.locator("#quick-job").selectOption("care");
+  await expect(page.locator("#quick-summary")).toContainText("25歳・大都市圏・医療・介護・福祉でスタート。");
   await expectFits(page);
   await page.locator("#remember").check();
   await page.locator("#quick-start").click();
@@ -35,6 +37,7 @@ test("quick start uses age band and region estimates and starts with neutral fam
   const p = await page.evaluate(() => JSON.parse(localStorage.getItem("unwritten-life:v2")).profile);
   expect([p.age, p.region, p.income, p.savings, p.monthlyCost, p.rent]).toEqual([25, "metro", 390, 100, 11, 9]);
   expect([p.household, p.partner, p.children]).toEqual(["solo", "unspecified", 0]);
+  expect(p.job).toBe("care");
   await expectFits(page);
 });
 

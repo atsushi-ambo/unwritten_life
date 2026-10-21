@@ -1503,7 +1503,7 @@ function updateBudget() {
   updateProfileVisibility();
   const values = readProfile();
   $("quick-summary").textContent =
-    `${values.age}歳・${REGIONS[values.region].label}でスタート。年収${values.income}万円・資産${values.savings}万円など、年代と地域から決めたゲーム用の目安を使います。`;
+    `${values.age}歳・${REGIONS[values.region].label}・${JOBS[values.job].label}でスタート。年収${values.income}万円・資産${values.savings}万円など、年代と地域から決めたゲーム用の目安を使います。`;
   $("budget-summary").textContent =
     `このゲームの初期設定：年収 ${values.income}万円、金融資産 ${values.savings}万円（うち株式 ${values.stocks}万円）、生活費 ${values.monthlyCost}万円/月 ＋ ${values.housing === "own" ? "持ち家の維持・返済費" : "家賃 " + values.rent + "万円/月"}。未入力はゲーム用の仮値です。実際の資産を入力する必要はありません。`;
 }
