@@ -205,3 +205,35 @@ test("friction at work is told but does not stop a direction; serious events sti
   }
   assert.ok(mild, "no seed had a falling-out in the first year");
 });
+
+test("a year of leave does not stop a direction; returning to work does", () => {
+  let found;
+  for (let seed = 1; seed < 3000 && !found; seed++) {
+    let g = createGame(profile, "steady", seed);
+    for (let k = 0; k < 20 && !g.ended && !found; k++) {
+      const before = g;
+      g = advance(g, "focus");
+      if (g.history.at(-1).incident?.id === "burnout" || g.history.at(-1).incident?.title?.includes("休職")) found = { before, g };
+    }
+  }
+  assert.ok(found, "no seed went on leave");
+  const run = advanceDirection(found.g, "rest");
+  assert.ok(!run.entries.slice(0, -1).some((e) => e.incident?.id === "returnToWork"), "the run stops at the return");
+  if (run.entries.at(-1).incident?.id === "returnToWork")
+    assert.match(run.stopReason, /休職から仕事に戻りました/);
+  assert.ok(!run.entries.slice(0, -1).some((e) => e.incident?.id === "leaveContinues" && run.entries.length === 1));
+});
+
+test("a fresh reply offers early retirement only when it is affordable", () => {
+  const g = quiet({ ...profile, age: 46, savings: 2700 });
+  const reply = (id) => ({
+    title: "次の5年", body: "仕事と暮らしを考え、次の5年を選ぶ。直前の結果から考える。", insight: "架空の場面。",
+    options: [...["focus", "learn", "connect"].map((x) => ({ id: x, label: `合成の${x}`, hint: "配分", reason: "条件", decision: { id: x, intent: `${x}を試す` } })),
+      { id, label: "仕事を離れる", hint: "収入が止まる", reason: "暮らし", decision: { id, intent: "離れる" } }],
+  });
+  assert.ok(availableChoices(g).includes("retire"));
+  assert.throws(() => validateGeneratedScene(reply("retire"), g, { mode: "life", fresh: true }));
+  validateGeneratedScene(reply("retire"), g, { mode: "life" });
+  validateGeneratedScene(reply("retire"), quiet({ ...profile, age: 46, savings: 90000 }), { mode: "life", fresh: true });
+  validateGeneratedScene(reply("retire"), quiet({ ...profile, age: 56, savings: 2700 }), { mode: "life", fresh: true });
+});
