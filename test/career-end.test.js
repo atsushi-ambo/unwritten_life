@@ -4,7 +4,7 @@ import {
   createGame, advance, advanceYears, encodeSave, decodeSave, RANKS, MAX_AGE,
   optionalProfileInputs, profileInputForLevel,
 } from "../public/engine.js";
-import { lifeStory, careerRecordText } from "../public/careers.js";
+import { lifeStory, careerRecordText, peakRankLabel, yearSpan } from "../public/careers.js";
 
 const profile = (extra = {}) => optionalProfileInputs(profileInputForLevel(
   { occupation: "software", company: "合成ソフト社", ...extra }, "advanced",
@@ -83,3 +83,17 @@ test("my resume sums up money, titles, family and luck, decade by decade", () =>
 function availableTry(g) {
   return g.position.rank === "staff" ? "promote" : "focus";
 }
+
+test("an unknown starting stage with no promotion reads as no recorded promotion, not missing input", () => {
+  assert.equal(peakRankLabel("unspecified", RANKS), "昇格の記録なし");
+  assert.equal(peakRankLabel("lead", RANKS), "リーダー");
+  assert.equal(peakRankLabel(undefined, RANKS), "記録なし");
+  let g = quiet(profile({ age: 60, retirementAge: 62 }), 5);
+  while (!g.ended) g = advance(g, "rest");
+  assert.equal(lifeStory(g, RANKS).stats.peakRank, "unspecified");
+  const text = careerRecordText(g, {}, RANKS);
+  assert.match(text, /いちばん上の役職 昇格の記録なし/);
+  assert.doesNotMatch(text, /未入力/);
+  assert.equal(yearSpan(2035, 2035), "2035年");
+  assert.equal(yearSpan(2031, 2034), "2031〜2034年");
+});

@@ -44,6 +44,8 @@ import {
   careerRecord,
   careerRecordText,
   lifeStory,
+  peakRankLabel,
+  yearSpan,
 } from "./careers.js";
 import {
   worldAt,
@@ -345,7 +347,7 @@ function renderLifeStory() {
   for (const [label, value, note] of [
     ["年収", `${money(s.startIncome)}→${money(s.peakIncome)}万円`, "はじめ → ピーク"],
     ["純資産", `${money(s.startNetWorth)}→${money(s.endNetWorth)}万円`, "はじめ → おわり"],
-    ["いちばん上の役職", RANKS[s.peakRank]?.label ?? "記録なし", ""],
+    ["いちばん上の役職", peakRankLabel(s.peakRank, RANKS), ""],
     ["転職", `${s.moves}回`, `勤めた会社 ${s.employers}社`],
     ["家族", s.partner ? "パートナーあり" : "パートナーなし", `子ども ${s.children}人`],
     ["住まい", s.housing === "own" ? "持ち家" : "賃貸", ""],
@@ -390,12 +392,12 @@ function renderCareerResume() {
   const timeline = node("ol", undefined, "resume-timeline");
   for (const t of record.tenures) {
     const row = node("li");
-    row.append(node("small", `${t.from}〜${t.to}年 · ${t.years}年`), node("b", t.employer));
+    row.append(node("small", `${yearSpan(t.from, t.to)} · ${t.years}年`), node("b", t.employer));
     if (t.role)
       row.append(
         node(
           "span",
-          [JOBS[t.role]?.label ?? t.role, t.rank ? RANKS[t.rank].label : "", t.unit ?? ""]
+          [JOBS[t.role]?.label ?? t.role, t.rank && t.rank !== "unspecified" ? RANKS[t.rank].label : "", t.unit ?? ""]
             .filter(Boolean)
             .join(" · "),
         ),

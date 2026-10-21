@@ -98,6 +98,12 @@ export function careerRecord(game) {
     .map((m) => ({ ...m, text: game.reflections[m.id] }));
   return { map, tenures, yearsByState, decisions, reflections };
 }
+// An unknown starting stage with no promotion reads as a career fact, not as
+// a missing form field (2026-10-22: the résumé showed 役職は未入力).
+export const peakRankLabel = (rank, ranks) =>
+  rank === "unspecified" ? "昇格の記録なし" : ranks[rank]?.label ?? "記録なし";
+// A tenure within one calendar year reads 2035年, not 2035〜2035年.
+export const yearSpan = (from, to) => from === to ? `${from}年` : `${from}〜${to}年`;
 export function careerRecordText(game, roles = {}, ranks = {}) {
   const record = careerRecord(game);
   const story = lifeStory(game, ranks);
@@ -105,11 +111,11 @@ export function careerRecordText(game, roles = {}, ranks = {}) {
   const lines = [
     "Unwritten Life / わたしの履歴書", story.headline,
     `年収 ${man(story.stats.startIncome)} → ピーク ${man(story.stats.peakIncome)} / 純資産 ${man(story.stats.startNetWorth)} → ${man(story.stats.endNetWorth)}`,
-    `いちばん上の役職 ${ranks[story.stats.peakRank]?.label ?? "記録なし"} / 転職 ${story.stats.moves}回・勤めた会社 ${story.stats.employers}社 / 家族 ${story.stats.partner ? "パートナーあり" : "パートナーなし"}・子ども${story.stats.children}人 / ${story.stats.housing === "own" ? "持ち家" : "賃貸"} / 学びの時間 ${story.stats.studyHours.toLocaleString("ja-JP")}時間`,
+    `いちばん上の役職 ${peakRankLabel(story.stats.peakRank, ranks)} / 転職 ${story.stats.moves}回・勤めた会社 ${story.stats.employers}社 / 家族 ${story.stats.partner ? "パートナーあり" : "パートナーなし"}・子ども${story.stats.children}人 / ${story.stats.housing === "own" ? "持ち家" : "賃貸"} / 学びの時間 ${story.stats.studyHours.toLocaleString("ja-JP")}時間`,
     ...story.chapters.flatMap((c) => ["", `【${c.label}】`, ...c.events.map((e) => `${e.year}年・${e.age}歳 ${e.text}`)]),
     "", "勤務先と役割",
     `${game.profile.age}歳から${game.age}歳まで・${game.decisions.length}年間。ゲーム内の架空の経歴で、実際の職務経歴を証明するものではありません。`,
-    ...record.tenures.map((t) => `${t.from}〜${t.to}年（${t.years}年） ${t.employer}${t.role ? " / " + (roles[t.role]?.label ?? t.role) : ""}${t.rank ? " / " + (ranks[t.rank]?.label ?? t.rank) : ""}${t.unit ? "（" + t.unit + "）" : ""}`),
+    ...record.tenures.map((t) => `${yearSpan(t.from, t.to)}（${t.years}年） ${t.employer}${t.role ? " / " + (roles[t.role]?.label ?? t.role) : ""}${t.rank && t.rank !== "unspecified" ? " / " + (ranks[t.rank]?.label ?? t.rank) : ""}${t.unit ? "（" + t.unit + "）" : ""}`),
     "", "一年の主な活動（重複なし）",
     ...Object.entries(record.yearsByState).map(([key, years]) => `${CAREER_STATES[key].label}：${years}年`),
     "", "節目の一行",
