@@ -6,8 +6,9 @@ import {
 } from "../public/engine.js";
 
 // The reported case: 30, IT, regional city, 500万円, at a large company.
+// Standard input derives job from occupation; an empty occupation means other.
 const profile = (extra = {}) => optionalProfileInputs({
-  ...profileInputForLevel({}, "standard"), age: 30, region: "city", income: 500,
+  ...profileInputForLevel({ occupation: "infrastructure" }, "standard"), age: 30, region: "city", income: 500,
   companyType: "large", ...extra,
 }, PROFILE_DEFAULTS);
 const median = (v) => [...v].sort((a, b) => a - b)[Math.floor(v.length / 2)];

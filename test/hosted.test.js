@@ -567,7 +567,7 @@ test("hosted generation accepts saves without a salary cap boundary and rejects 
   assert.equal(calls, 3);
 });
 
-test("hosted offer boundaries reject invalid saves before requests, attempt records or budget reservations", async (t) => {
+test("hosted offer and pace boundaries reject invalid saves before requests, attempt records or budget reservations", async (t) => {
   const { db, sql } = database(t);
   let calls = 0;
   const api = makeHostedAPI({
@@ -578,16 +578,16 @@ test("hosted offer boundaries reject invalid saves before requests, attempt reco
     },
   });
   const auth = await session(api), saved = JSON.parse(encodeSave(createGame(profile)));
-  for (const offersFrom of [null, -1, 1.5, 111, "0"]) {
-    const response = await api.scene(request(auth, { save: JSON.stringify({ ...saved, offersFrom }) }), user);
+  for (const field of ["offersFrom", "paceFrom"]) for (const value of [null, -1, 1.5, 111, "0"]) {
+    const response = await api.scene(request(auth, { save: JSON.stringify({ ...saved, [field]: value }) }), user);
     assert.equal(response.status, 400);
     assert.equal(calls, 0);
     assert.equal(sql.prepare("SELECT count(*) AS n FROM ai_attempts").get().n, 0);
     assert.equal(sql.prepare("SELECT count(*) AS n FROM ai_budget").get().n, 0);
   }
-  for (const offersFrom of [0, 1, 110]) {
-    const response = await api.scene(request(auth, { save: JSON.stringify({ ...saved, offersFrom }) }), user);
+  for (const field of ["offersFrom", "paceFrom"]) for (const value of [0, 1, 110]) {
+    const response = await api.scene(request(auth, { save: JSON.stringify({ ...saved, [field]: value }) }), user);
     assert.equal(response.status, 200);
   }
-  assert.equal(calls, 3);
+  assert.equal(calls, 6);
 });
