@@ -13,7 +13,7 @@ import { fourReply } from "../test/fixtures/ai-replies.js";
 // tests. A synthetic AI answers instantly through the real validation path.
 function fakeScene(save, mode = "life") {
   const game = decodeSave(save);
-  const reply = fourReply(storyRequest(game, { mode }).context);
+  const reply = fourReply(storyRequest(game, { mode }).context, { offerResponses: false });
   const scene = groundScene(validateGeneratedScene(reply, game, { mode }), game);
   return { scene, turn: sceneKey(game), model: "e2e-synthetic", cached: false };
 }

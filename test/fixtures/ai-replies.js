@@ -3,7 +3,7 @@
 import { makeAI } from "../../lib/ai.mjs";
 
 const companies = ["合成商事", "合成ソフト", "合成ロジ"];
-export function fourReply(context, { career = context.generationMode === "career", ...overrides } = {}) {
+export function fourReply(context, { career = context.generationMode === "career", offerResponses = true, ...overrides } = {}) {
   const ids = context.allowedActions.map((a) => a.id);
   const options = career
     ? [
@@ -36,7 +36,7 @@ export function fourReply(context, { career = context.generationMode === "career
             decision: { id: "switch", target: "custom", name: "合成クラウド社", role: "tech", companyType: "unknown",
               candidateKind: "real", workModel: "services", proposal: "経験を生かす架空の役割", intent: "次の仕事を探す" } }
           : o);
-  const offer = context.careerOffer;
+  const offer = offerResponses ? context.careerOffer : null;
   if (offer?.id === "scout") {
     options[career ? 0 : 3] = {
       id: "switch", label: "スカウトの企業を検討する", hint: "採用は未定", reason: "経験との接点を調べる",
@@ -52,7 +52,7 @@ export function fourReply(context, { career = context.generationMode === "career
     o.id === "scout" ? "スカウトの連絡が届いた。" : "上司から昇進の打診があった。").join("");
   return {
     title: "学びを仕事へ",
-    body: offerBody + "会社と暮らしを考え、次の一年を選ぶ。直前の結果を受けて、何を続けるかを考える。",
+    body: (offerResponses ? offerBody : "") + "会社と暮らしを考え、次の一年を選ぶ。直前の結果を受けて、何を続けるかを考える。",
     insight: "これは仮想の場面。",
     options,
     ...overrides,
