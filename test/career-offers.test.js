@@ -330,3 +330,23 @@ test("cohorts retain different careers and rare extremes with tolerant promotion
       within(c[field].reduce((a, b) => a + b), 0.999, 1.001, field);
   }
 });
+
+test("a fresh reply must name a company, not describe a move; saved scenes still load", () => {
+  const g = createGame({ age: 27, region: "city", job: "people", ai: "sometimes", priority: "balance",
+    gender: "undisclosed", household: "solo", companyType: "unknown" }, "steady", 3);
+  const scene = (name) => ({
+    title: "次の5年", body: "店の仕事と暮らしを考え、次の5年を選ぶ。直前の結果から考える。", insight: "架空の場面。",
+    options: [
+      ...["focus", "learn", "connect"].map((id) => ({ id, label: `合成の${id}`, hint: "時間の配分", reason: "本人の条件", decision: { id, intent: `${id}を試す` } })),
+      { id: "switch", label: "別の会社へ移る", hint: "慣れるまで大変", reason: "経験の接点",
+        decision: { id: "switch", target: "custom", name, role: "people", companyType: "unknown", candidateKind: "real",
+          workModel: "services", proposal: "経験を生かす架空の役割", intent: "移る" } },
+    ],
+  });
+  for (const name of ["AIを活用する職場に転職する", "接客を生かせる職場", "IT業界へ転職", "成長できる環境"])
+    assert.throws(() => validateGeneratedScene(scene(name), g, { mode: "life", fresh: true }), name);
+  for (const name of ["良品計画", "大栄環境", "JFE環境", "リクルート"])
+    validateGeneratedScene(scene(name), g, { mode: "life", fresh: true });
+  // A scene saved before this check (replayed without fresh) still validates.
+  validateGeneratedScene(scene("AIを活用する職場に転職する"), g, { mode: "life" });
+});

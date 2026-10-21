@@ -2201,7 +2201,7 @@ function validateLifeOptions(scene, g, mode) {
 export function validateGeneratedScene(
   raw,
   g,
-  { personalized = true, mode = "life" } = {},
+  { personalized = true, mode = "life", fresh = false } = {},
 ) {
   mode = careerSceneMode(g, mode);
   if (!personalized) {
@@ -2278,6 +2278,18 @@ export function validateGeneratedScene(
       /^(?:未公開|未定|未確認|不明|非公開|匿名|架空)|^(?:大手|中小|某).*(?:企業|会社|部門|推進部)$|^(?:AI|技術|地域|一般的な|新興)?スタートアップ$|企業$/u.test(
         decision.name ?? "",
       )
+    )
+      fail();
+    // A fresh reply must name a company, not describe a move (2026-10-21: a
+    // model proposed 「AIを活用する職場に転職する」, which then became the
+    // employer and blocked every later scene). Saved scenes keep loading.
+    if (
+      fresh &&
+      decision.id === "switch" &&
+      decision.target === "custom" &&
+      // Verbs and descriptions only: plain nouns such as 環境 end real names
+      // (大栄環境, JFE環境).
+      /(?:する|したい|します|働き方)$|(?:できる|られる|せる)(?:環境|職場|会社|ところ)$|職場$|に転職|へ転職|を目指|を活用|で働く/u.test(decision.name ?? "")
     )
       fail();
     // AI may propose an employer, never mark its invented facts as verified.
