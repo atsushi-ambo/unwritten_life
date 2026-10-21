@@ -1052,6 +1052,7 @@ function renderGame() {
         game.reemploymentPayFrom,
         game.driftFrom,
         game.familyFrom,
+        game.growthFrom,
       );
       showGame(true);
     });
@@ -1495,6 +1496,7 @@ $("undo-button").addEventListener("click", () => {
     game.reemploymentPayFrom,
     game.driftFrom,
     game.familyFrom,
+    game.growthFrom,
     blocks,
   );
   const reached = new Set(careerMilestones(game).map((m) => m.id));

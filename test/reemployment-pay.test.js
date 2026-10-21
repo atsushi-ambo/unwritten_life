@@ -18,7 +18,7 @@ const replayGame = (g, length = g.decisions.length) => replay(
   false, g.dynamicFrom, g.worldFrom, g.retirementFrom, g.careLeaveSalaryFrom,
   g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom,
   g.careerEndFrom, g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom,
-  g.reemploymentPayFrom, g.driftFrom, g.familyFrom,
+  g.reemploymentPayFrom, g.driftFrom, g.familyFrom, g.growthFrom,
 );
 function hire(g) {
   for (let i = 0; i < 10 && g.employer.kind === "seeking" && !g.ended; i++) g = advance(g, "connect");
@@ -38,7 +38,7 @@ test("layoff captures ordinary pay after care leave or illness; a new job applie
     const lost = advance(before, "focus");
     assert.equal(lost.history.at(-1).incident.id, "layoff");
     assert.equal(lost.salary, 0);
-    assert.equal(lost.employer.lastSalary, before.salary / reduction);
+    assert.ok(Math.abs(lost.employer.lastSalary - before.salary / reduction) < 1e-9);
     const hired = hire(lost), factor = hired.history.at(-1).outcome.salaryFactor;
     assert.ok(factor >= 0.8 && factor <= 1);
     assert.equal(hired.salary, lost.employer.lastSalary * factor);
