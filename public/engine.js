@@ -2368,6 +2368,11 @@ export function validateGeneratedScene(
     return { ...o, decision };
   });
   const scene = validateLifeOptions(validateScene({ ...raw, options }, g), g, mode);
+  // A fresh reply tells the story, not the form (2026-10-22: a scene said
+  // 「役職はまだ入力されていない」). Saved scenes keep loading.
+  if (fresh && /未入力|入力され(?:て)?(?:い)?ない|入力して(?:い)?ない|入力がない/u.test(
+    [scene.title, scene.body, scene.insight, ...scene.options.flatMap((o) => [o.label, o.hint, o.reason])].join("\n")))
+    fail();
   // While working for an employer, staying and building a career there is
   // always one of the four paths, next to moving, learning and living.
   if (
