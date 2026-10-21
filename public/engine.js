@@ -3304,7 +3304,11 @@ export function advanceDirection(game, decision, { years = 5 } = {}) {
         : ["rest", "recover", "careLeave", "connect", "explore"].includes(id) ? [id]
           : ["familyPlan", "reconsiderFamily", "meet"].includes(id) ? ["connect", "rest"]
             : working ? ["focus"] : ["rest"];
-      action = [...preferred, working ? "focus" : "rest"].find((a) => allowed.includes(a));
+      // Someone worn down eases off instead of pushing on (2026-10-21: focus
+      // every follow-through year drained ゆとり to 0 for a decade, and pay
+      // fell each year with it).
+      const tired = working && next.health < 35 && allowed.includes("rest") && !["learn", "studyDaily"].includes(id);
+      action = tired ? "rest" : [...preferred, working ? "focus" : "rest"].find((a) => allowed.includes(a));
       if (!action) {
         stopReason = "状況が変わり、この方針を続けられなくなりました。";
         break;
@@ -3329,6 +3333,8 @@ export function advanceDirection(game, decision, { years = 5 } = {}) {
       stopReason = "思いがけない出来事がありました。ここからの方針を選び直せます。";
     } else if (entry.outcome?.kind === "reemployed") {
       stopReason = "次の仕事が決まりました。新しい職場での方針を選び直せます。";
+    } else if (next.health < 20 && before.health >= 20) {
+      stopReason = "心と体のゆとりが少なくなっています。働き方を選び直せます。";
     } else if (entry.incident?.id === "returnToWork") {
       stopReason = "休職から仕事に戻りました。ここからの働き方を選び直せます。";
     } else if (next.employer.kind === "seeking" && i < years - 1) {
