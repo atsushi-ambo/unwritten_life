@@ -140,6 +140,17 @@ export const payRealism = (g) => g.decisions.length >= (g.payRealismFrom ?? 0);
 export const lifeRealism = (g) => g.decisions.length >= (g.lifeRealismFrom ?? 0);
 export const careerOffers = (g) => g.decisions.length >= (g.offersFrom ?? 0);
 const measuredPace = (g) => g.decisions.length >= (g.paceFrom ?? 0);
+// Keep temporary leave pay out of the salary basis of a later employer.
+function employmentSalary(g) {
+  if (g.decisions.length < (g.reemploymentPayFrom ?? 0)) return g.salary;
+  const previous = g.history.at(-1)?.incident;
+  const incidentRestore = onMentalLeave(g) ? 1 / 0.7
+    : previous?.effects.temporary && previous.effects.salaryFactor
+      ? 1 / previous.effects.salaryFactor : 1;
+  const careRestore = g.decisions.length - 1 >= g.worldFrom &&
+    decisionId(g.decisions.at(-1)) === "careLeave" ? 1 / 0.85 : 1;
+  return g.salary * incidentRestore * careRestore;
+}
 // Offers last only until the next annual decision. Nothing is reserved or paid
 // on receipt/decline; the existing switch decision names the candidate company.
 export function pendingCareerOffer(g) {
@@ -915,7 +926,7 @@ function nextEmployer(g, decision) {
       facts: null,
       started: g.year,
       ...(lifeRealism(g) ? {
-        lastSalary: g.salary || g.employer.lastSalary || g.profile.income,
+        lastSalary: employmentSalary(g) || g.employer.lastSalary || g.profile.income,
         lastRole: g.employer.lastRole ?? g.employer.role,
       } : {}),
     };
@@ -991,6 +1002,7 @@ export function createGame(
   lifeRealismFrom = 0,
   offersFrom = 0,
   paceFrom = 0,
+  reemploymentPayFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -1039,7 +1051,10 @@ export function createGame(
     offersFrom > MAX_AGE ||
     !Number.isInteger(paceFrom) ||
     paceFrom < 0 ||
-    paceFrom > MAX_AGE
+    paceFrom > MAX_AGE ||
+    !Number.isInteger(reemploymentPayFrom) ||
+    reemploymentPayFrom < 0 ||
+    reemploymentPayFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -1064,6 +1079,7 @@ export function createGame(
     lifeRealismFrom,
     offersFrom,
     paceFrom,
+    reemploymentPayFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -2175,18 +2191,10 @@ function validateLifeOptions(scene, g, mode) {
     const hasScout = offers.some((h) => h.incident.id === "scout");
     const hasPromotion = offers.some((h) => h.incident.id === "promotionOffer");
     const prose = [scene.body, ...scene.options.flatMap((o) => [o.label, o.hint, o.reason, o.decision?.intent])].join(" ");
-    if (hasScout && !/スカウト/.test(scene.body)) fail();
-    if (hasPromotion && !/打診/.test(scene.body)) fail();
     if (!hasScout && /スカウト.{0,15}(?:届|来た|受け|連絡|紹介)|(?:届|受け).{0,10}スカウト/.test(prose)) fail();
     if (!hasPromotion && /(?:上司|会社|昇進|昇格).{0,15}打診.{0,12}(?:あった|受け|届|された)/.test(prose)) fail();
-    const pending = pendingCareerOffer(g);
-    if (pending?.id === "scout" && !scene.options.some((o) => o.id === "switch" &&
-      /スカウト/.test([o.label, o.hint, o.reason, o.decision?.intent].join(" ")) && o.decision?.name)) fail();
-    if (pending?.id === "promotionOffer" &&
-      (!scene.options.some((o) => o.id === "promote" &&
-        /打診|受諾|引き受け|受ける/.test([o.label, o.hint, o.reason, o.decision?.intent].join(" ")) &&
-        (g.position.rank !== "lead" || o.decision?.track === RANKS[pending.targetRank].track)) ||
-        !scene.options.some((o) => ["focus", "pilot", "mentor", "negotiate"].includes(o.id)))) fail();
+    // The game renders recorded offers beside the four generated options.
+    // Relaxing these requirements also accepts scenes saved under the old rule.
   }
   return scene;
 }
@@ -3416,7 +3424,7 @@ export function advance(g, rawDecision) {
       companyType: "unknown",
       facts: null,
       summary: "人員整理で職を離れ、次の仕事を探している",
-      lastSalary: g.salary,
+      lastSalary: employmentSalary(g),
       lastRole: employer.role,
     };
   }
@@ -3925,6 +3933,7 @@ export function replay(
   lifeRealismFrom = 0,
   offersFrom = 0,
   paceFrom = 0,
+  reemploymentPayFrom = 0,
   directionBlocks,
 ) {
   if (
@@ -3954,6 +3963,7 @@ export function replay(
     lifeRealismFrom,
     offersFrom,
     paceFrom,
+    reemploymentPayFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -4006,6 +4016,7 @@ export function compareWorlds(g) {
       g.lifeRealismFrom,
       g.offersFrom,
       g.paceFrom,
+      g.reemploymentPayFrom,
       g.directionBlocks,
     ),
   );
@@ -4041,7 +4052,10 @@ export function encodeSave(g) {
     g.offersFrom > MAX_AGE ||
     !Number.isInteger(g.paceFrom) ||
     g.paceFrom < 0 ||
-    g.paceFrom > MAX_AGE
+    g.paceFrom > MAX_AGE ||
+    !Number.isInteger(g.reemploymentPayFrom) ||
+    g.reemploymentPayFrom < 0 ||
+    g.reemploymentPayFrom > MAX_AGE
   )
     fail();
   const value = JSON.stringify({
@@ -4060,6 +4074,7 @@ export function encodeSave(g) {
     lifeRealismFrom: g.lifeRealismFrom,
     offersFrom: g.offersFrom,
     paceFrom: g.paceFrom,
+    reemploymentPayFrom: g.reemploymentPayFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
@@ -4119,6 +4134,10 @@ export function decodeSave(value) {
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
     Object.hasOwn(d, "paceFrom")
       ? d.paceFrom
+      : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
+    // Keep recorded salaries/debt and the already presented current year.
+    Object.hasOwn(d, "reemploymentPayFrom")
+      ? d.reemploymentPayFrom
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
   );
   if (Object.hasOwn(d, "directionBlocks"))

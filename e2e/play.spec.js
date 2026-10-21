@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { createGame, advance, recordCareerReflection, encodeSave, decodeSave } from "../public/engine.js";
+import { createGame, advance, pendingCareerOffer, profileInputForLevel, recordCareerReflection, encodeSave, decodeSave } from "../public/engine.js";
 
 const syntheticProfile = {
   age: 29, region: "city", job: "tech", income: 500, ai: "sometimes",
@@ -8,6 +8,17 @@ const syntheticProfile = {
 };
 const saveFile = (game) => ({ name: "synthetic-save.json", mimeType: "application/json", buffer: Buffer.from(encodeSave(game)) });
 const quietGame = (profile = syntheticProfile) => createGame(profile, "steady", 42, 0, 0, 0, 0, 0, 0, 0, 110);
+function offerGame(id) {
+  let game = createGame({
+    ...profileInputForLevel({}, "quick", { band: "new", region: "city" }),
+    age: 35, rank: "lead", savings: 1500,
+  }, "steady", id === "scout" ? 2 : 19);
+  for (let year = 0; year < 12 && !game.ended; year++) {
+    game = advance(game, "rest");
+    if (pendingCareerOffer(game)?.id === id) return game;
+  }
+  throw Error(`Missing synthetic ${id}`);
+}
 async function finishDirection(page) {
   await page.locator("#journey-next").click();
   await expect(page.locator("#choices button").first()).toBeVisible();
@@ -19,6 +30,80 @@ async function expectFits(page) {
   }));
   expect(overflow).toEqual({ page: false, dialogs: false });
 }
+
+test("a fixed scout command opens AI company comparisons, closes without a decision and accepts a switch", async ({ page, isMobile }) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await page.locator("#remember").check();
+  const initial = offerGame("scout");
+  await page.locator("#import-save-file").setInputFiles(saveFile(initial));
+  const command = page.locator('#choices [data-offer="scout"]');
+  await expect(page.locator("#choices [data-choice]")).toHaveCount(4);
+  await expect(command).toContainText("届いた話");
+  await expect(command).toContainText("スカウトの話を聞く");
+  expect(await command.evaluate((el) => el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+  await expectFits(page);
+  if (isMobile) await command.tap();
+  else {
+    await page.locator("#choices button").first().focus();
+    await page.keyboard.press("End");
+    await expect(command).toBeFocused();
+    await page.keyboard.press("Enter");
+  }
+  await expect(page.locator("#career-title")).toContainText("スカウト");
+  const companies = page.locator("#career-offers .career-offer-button");
+  await expect(companies).toHaveCount(4);
+  await expect(companies.first()).toBeEnabled();
+  await expectFits(page);
+  await page.locator("#career-dialog [data-close]").click();
+  await expect(page.locator("#career-dialog")).not.toBeVisible();
+  await expect(command).toBeFocused();
+  await expect(page.locator("#choices [data-choice]")).toHaveCount(4);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("unwritten-life:v2")).decisions.length))
+    .toBe(initial.decisions.length);
+  await command[isMobile ? "tap" : "click"]();
+  const company = await companies.first().locator("strong").textContent();
+  await companies.first()[isMobile ? "tap" : "click"]();
+  await expect(page.locator("#career-dialog")).not.toBeVisible();
+  await finishDirection(page);
+  const save = await page.evaluate(() => localStorage.getItem("unwritten-life:v2"));
+  const accepted = decodeSave(save);
+  expect(accepted.decisions[initial.decisions.length].id).toBe("switch");
+  expect(accepted.history[initial.decisions.length].employer.name).toBe(company);
+  expect(accepted.employer.name).toBe(company);
+  await expect(command).toHaveCount(0);
+  await expectFits(page);
+});
+
+test("a fixed promotion command accepts the offered rank; another choice lets the offer expire", async ({ page, isMobile }) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await page.locator("#remember").check();
+  const initial = offerGame("promotionOffer"), target = pendingCareerOffer(initial).targetRank;
+  await page.locator("#import-save-file").setInputFiles(saveFile(initial));
+  const command = page.locator('#choices [data-offer="promotionOffer"]');
+  await expect(page.locator("#choices [data-choice]")).toHaveCount(4);
+  await expect(command).toContainText("打診を受ける");
+  await expectFits(page);
+  await command[isMobile ? "tap" : "click"]();
+  await finishDirection(page);
+  const accepted = decodeSave(await page.evaluate(() => localStorage.getItem("unwritten-life:v2")));
+  expect(accepted.decisions[initial.decisions.length].id).toBe("promote");
+  expect(accepted.history[initial.decisions.length].position.rank).toBe(target);
+  expect(accepted.history[initial.decisions.length].outcome.chance).toBe(1);
+  await expect(command).toHaveCount(0);
+  await page.locator("#back-setup").click();
+  await page.locator("#import-save-file").setInputFiles(saveFile(initial));
+  await page.locator("#save-import-confirm").click();
+  await page.locator('#choices [data-choice="focus"]')[isMobile ? "tap" : "click"]();
+  await finishDirection(page);
+  const declined = decodeSave(await page.evaluate(() => localStorage.getItem("unwritten-life:v2")));
+  expect(declined.history[initial.decisions.length].position.rank).toBe(initial.position.rank);
+  await expect(command).toHaveCount(0);
+  await expectFits(page);
+});
 
 test("quick start uses age band and region estimates and starts with neutral family fields", async ({ page }) => {
   await page.goto("/");

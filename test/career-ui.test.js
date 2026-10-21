@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createContext, runInContext } from "node:vm";
-import { createGame, advance, recordCareerReflection, encodeSave, JOBS, RANKS } from "../public/engine.js";
+import { createGame, advance, advanceDirection, pendingCareerOffer, availableChoices, decisionId,
+  validateGeneratedScene, recordCareerReflection, encodeSave, JOBS, RANKS } from "../public/engine.js";
+import { storyRequest } from "../public/story.js";
+import { fourReply } from "./fixtures/ai-replies.js";
 import { careerMap, careerRecord, careerRecordText, lifeStory, CAREER_STATES } from "../public/careers.js";
 
 const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
@@ -14,7 +17,7 @@ function harness(game) {
   let focused, copied, denied = false;
   class Element {
     constructor(tag, text = "", className = "") {
-      Object.assign(this, { tag, text, className, children: [], attributes: {}, dataset: {}, handlers: {} });
+      Object.assign(this, { tag, text, className, children: [], attributes: {}, dataset: {}, handlers: {}, isConnected: true });
     }
     append(...children) { this.children.push(...children); }
     replaceChildren(...children) { this.text = ""; this.children = children; }
@@ -142,4 +145,70 @@ test("command arrow keys wrap focus, Home and End jump, and modified keys retain
   assert.equal(h.focused, buttons[0]);
   assert.equal(press("ArrowDown", { ctrlKey: true }), false);
   assert.equal(press("Enter"), false);
+});
+
+test("fixed offer commands open scouts without advancing and accept promotions in the offered track", () => {
+  for (const id of ["scout", "promotionOffer"]) {
+    let game;
+    for (let seed = 1; seed < 1000 && !game; seed++) {
+      let g = createGame({ ...profile, age: 35, rank: "lead", income: 500, savings: 1500 }, "steady", seed);
+      for (let year = 0; year < 12 && !g.ended; year++) {
+        g = advance(g, "rest");
+        if (pendingCareerOffer(g)?.id === id) { game = g; break; }
+      }
+    }
+    assert.ok(game);
+    const h = harness(game), opened = [], committed = [], offer = pendingCareerOffer(game);
+    Object.assign(h.context, {
+      pendingCareerOffer, revision: 1, generating: false, timelineRevealing: () => false,
+      openCareer: (mode) => opened.push(mode), commitChoice: (decision) => committed.push(decision),
+    });
+    runInContext(app.slice(app.indexOf("function appendCareerOfferCommand("), app.indexOf("// Safari does not always")), h.context);
+    runInContext('appendCareerOfferCommand($("choices"))', h.context);
+    const button = h.$("choices").children[0];
+    assert.equal(button.type, "button");
+    assert.equal(button.dataset.offer, id);
+    assert.match(button.textContent, /届いた話/);
+    assert.equal(button.querySelector(".command-cursor").getAttribute("aria-hidden"), "true");
+    const saved = encodeSave(game);
+    button.handlers.click();
+    assert.equal(encodeSave(h.context.game), saved);
+    if (id === "scout") {
+      assert.deepEqual(opened, ["switch"]);
+      const scene = validateGeneratedScene(fourReply(storyRequest(game, { mode: "career" }).context,
+        { offerResponses: false }), game, { mode: "career" });
+      let closed = false;
+      h.$("career-dialog").close = () => { closed = true; };
+      Object.assign(h.context, {
+        availableChoices, decisionId, careerMode: "switch", careerGenerating: false,
+        careerError: "", careerDraft: { revision: 1, scene },
+        commitChoice: (decision) => {
+          committed.push(decision);
+          h.context.game = advanceDirection(h.context.game, decision).game;
+        },
+        toast: (message) => assert.fail(message),
+      });
+      runInContext(app.slice(app.indexOf("function takeCareerDecision("), app.indexOf('$("career-manual-toggle").addEventListener')), h.context);
+      runInContext("renderCareerOffers()", h.context);
+      const companies = h.$("career-offers").querySelectorAll(".career-offer-button");
+      assert.equal(companies.length, 4);
+      companies[0].handlers.click();
+      assert.equal(closed, true);
+      assert.equal(committed[0].id, "switch");
+      assert.equal(h.context.game.history[game.decisions.length].employer.name, scene.options[0].decision.name);
+      assert.equal(h.context.game.employer.name, scene.options[0].decision.name);
+    } else {
+      assert.equal(committed.length, 1);
+      const journey = advanceDirection(game, committed[0]);
+      assert.equal(journey.entries[0].position.rank, offer.targetRank);
+      assert.equal(journey.entries[0].outcome.chance, 1);
+    }
+    h.context.game = advance(game, "rest");
+    h.$("choices").replaceChildren();
+    runInContext('appendCareerOfferCommand($("choices"))', h.context);
+    assert.equal(h.$("choices").children.length, 0);
+    // A detached or expired command cannot act again.
+    button.handlers.click();
+    assert.equal(id === "scout" ? opened.length : committed.length, 1);
+  }
 });
