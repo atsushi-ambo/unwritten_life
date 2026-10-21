@@ -19,7 +19,7 @@ const replayGame = (g, length = g.decisions.length) => replay(
   false, g.dynamicFrom, g.worldFrom, g.retirementFrom, g.careLeaveSalaryFrom,
   g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom,
   g.careerEndFrom, g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom,
-  g.reemploymentPayFrom, g.driftFrom, g.familyFrom, g.growthFrom,
+  g.reemploymentPayFrom, g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom,
 );
 
 test("yearly noise has the same slope on both sides of zero near the ceiling, with no negative mean drift", () => {
@@ -57,7 +57,9 @@ test("2,000 healthy care/rural stayers retain flat to slightly rising median pay
   const c = measureDrift({ healthy: true });
   assert.ok(c.stayers > 1000);
   assert.ok(c.stayerPay[55] >= c.stayerPay[40]);
-  assert.ok(c.stayerPay[55] < c.stayerPay[40] * 1.05);
+  // From cycleFrom downturns no longer leave permanent cuts; care pay in the
+  // wage survey still rises only a little from the early 40s to the mid 50s.
+  assert.ok(c.stayerPay[55] < c.stayerPay[40] * 1.1, JSON.stringify(c.stayerPay));
 });
 
 test("mental leave pays a separate untaxed allowance for one year plus half a year, then zero", () => {
