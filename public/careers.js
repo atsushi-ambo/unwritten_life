@@ -103,6 +103,10 @@ export function careerRecord(game) {
 export const peakRankLabel = (rank, ranks) =>
   rank === "unspecified" ? "昇格の記録なし" : ranks[rank]?.label ?? "記録なし";
 // A tenure within one calendar year reads 2035年, not 2035〜2035年.
+// A story that ends without a career end is a death; before 70 it is sudden
+// (2026-10-22: 「44歳、物語が完結した」 did not say what had happened).
+export const deathHeadline = (age) =>
+  age < 70 ? `${age}歳で、思いがけず人生の幕が下りた。` : `${age}歳で、人生の幕を閉じた。`;
 export const yearSpan = (from, to) => from === to ? `${from}年` : `${from}〜${to}年`;
 export function careerRecordText(game, roles = {}, ranks = {}) {
   const record = careerRecord(game);
@@ -626,7 +630,7 @@ export function lifeStory(game, ranks = {}) {
     headline: end
       ? `${game.age}歳、${end.title}。`
       : game.ended
-        ? `${game.age}歳、物語が完結した。`
+        ? deathHeadline(game.age)
         : `${game.age}歳、物語はまだ続いている。`,
     stats: {
       startIncome: game.profile.income,

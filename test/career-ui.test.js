@@ -6,7 +6,7 @@ import { createGame, advance, advanceDirection, pendingCareerOffer, availableCho
   validateGeneratedScene, recordCareerReflection, encodeSave, JOBS, RANKS } from "../public/engine.js";
 import { storyRequest } from "../public/story.js";
 import { fourReply } from "./fixtures/ai-replies.js";
-import { careerMap, careerRecord, careerRecordText, lifeStory, CAREER_STATES, peakRankLabel, yearSpan } from "../public/careers.js";
+import { careerMap, careerRecord, careerRecordText, lifeStory, CAREER_STATES, peakRankLabel, yearSpan, deathHeadline } from "../public/careers.js";
 
 const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 const profile = { age: 29, region: "city", job: "tech", ai: "daily", priority: "balance", gender: "undisclosed", household: "solo", companyType: "small" };
@@ -45,7 +45,7 @@ function harness(game) {
     return elements.get(id);
   };
   const context = createContext({
-    game, node, $, JOBS, RANKS, careerMap, careerRecord, careerRecordText, lifeStory, CAREER_STATES, peakRankLabel, yearSpan,
+    game, node, $, JOBS, RANKS, careerMap, careerRecord, careerRecordText, lifeStory, CAREER_STATES, peakRankLabel, yearSpan, deathHeadline,
     money: (n) => String(Math.round(n)), nf: new Intl.NumberFormat("ja-JP"),
     favoriteYears: new Set(), favoritesOnly: false, appendBudget() {},
     document: { createTextNode: (text) => node("#text", text), get activeElement() { return focused; } },
