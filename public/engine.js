@@ -413,7 +413,7 @@ export const CHOICES = Object.freeze({
     icon: "⇄",
   },
   recover: {
-    label: "暮らしと次の仕事を立て直す",
+    label: "暮らしと支出を立て直す",
     hint: "支出や働き方を見直し、ゆとりを取り戻す",
     cost: 0,
     skill: 2,
