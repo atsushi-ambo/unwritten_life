@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { createGame, advance, pendingCareerOffer, profileInputForLevel, recordCareerReflection, encodeSave, decodeSave } from "../public/engine.js";
 
+import { paceProfile } from "../scripts/simulate-pace.mjs";
+
 const syntheticProfile = {
   age: 29, region: "city", job: "tech", income: 500, ai: "sometimes",
   priority: "balance", gender: "undisclosed", household: "solo",
@@ -30,6 +32,22 @@ async function expectFits(page) {
   }));
   expect(overflow).toEqual({ page: false, dialogs: false });
 }
+
+test("mental leave shows sickness allowance separately from salary in the budget", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  const game = advance(createGame(paceProfile(), "steady", 5819), "focus");
+  expect(game.salary).toBe(0);
+  expect(game.history[0].budget.sicknessAllowance).toBeGreaterThan(0);
+  await page.goto("/");
+  await page.locator("#import-save-file").setInputFiles(saveFile(game));
+  const budget = page.locator("#history .budget-window").first();
+  await budget.locator("summary").click();
+  await expect(budget).toContainText("傷病手当金（給与の約2/3、最長1年6か月）");
+  await expect(budget).not.toContainText("労働収入（手取り）");
+  // The budget lists signed amounts in 万円 (its heading says so).
+  await expect(budget.locator("dd").first()).toHaveText(`+${Math.round(game.income)}`);
+  await expectFits(page);
+});
 
 test("a fixed scout command opens AI company comparisons, closes without a decision and accepts a switch", async ({ page, isMobile }) => {
   await page.setViewportSize({ width: 320, height: 740 });

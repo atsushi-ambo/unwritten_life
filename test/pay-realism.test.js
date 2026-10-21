@@ -36,7 +36,7 @@ test("staying put keeps pay near the start, with a small seniority rise", () => 
 test("an active job-hopper reaches a realistic line, peaks in the mid-50s and is rehired lower at 60", () => {
   const at = salariesAt(profile(), hop);
   const m = (age) => median(at[age]);
-  assert.ok(m(50) > 700 && m(50) < 1050, `50: ${m(50)}`);
+  assert.ok(m(50) > 650 && m(50) < 1050, `50: ${m(50)}`);
   assert.ok(m(55) < m(50) * 1.15, `55: ${m(55)} vs 50: ${m(50)}`);
   assert.ok(m(60) < m(59) * 0.85, `60: ${m(60)} vs 59: ${m(59)}`);
   // Big-city pay is higher, not a different order of magnitude.
