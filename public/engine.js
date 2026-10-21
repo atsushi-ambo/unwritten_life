@@ -144,6 +144,7 @@ export const familyMoney = (g) => g.decisions.length >= (g.familyFrom ?? 0);
 export const WORLD_GROWTH_MEAN = -0.0072;
 export const payCurve = (g) => g.decisions.length >= (g.growthFrom ?? 0);
 export const payCycles = (g) => g.decisions.length >= (g.cycleFrom ?? 0);
+export const lifestyleSpending = (g) => g.decisions.length >= (g.spendFrom ?? 0);
 const symmetricDrift = (g) => g.decisions.length >= (g.driftFrom ?? 0);
 const measuredPace = (g) => g.decisions.length >= (g.paceFrom ?? 0);
 // Keep temporary leave pay out of the salary basis of a later employer.
@@ -1019,6 +1020,7 @@ export function createGame(
   familyFrom = 0,
   growthFrom = 0,
   cycleFrom = 0,
+  spendFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -1082,7 +1084,10 @@ export function createGame(
     growthFrom > MAX_AGE ||
     !Number.isInteger(cycleFrom) ||
     cycleFrom < 0 ||
-    cycleFrom > MAX_AGE
+    cycleFrom > MAX_AGE ||
+    !Number.isInteger(spendFrom) ||
+    spendFrom < 0 ||
+    spendFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -1112,6 +1117,7 @@ export function createGame(
     familyFrom,
     growthFrom,
     cycleFrom,
+    spendFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -1139,6 +1145,7 @@ export function createGame(
     housing: p.housing,
     region: p.region,
     livingCost: p.monthlyCost,
+    lifestyle: 0,
     rent: p.rent,
     savings: cash + investments + p.homeValue - p.mortgage - debt,
     health: 65,
@@ -3773,7 +3780,7 @@ export function advance(g, rawDecision) {
     const buffer = livingCost * 6,
       scheduled = amortizeYear(mortgage, p.mortgageRate, mortgageYears),
       reserved =
-        livingCost * 12 * (1 + (world?.shock.costs ?? 0)) +
+        (livingCost + (g.lifestyle ?? 0)) * 12 * (1 + (world?.shock.costs ?? 0)) +
         familyChange.cost +
         (g.age >= 80 ? 12 : 0) +
         homeValue * 0.01 +
@@ -3797,8 +3804,24 @@ export function advance(g, rawDecision) {
     housing === "own" ? loanPayment + homeValue * 0.01 : rent * 12;
   const disposable = (income - sicknessAllowance) * 0.76 + sicknessAllowance + partnerTakeHome,
     bonus = choice === "explore" ? (randomAt(g.seed, i, 1) - 0.5) * 30 : 0;
+  // From spendFrom spending follows take-home pay: each year it moves 30% of
+  // the way toward half of the rise in take-home above the start, after any
+  // rise in the family's own costs. It stays at, or returns to, zero while
+  // children under 22 live at home (their costs already grow), while in debt
+  // or with under six months of costs saved. Reviewing spending halves it.
+  let lifestyle = g.lifestyle ?? 0;
+  if (lifestyleSpending(g)) {
+    const short = familyChange.family.childAges.some((age) => age < 22) ||
+      g.debt > 0 || g.cash < (g.livingCost + lifestyle) * 6;
+    const target = short ? 0 : 0.5 * Math.max(0, disposable -
+      (p.income + (p.partnerIncome ?? 0)) * 0.76 - Math.max(0, livingCost - p.monthlyCost) * 12) / 12;
+    lifestyle += (target - lifestyle) * 0.3;
+    if (choice === "recover") lifestyle *= 0.5;
+  }
+  const lifestyleCost = lifestyle * 12 * (1 + (world?.shock.costs ?? 0));
   const expenses =
     livingCost * 12 * (1 + (world?.shock.costs ?? 0)) +
+    lifestyleCost +
     housingCost +
     cost +
     familyChange.cost +
@@ -3980,7 +4003,8 @@ export function advance(g, rawDecision) {
       ...(familyMoney(g) ? { partnerIncome: partnerTakeHome } : {}),
       pension: (symmetricDrift(g) ? pension : income - salary) * 0.76,
       ...(symmetricDrift(g) ? { sicknessAllowance } : {}),
-      living: -(expenses - housingCost - cost),
+      living: -(expenses - housingCost - cost - lifestyleCost),
+      ...(lifestyleSpending(g) ? { lifestyle: -lifestyleCost } : {}),
       housing: -(housingCost - loanPayment + homeTransaction),
       loanInterest: -loan.interest,
       loanPrincipal: -(principal + prepayment),
@@ -4030,6 +4054,7 @@ export function advance(g, rawDecision) {
     housing,
     region,
     livingCost,
+    lifestyle,
     rent,
     savings,
     health,
@@ -4068,6 +4093,7 @@ export function replay(
   familyFrom = 0,
   growthFrom = 0,
   cycleFrom = 0,
+  spendFrom = 0,
   directionBlocks,
 ) {
   if (
@@ -4102,6 +4128,7 @@ export function replay(
     familyFrom,
     growthFrom,
     cycleFrom,
+    spendFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -4159,6 +4186,7 @@ export function compareWorlds(g) {
       g.familyFrom,
       g.growthFrom,
       g.cycleFrom,
+      g.spendFrom,
       g.directionBlocks,
     ),
   );
@@ -4209,7 +4237,10 @@ export function encodeSave(g) {
     g.growthFrom > MAX_AGE ||
     !Number.isInteger(g.cycleFrom) ||
     g.cycleFrom < 0 ||
-    g.cycleFrom > MAX_AGE
+    g.cycleFrom > MAX_AGE ||
+    !Number.isInteger(g.spendFrom) ||
+    g.spendFrom < 0 ||
+    g.spendFrom > MAX_AGE
   )
     fail();
   const value = JSON.stringify({
@@ -4233,6 +4264,7 @@ export function encodeSave(g) {
     familyFrom: g.familyFrom,
     growthFrom: g.growthFrom,
     cycleFrom: g.cycleFrom,
+    spendFrom: g.spendFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
@@ -4308,6 +4340,9 @@ export function decodeSave(value) {
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
     Object.hasOwn(d, "cycleFrom")
       ? d.cycleFrom
+      : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
+    Object.hasOwn(d, "spendFrom")
+      ? d.spendFrom
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
   );
   if (Object.hasOwn(d, "directionBlocks"))

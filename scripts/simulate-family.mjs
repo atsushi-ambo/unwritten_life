@@ -14,11 +14,11 @@ export const familyProfile = (extra = {}) => optionalProfileInputs(profileInputF
 }, "advanced"));
 const median = (values) => values.length ? [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)] : null;
 
-export function measureFamily({ seeds = 1000, from = 0, partnerIncome = 0 } = {}) {
+export function measureFamily({ seeds = 1000, from = 0, partnerIncome = 0, spendFrom = 0 } = {}) {
   const wealth = { 45: [], 55: [], 65: [] };
   let debtEnds = 0, borrowingYears = 0, twentyYearBorrowers = 0, reachedRetirement = 0;
   for (let seed = 1; seed <= seeds; seed++) {
-    let g = { ...createGame(familyProfile({ partnerIncome }), "steady", seed * 7919), familyFrom: from };
+    let g = { ...createGame(familyProfile({ partnerIncome }), "steady", seed * 7919), familyFrom: from, spendFrom };
     let longest = 0, streak = 0;
     while (!g.ended) {
       // Fixed five-year age bands, even if an incident interrupts a direction.

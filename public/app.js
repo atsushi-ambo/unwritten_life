@@ -581,6 +581,7 @@ function appendBudget(parent, h, collapsed = false) {
     ["pension", "年金等（手取り）"],
     ["sicknessAllowance", "傷病手当金（給与の約2/3、最長1年6か月）"],
     ["living", "生活費・子育て等"],
+    ["lifestyle", "収入に合わせて増えた生活費"],
     ["housing", "住居費・購入費（ローン除く）"],
     ["loanInterest", "ローン利息"],
     ["loanPrincipal", "ローン元金（繰り上げ含む）"],
@@ -1054,6 +1055,7 @@ function renderGame() {
         game.familyFrom,
         game.growthFrom,
         game.cycleFrom,
+        game.spendFrom,
       );
       showGame(true);
     });
@@ -1502,6 +1504,7 @@ $("undo-button").addEventListener("click", () => {
     game.familyFrom,
     game.growthFrom,
     game.cycleFrom,
+    game.spendFrom,
     blocks,
   );
   const reached = new Set(careerMilestones(game).map((m) => m.id));
