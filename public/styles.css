@@ -2032,6 +2032,8 @@ progress::-moz-progress-bar { background: #42745a; }
 .choice:focus-visible { outline-offset: -3px; }
 .choice b { font-size: 14px; font-weight: 700; line-height: 1.65; }
 .choice small { font-size: 12px; line-height: 1.8; }
+.choice-offer { border-left-color: var(--green); background: #f1efd9; }
+.choice-offer .choice-offer-label { color: var(--green); font-weight: 700; }
 .choice-symbol { font-size: 19px; color: var(--green); flex-shrink: 0; width: 20px; }
 .choice-arrow { display: none; }
 .choice:disabled .command-cursor { visibility: hidden; }

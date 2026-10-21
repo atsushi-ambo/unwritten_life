@@ -362,7 +362,7 @@ export function storyRequest(
   system += SCENE_STYLE;
   system += CAREER_DISCOVERY;
   if (careerOffers(game)) system +=
-    " recordedCareerOffersは前の方針以降に実際に起きた打診。あればスカウト・昇進の種類を本文に明記する。記録にないスカウトや上司からの昇進の打診を作らない。careerOfferは翌年の今回だけ応答できる打診。scoutならスカウトを受けてその企業を検討するswitchを少なくとも1案にし、labelかhintにスカウトと明記し、既存の規則に沿う具体的な企業名・職務をdecisionへ入れる。qualityがexploratoryの求職者向け連絡は広い条件の探索的な紹介として描き、好条件・内定を保証しない。受信も辞退も費用や収入を変えず、転職を実行した場合だけ通常の費用と結果になる。スカウト以外にも今の道を続ける案を残す。promotionOfferならpromoteを必ず1案にし、targetRankに対応するtrackでその打診を受諾する案を書く。この年の受諾だけ昇格が確定する。もう1案はfocus等で今の役割を続け、昇進を見送る道にする。打診を次の5年間ずっと持ち越せると書かない。mentalLeaveなら休職中の治療・休養と復帰の不確実さを描き、復帰を保証せず、許可された行動だけを提案する。";
+    " recordedCareerOffersは前の方針以降に実際に起きた打診。本文で自然に触れてもよいが、必須ではない。記録にないスカウトや上司からの昇進の打診を作らない。careerOfferは翌年の今回だけ応答できる打診。ゲームが4択の横に専用ボタンを表示するので、通常の4択に打診への応答を入れる必要はない。scoutには「スカウトの話を聞く」から企業と役割の比較を開き、会社を選ぶことで応答する。careerモードの企業比較では、そのスカウトを検討する企業と役割を既存の規則に沿って提案する。qualityがexploratoryの求職者向け連絡は広い条件の探索的な紹介として描き、好条件・内定を保証しない。受信も辞退も費用や収入を変えず、転職を実行した場合だけ通常の費用と結果になる。promotionOfferにはゲームの「打診を受ける」で応答する。この年の受諾だけtargetRankへの昇格が確定する。4択では今の役割を続けるなど、それぞれ違う方向を提案する。別の選択でも打診を見送れる。打診を次の5年間ずっと持ち越せると書かない。mentalLeaveなら休職中の治療・休養と復帰の不確実さを描き、復帰を保証せず、許可された行動だけを提案する。";
   system += ` 今回は${directionSpan(game)}の方針を選ぶ場面。bodyは今年の具体的な一場面から、yearsSincePreviousDecisionにある前回の決断以降の年月を振り返り、何が続き何が変わったかを描く。最後の一年だけに縮めず、記録にない出来事は補わない。初回は開始時点から${directionSpan(game)}への迷いを描く。4択のlabelは一回の作業でなく『〜を軸にする』『〜を目指す』など5年の方向として書く。decisionの実行は初年だけで、その後は就業中なら仕事を深め、${lifeRealism(game) ? "学びの方針も就業中は2年目からfocusで仕事を主にして学びの意図を引き継ぐ。求職中は1年ごとに選び直し、" : "学びなら学習、"}休養や家族ならその時間を続ける。購入・引っ越し・転職・事業拡大を毎年繰り返す案にしない。家族の変化・退職・事業終了・重い出来事で5年より早く選び直すことがあり、結果や5年間の継続は保証しない。`;
   if (context.allowedActions.some((a) => a.id === "prepay"))
     system += " prepayは生活費半年分と今年の支払いを残せる範囲でローン元金を繰り上げ返済する行動。通常の仕事や年金は続き、返済期間は維持する。金額や完済を約束しない。";
@@ -524,7 +524,7 @@ export function groundScene(scene, game) {
     .trim();
   body = body.length >= 40 ? body : eventFor({ ...game, scenes: {} }).body;
   // Monetary grounding may remove a whole sentence containing an offer.
-  // Restore only recorded facts, so the delivered scene still answers it.
+  // Restore only recorded facts as context; responding uses the game button.
   if (careerOffers(game)) {
     const offers = historySinceDecision(game).map((h) => h.incident);
     if (offers.some((o) => o?.id === "scout") && !/スカウト/.test(body))

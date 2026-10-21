@@ -21,7 +21,7 @@ const replayGame = (g, decisions = g.decisions) => replay(g.profile, g.scenario,
   decisions, g.scenes, false, g.dynamicFrom, g.worldFrom, g.retirementFrom,
   g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom,
   g.incidentFrom, g.careerPathFrom, g.careerEndFrom, g.payRealismFrom,
-  g.lifeRealismFrom, g.offersFrom, g.paceFrom, decisions.length === g.decisions.length ? g.directionBlocks : undefined);
+  g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom, decisions.length === g.decisions.length ? g.directionBlocks : undefined);
 const within = (n, lo, hi, label) => assert.ok(n >= lo && n <= hi, `${label}: ${n}`);
 function findIncident(id, make = start, predicate = () => true) {
   for (let seed = 1; seed < 30000; seed++) {
@@ -85,7 +85,7 @@ test("promotion offers need stage and employer tenure; senior seats are scarce a
   assert.ok(rate({ ...g, skill: 85, history: [{ outcome: { kind: "success" } }] }) > rate(g));
 });
 
-test("receiving/declining scouts changes no money; directions pause and the next scene must answer by a named switch", () => {
+test("receiving/declining scouts changes no money; directions pause and AI offer responses are optional", () => {
   const g = findIncident("scout"), heard = advance(g, "focus");
   const quiet = advance({ ...g, incidentFrom: MAX_AGE }, "focus");
   for (const key of ["cash", "income", "salary", "debt", "investments"]) assert.equal(heard[key], quiet[key], key);
@@ -98,8 +98,13 @@ test("receiving/declining scouts changes no money; directions pause and the next
   assert.equal(request.context.careerOffer.id, "scout");
   assert.equal(request.context.yearsSincePreviousDecision.at(-1).incident.id, "scout");
   validateGeneratedScene(scene, heard);
-  assert.throws(() => validateGeneratedScene({ ...scene, body: "今の会社で働き続ける。" }, heard));
-  assert.throws(() => validateGeneratedScene({ ...scene, options: fourReply(storyRequest(g).context).options }, heard));
+  validateGeneratedScene({ ...scene, body: "今の会社で働き続ける。" }, heard);
+  const ordinary = fourReply(request.context, { offerResponses: false });
+  validateGeneratedScene(ordinary, heard);
+  validateGeneratedScene({ ...ordinary, options: ordinary.options.map(({ decision, ...option }) => option) }, heard, { personalized: false });
+  assert.throws(() => validateGeneratedScene({ ...ordinary, body: "上司から昇進の打診があった。" }, heard));
+  const savedOldScene = applyScene(heard, scene);
+  assert.deepEqual(decodeSave(encodeSave(savedOldScene)), savedOldScene);
   const accepted = advance(heard, scene.options.find((o) => o.id === "switch").decision);
   assert.equal(accepted.employer.name, "合成クラウド社");
   assert.deepEqual(decodeSave(encodeSave(accepted)), accepted);
@@ -132,11 +137,13 @@ test("a recorded promotion can be accepted once with certainty or declined witho
     assert.notEqual(pendingCareerOffer(declined), offer);
     assert.deepEqual(decodeSave(encodeSave(accepted)), accepted);
     assert.deepEqual(replayGame(accepted), accepted);
-    const missing = structuredClone(scene);
-    missing.options[3] = { id: "connect", label: "人と会う", hint: "時間を使う", reason: "相談", decision: { id: "connect", intent: "相談する" } };
-    assert.throws(() => validateGeneratedScene(missing, g));
-    assert.throws(() => validateGeneratedScene({ ...scene, options: scene.options.map((o) => o.id === "focus" ? missing.options[3] : o) }, g));
-    assert.throws(() => validateGeneratedScene({ ...scene, body: "会社に残って次の仕事を考える。" }, g));
+    const missing = fourReply(request.context, { offerResponses: false });
+    validateGeneratedScene(missing, g);
+    validateGeneratedScene({ ...missing, options: missing.options.map(({ decision, ...option }) => option) }, g, { personalized: false });
+    assert.throws(() => validateGeneratedScene({ ...missing, body: "スカウトの連絡が来た。" }, g));
+    validateGeneratedScene({ ...scene, body: "会社に残って次の仕事を考える。" }, g);
+    const savedOldScene = applyScene(g, scene);
+    assert.deepEqual(decodeSave(encodeSave(savedOldScene)), savedOldScene);
     assert.equal(pendingCareerOffer(replayGame(accepted, g.decisions)).targetRank, offer.targetRank);
   }
 });
@@ -275,24 +282,23 @@ test("offer scenes survive grounding and saving, and invalid boundaries consume 
   assert.equal(ai.status().reservedUSD, accounting.reservedUSD);
 });
 
-test("a missing scout response is rejected without caching, and the sent prompt carries the discovery and offer facts", async () => {
-  const g = advance(findIncident("scout"), "focus");
-  let calls = 0;
-  const ai = await readyAI(async (_url, options) => {
-    calls++;
-    const messages = JSON.parse(options.body).messages;
-    assert.ok(messages[0].content.includes(CAREER_DISCOVERY));
-    const context = JSON.parse(messages.at(-1).content);
-    assert.equal(context.careerOffer.id, "scout");
-    const reply = fourReply(context);
-    if (calls === 1) reply.options[3] = { id: "rest", label: "休む", hint: "休養", reason: "体調",
-      decision: { id: "rest", intent: "休む" } };
-    return { status: 200, text: ollamaText(reply) };
-  });
-  await assert.rejects(() => ai.generate(encodeSave(g)));
-  assert.equal((await ai.generate(encodeSave(g))).cached, false);
-  assert.equal((await ai.generate(encodeSave(g))).cached, true);
-  assert.equal(calls, 2);
+test("AI scenes without offer prose or options are accepted and cached; prompts explain the game buttons", async () => {
+  for (const g of [advance(findIncident("scout"), "focus"), promotionGame()]) {
+    let calls = 0;
+    const ai = await readyAI(async (_url, options) => {
+      calls++;
+      const messages = JSON.parse(options.body).messages;
+      assert.ok(messages[0].content.includes(CAREER_DISCOVERY));
+      const context = JSON.parse(messages.at(-1).content);
+      assert.equal(context.careerOffer.id, pendingCareerOffer(g).id);
+      assert.match(messages[0].content, /ゲームが4択の横に専用ボタン/);
+      const reply = fourReply(context, { offerResponses: false });
+      return { status: 200, text: ollamaText(reply) };
+    });
+    assert.equal((await ai.generate(encodeSave(g))).cached, false);
+    assert.equal((await ai.generate(encodeSave(g))).cached, true);
+    assert.equal(calls, 1);
+  }
 });
 
 test("cohorts retain different careers and rare extremes with tolerant promotion and lifetime distributions", () => {

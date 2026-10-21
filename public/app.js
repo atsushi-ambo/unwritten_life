@@ -29,6 +29,7 @@ import {
   recordCareerSeen,
   careerSeenUntil,
   directionSpan,
+  pendingCareerOffer,
 } from "./engine.js";
 import {
   VENTURES,
@@ -513,6 +514,36 @@ function selectCommand(event) {
   if (!button || button.disabled) return;
   for (const command of $("choices").querySelectorAll("button"))
     command.dataset.active = String(command === button);
+}
+function appendCareerOfferCommand(choices) {
+  const offer = pendingCareerOffer(game);
+  if (!offer) return;
+  const currentRevision = revision,
+    scout = offer.id === "scout",
+    button = node("button", undefined, "choice choice-offer"),
+    copy = node("span");
+  button.type = "button";
+  button.dataset.offer = offer.id;
+  button.disabled = generating;
+  copy.append(
+    node("small", "届いた話", "choice-offer-label"),
+    node("b", scout ? "スカウトの話を聞く" : "打診を受ける"),
+    node("small", scout
+      ? "企業と役割を比べる。閉じると、元の4択に戻れます。"
+      : `${RANKS[offer.targetRank].label}への打診。この年に受けると昇格します。`),
+  );
+  const cursor = node("span", "▶", "command-cursor"),
+    symbol = node("span", "✉", "choice-symbol");
+  cursor.setAttribute("aria-hidden", "true");
+  symbol.setAttribute("aria-hidden", "true");
+  button.append(cursor, symbol, copy);
+  button.addEventListener("click", () => {
+    if (!button.isConnected || revision !== currentRevision || generating ||
+      timelineRevealing() || pendingCareerOffer(game) !== offer) return;
+    if (scout) openCareer("switch");
+    else commitChoice({ id: "promote", track: RANKS[offer.targetRank].track, intent: "昇進の打診を受ける" });
+  });
+  choices.append(button);
 }
 // Safari does not always focus buttons after a tap. Track the pointer as well
 // as keyboard focus so the cursor still marks the chosen command.
@@ -1016,6 +1047,7 @@ function renderGame() {
         game.lifeRealismFrom,
         game.offersFrom,
         game.paceFrom,
+        game.reemploymentPayFrom,
       );
       showGame(true);
     });
@@ -1161,6 +1193,7 @@ function renderGame() {
       });
       choices.append(button);
     }
+    appendCareerOfferCommand(choices);
   }
   $("choice-title").parentElement.hidden = revealing || complete || !eventFor(game).generated;
   $("choice-title").textContent = `コマンド / ${directionSpan(game)}の方針`;
@@ -1452,6 +1485,7 @@ $("undo-button").addEventListener("click", () => {
     game.lifeRealismFrom,
     game.offersFrom,
     game.paceFrom,
+    game.reemploymentPayFrom,
     blocks,
   );
   const reached = new Set(careerMilestones(game).map((m) => m.id));
@@ -1725,15 +1759,18 @@ function resetCareerResearch() {
 function openCareer(mode) {
   if (!game || game.ended || generating || isRetiredAt(game)) return;
   careerMode = mode;
+  const scout = mode === "switch" && pendingCareerOffer(game)?.id === "scout";
   resetCareerResearch();
   $("career-title").textContent =
     mode === "startup"
       ? "まだない仕事を、自分でつくる。"
-      : "次は、どこで働こう。";
+      : scout ? "届いたスカウトを、検討する。" : "次は、どこで働こう。";
   $("career-intro").textContent =
     mode === "startup"
       ? "事業を選ぶだけで始められます。名前をつけるのは任意です。"
-      : `${game.year}年の分岐。会社と役割の組み合わせが、その後の物語と収支を変えます。`;
+      : scout
+        ? `${game.year}年に応答できるスカウトです。AIが考える企業と役割を比べ、会社を選ぶと転職します。閉じて元の4択を選ぶこともできます。採用や好条件を保証する話ではありません。`
+        : `${game.year}年の分岐。会社と役割の組み合わせが、その後の物語と収支を変えます。`;
   $("career-job-fields").hidden = mode !== "switch";
   $("career-venture-fields").hidden = mode !== "startup";
   $("career-error").textContent = "";
@@ -1827,6 +1864,10 @@ async function generateCareerChoices() {
   }
 }
 $("career-generate").addEventListener("click", generateCareerChoices);
+$("career-dialog").addEventListener("close", () => {
+  if (game && pendingCareerOffer(game)?.id === "scout" && !timelineRevealing())
+    $("choices").querySelector('[data-offer="scout"]')?.focus();
+});
 function takeCareerDecision(decision) {
   if (generating || timelineRevealing() || !availableChoices(game).includes(decisionId(decision)))
     throw new Error("今の状態では選べません。");
