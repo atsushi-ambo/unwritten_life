@@ -140,6 +140,9 @@ export const payRealism = (g) => g.decisions.length >= (g.payRealismFrom ?? 0);
 export const lifeRealism = (g) => g.decisions.length >= (g.lifeRealismFrom ?? 0);
 export const careerOffers = (g) => g.decisions.length >= (g.offersFrom ?? 0);
 export const familyMoney = (g) => g.decisions.length >= (g.familyFrom ?? 0);
+// Mean of worldAt().growth over seeds, years and employers (steady scenario).
+export const WORLD_GROWTH_MEAN = -0.0072;
+export const payCurve = (g) => g.decisions.length >= (g.growthFrom ?? 0);
 const symmetricDrift = (g) => g.decisions.length >= (g.driftFrom ?? 0);
 const measuredPace = (g) => g.decisions.length >= (g.paceFrom ?? 0);
 // Keep temporary leave pay out of the salary basis of a later employer.
@@ -1013,6 +1016,7 @@ export function createGame(
   reemploymentPayFrom = 0,
   driftFrom = 0,
   familyFrom = 0,
+  growthFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -1070,7 +1074,10 @@ export function createGame(
     driftFrom > MAX_AGE ||
     !Number.isInteger(familyFrom) ||
     familyFrom < 0 ||
-    familyFrom > MAX_AGE
+    familyFrom > MAX_AGE ||
+    !Number.isInteger(growthFrom) ||
+    growthFrom < 0 ||
+    growthFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -1098,6 +1105,7 @@ export function createGame(
     reemploymentPayFrom,
     driftFrom,
     familyFrom,
+    growthFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -3554,11 +3562,19 @@ export function advance(g, rawDecision) {
   const aiBenefit = tech * adoption * job.complement * (g.skill / 100) *
     (measuredPace(g) && employer.kind !== "venture" &&
       !["switch", "promote", "negotiate"].includes(choice) ? 0.001 : 0.1);
-  const transitionCost =
-    tech * adoption * exposure * (1 - g.skill / 125) * 0.075;
+  // From growthFrom the adjustment follows this year's rise in adoption, so it
+  // is a level shift while technology spreads, not a cut repeated every year
+  // after it has arrived (about -10% in total for an exposed average worker).
+  const transitionCost = payCurve(g)
+    ? Math.max(0, tech - technologyAt({ ...g, year: g.year - 1, decisions: g.decisions.slice(0, -1) })) *
+      adoption * exposure * (1 - g.skill / 125) * 0.3
+    : tech * adoption * exposure * (1 - g.skill / 125) * 0.075;
   // Recalibrate the pre-50 employee focus raise by 0.1 percentage point so
   // removing the noise bias keeps the existing measured IT pace range.
-  const focusGrowth = symmetricDrift(g) && g.age < 50 && choice === "focus" &&
+  // From growthFrom the AI and economy drags no longer cut pay every year, so
+  // the focus raise falls to keep the measured pace and stay-put ranges
+  // (about 2% a year with the seniority raise; scripts/simulate-pay-curve.mjs).
+  const focusGrowth = payCurve(g) ? 0.008 : symmetricDrift(g) && g.age < 50 && choice === "focus" &&
     inCompany({ ...g, employer }) ? 0.022 : 0.023;
   let growth = clamp(
     0.006 +
@@ -3571,7 +3587,9 @@ export function advance(g, rawDecision) {
         : ["transfer", "internalVenture"].includes(choice)
           ? 0.01
           : 0) +
-      (g.health < 30 ? -0.035 : 0),
+      // Worn-down years slow raises and bonuses; base pay in Japan rarely
+      // falls, so from growthFrom the yearly penalty is smaller.
+      (g.health < 30 ? payCurve(g) ? -0.015 : -0.035 : 0),
     -0.12,
     0.12,
   );
@@ -3603,7 +3621,10 @@ export function advance(g, rawDecision) {
     growth +=
       (randomAt(g.seed, i, 21) - 0.5) * 0.4 +
       tech * (g.skill / 100 - 0.5) * 0.1;
-  if (world) growth += world.growth;
+  // Booms and downturns move pay around a flat long-run trend. From growthFrom
+  // the mean of world.growth (scripts/simulate-pay-curve.mjs) is removed, so
+  // cycles no longer add up to a permanent yearly cut.
+  if (world) growth += world.growth - (payCurve(g) ? WORLD_GROWTH_MEAN : 0);
   // Employees are usually rehired at 60 on lower pay; the self-employed and
   // business owners are not.
   const rehire =
@@ -4033,6 +4054,7 @@ export function replay(
   reemploymentPayFrom = 0,
   driftFrom = 0,
   familyFrom = 0,
+  growthFrom = 0,
   directionBlocks,
 ) {
   if (
@@ -4065,6 +4087,7 @@ export function replay(
     reemploymentPayFrom,
     driftFrom,
     familyFrom,
+    growthFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -4120,6 +4143,7 @@ export function compareWorlds(g) {
       g.reemploymentPayFrom,
       g.driftFrom,
       g.familyFrom,
+      g.growthFrom,
       g.directionBlocks,
     ),
   );
@@ -4164,7 +4188,10 @@ export function encodeSave(g) {
     g.driftFrom > MAX_AGE ||
     !Number.isInteger(g.familyFrom) ||
     g.familyFrom < 0 ||
-    g.familyFrom > MAX_AGE
+    g.familyFrom > MAX_AGE ||
+    !Number.isInteger(g.growthFrom) ||
+    g.growthFrom < 0 ||
+    g.growthFrom > MAX_AGE
   )
     fail();
   const value = JSON.stringify({
@@ -4186,6 +4213,7 @@ export function encodeSave(g) {
     reemploymentPayFrom: g.reemploymentPayFrom,
     driftFrom: g.driftFrom,
     familyFrom: g.familyFrom,
+    growthFrom: g.growthFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
@@ -4255,6 +4283,9 @@ export function decodeSave(value) {
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
     Object.hasOwn(d, "familyFrom")
       ? d.familyFrom
+      : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
+    Object.hasOwn(d, "growthFrom")
+      ? d.growthFrom
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
   );
   if (Object.hasOwn(d, "directionBlocks"))

@@ -58,6 +58,7 @@ for (const value of ["", "200"]) test(`advanced partner income ${value || "blank
   expect(saved.profile.partnerIncome).toBe(Number(value));
   expect(saved.profile.income).toBe(500);
   expect(saved.familyFrom).toBe(0);
+  expect(saved.growthFrom).toBe(0);
   await expectFits(page);
 });
 
