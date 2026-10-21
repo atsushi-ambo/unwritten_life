@@ -237,3 +237,21 @@ test("a fresh reply offers early retirement only when it is affordable", () => {
   validateGeneratedScene(reply("retire"), quiet({ ...profile, age: 46, savings: 90000 }), { mode: "life", fresh: true });
   validateGeneratedScene(reply("retire"), quiet({ ...profile, age: 56, savings: 2700 }), { mode: "life", fresh: true });
 });
+
+test("a worn-down player eases off in follow-through years and is asked when ゆとり runs low", () => {
+  const tired = { ...quiet(), health: 30 };
+  const run = advanceDirection(tired, "focus");
+  assert.ok(run.entries.slice(1).some((e) => e.choice === "rest"), "a follow-through year rests");
+  const dropping = { ...quiet(), health: 22 };
+  const low = advanceDirection(dropping, "focus");
+  const fell = low.entries.findIndex((e) => e.health < 20);
+  if (fell >= 0) {
+    assert.equal(low.entries.length, fell + 1);
+    assert.match(low.stopReason, /ゆとりが少なく/);
+  }
+  // Over a long career of focus directions, ゆとり does not stay at the floor.
+  let g = createGame(profile, "steady", 4150938329 % 1000);
+  for (let k = 0; k < 9 && !g.ended; k++) g = advanceDirection(g, "focus").game;
+  const zeros = g.history.filter((h) => h.health <= 1).length;
+  assert.ok(zeros <= 3, `${zeros} years at ゆとり 0`);
+});
