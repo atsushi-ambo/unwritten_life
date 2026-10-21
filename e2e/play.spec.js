@@ -60,6 +60,7 @@ for (const value of ["", "200"]) test(`advanced partner income ${value || "blank
   expect(saved.familyFrom).toBe(0);
   expect(saved.growthFrom).toBe(0);
   expect(saved.cycleFrom).toBe(0);
+  expect(saved.spendFrom).toBe(0);
   await expectFits(page);
 });
 

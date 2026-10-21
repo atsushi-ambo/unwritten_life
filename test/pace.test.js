@@ -16,7 +16,7 @@ const replayGame = (g, decisions = g.decisions, scenes = g.scenes) => replay(
   g.profile, g.scenario, g.seed, decisions, scenes, false, g.dynamicFrom, g.worldFrom,
   g.retirementFrom, g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom,
   g.incidentFrom, g.careerPathFrom, g.careerEndFrom, g.payRealismFrom, g.lifeRealismFrom,
-  g.offersFrom, g.paceFrom, g.reemploymentPayFrom, g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, decisions.length === g.decisions.length ? g.directionBlocks : undefined);
+  g.offersFrom, g.paceFrom, g.reemploymentPayFrom, g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, decisions.length === g.decisions.length ? g.directionBlocks : undefined);
 const within = (n, lo, hi, label) => assert.ok(n >= lo && n <= hi, `${label}: ${n}`);
 
 test("2,000 focus careers retain modest pay growth and occasional recognition", () => {

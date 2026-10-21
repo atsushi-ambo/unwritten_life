@@ -252,6 +252,7 @@ test("undo retains the care-leave salary migration boundary and can repeat the r
   assert.equal(h.context.game.familyFrom, game.familyFrom);
   assert.equal(h.context.game.growthFrom, game.growthFrom);
   assert.equal(h.context.game.cycleFrom, game.cycleFrom);
+  assert.equal(h.context.game.spendFrom, game.spendFrom);
   assert.equal(h.context.game.decisions.length, 3);
   assert.ok(h.context.game.cash > 30);
   assert.deepEqual({ ...advance(h.context.game, "invest"), reflections: { ...h.context.game.reflections }, careerSeen: { ...h.context.game.careerSeen } }, game);

@@ -15,7 +15,7 @@ const replayGame = (g, length = g.decisions.length) => replay(
   false, g.dynamicFrom, g.worldFrom, g.retirementFrom, g.careLeaveSalaryFrom,
   g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom,
   g.careerEndFrom, g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom,
-  g.reemploymentPayFrom, g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom,
+  g.reemploymentPayFrom, g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom,
 );
 
 test("stayers' pay rises into the early 50s and 55–59 stays near that peak until the rehire cut", () => {
@@ -32,7 +32,8 @@ test("stayers' pay rises into the early 50s and 55–59 stays near that peak unt
 });
 
 test("always-working new graduates rarely end at 65 in debt and do no worse than people starting at 35", () => {
-  const grad = measureCurve({ seeds: 300 }), mid = measureCurve({ seeds: 300, band: "30s" });
+  // Pay only: spending that grows with pay (spendFrom) is measured separately.
+  const grad = measureCurve({ seeds: 300, spendFrom: MAX_AGE }), mid = measureCurve({ seeds: 300, band: "30s", spendFrom: MAX_AGE });
   assert.ok(grad.debtAt65 < 0.15, `${grad.debtAt65}`);
   assert.ok(measureCurve({ seeds: 300, from: MAX_AGE }).debtAt65 > 0.2);
   assert.ok(grad.netWorthAt65 > mid.netWorthAt65 * 0.8, `${grad.netWorthAt65} vs ${mid.netWorthAt65}`);
