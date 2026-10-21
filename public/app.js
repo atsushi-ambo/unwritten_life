@@ -1172,6 +1172,9 @@ function renderGame() {
       // Ending the career ends the story; say so in the game's own words.
       if (option.id === "retire")
         copy.append(node("small", "選ぶとキャリアの物語が終わります", "choice-ending-note"));
+      // While job-seeking, these years pause the search (no re-employment).
+      if (game.employer.kind === "seeking" && ["rest", "recover", "careLeave"].includes(option.id))
+        copy.append(node("small", "この1年は仕事探しを休みます", "choice-pause-note"));
       if (option.decision?.id === "switch")
         copy.append(
           node(
