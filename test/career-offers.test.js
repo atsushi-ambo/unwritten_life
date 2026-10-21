@@ -21,7 +21,7 @@ const replayGame = (g, decisions = g.decisions) => replay(g.profile, g.scenario,
   decisions, g.scenes, false, g.dynamicFrom, g.worldFrom, g.retirementFrom,
   g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom,
   g.incidentFrom, g.careerPathFrom, g.careerEndFrom, g.payRealismFrom,
-  g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom, decisions.length === g.decisions.length ? g.directionBlocks : undefined);
+  g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom, g.driftFrom, decisions.length === g.decisions.length ? g.directionBlocks : undefined);
 const within = (n, lo, hi, label) => assert.ok(n >= lo && n <= hi, `${label}: ${n}`);
 function findIncident(id, make = start, predicate = () => true) {
   for (let seed = 1; seed < 30000; seed++) {
@@ -140,7 +140,9 @@ test("a recorded promotion can be accepted once with certainty or declined witho
     const missing = fourReply(request.context, { offerResponses: false });
     validateGeneratedScene(missing, g);
     validateGeneratedScene({ ...missing, options: missing.options.map(({ decision, ...option }) => option) }, g, { personalized: false });
-    assert.throws(() => validateGeneratedScene({ ...missing, body: "スカウトの連絡が来た。" }, g));
+    // An invented scout is refused; this sample may have had a real one.
+    if (!g.history.some((h) => h.incident?.id === "scout"))
+      assert.throws(() => validateGeneratedScene({ ...missing, body: "スカウトの連絡が来た。" }, g));
     validateGeneratedScene({ ...scene, body: "会社に残って次の仕事を考える。" }, g);
     const savedOldScene = applyScene(g, scene);
     assert.deepEqual(decodeSave(encodeSave(savedOldScene)), savedOldScene);
@@ -190,18 +192,20 @@ test("mental leave can continue or recover in later years, without stacking pay 
     if (!incident?.effects.mentalLeave) continue;
     const leave = advance(g, "focus");
     assert.equal(onMentalLeave(leave), true);
-    assert.ok(leave.salary < g.salary * 0.8);
+    assert.equal(leave.salary, 0);
+    assert.ok(leave.history.at(-1).leaveSalary > g.salary * 0.8);
     assert.ok(!availableChoices(leave).includes("promote"));
     assert.equal(storyRequest(leave).context.mentalLeave, true);
     const next = advance(leave, "rest");
     if (onMentalLeave(next)) {
       continued = true;
       assert.equal(next.history.at(-1).incident.id, "leaveContinues");
-      assert.equal(next.salary, leave.salary);
+      assert.equal(next.salary, 0);
+      assert.equal(next.history.at(-1).leaveSalary, leave.history.at(-1).leaveSalary);
     } else {
       returned = true;
       assert.equal(next.history.at(-1).incident.id, "returnToWork");
-      within(next.salary / leave.salary, 1.2, 1.65, "restored salary");
+      within(next.salary / leave.history.at(-1).leaveSalary, 0.9, 1.15, "restored salary");
     }
     assert.deepEqual(decodeSave(encodeSave(next)), next);
     assert.deepEqual(replayGame(next), next);
@@ -222,7 +226,8 @@ test("continued mental leave restores the separate family-leave reduction and re
       if (!incidentAt(g, action)?.effects.mentalLeave) continue;
       const leave = advance(g, action), next = advance(leave, "rest");
       if (!onMentalLeave(next)) continue;
-      assert.equal(next.salary, leave.salary * factor);
+      assert.equal(next.salary, 0);
+      assert.equal(next.history.at(-1).leaveSalary, leave.history.at(-1).leaveSalary * factor);
       assert.deepEqual(decodeSave(encodeSave(next)), next);
       checked = true;
     }

@@ -5,7 +5,7 @@ import {
 } from "../public/engine.js";
 
 // Synthetic cohorts only. The same seeds, existing pay rules and policies are
-// used on both sides; only lifeRealismFrom changes. Keep offersFrom/paceFrom disabled
+// used on both sides; only lifeRealismFrom changes. Keep offersFrom/paceFrom/driftFrom disabled
 // to reproduce the PR #49 historical measurement. No AI or private saves.
 export const simulationProfile = (extra = {}) => optionalProfileInputs({
   ...profileInputForLevel({}, "standard"), age: 32, income: 500,
@@ -17,7 +17,7 @@ export function measureLifeRealism({ seeds = 2000, from = 0 } = {}) {
   const counts = { firstYearFailure: 0, survivedFiveYears: 0, doubledWithinTenYears: 0,
     managerBy50: 0, directorBy50: 0, negotiations: 0, negotiationSuccesses: 0 };
   const start = (seed, extra) => createGame(simulationProfile(extra), "steady", seed * 7919,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, from, MAX_AGE, MAX_AGE);
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, from, MAX_AGE, MAX_AGE, 0, MAX_AGE);
   for (let seed = 1; seed <= seeds; seed++) {
     let g = start(seed), doubled = false;
     for (let year = 0; year < 10 && !g.ended; year++) {

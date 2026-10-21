@@ -17,12 +17,12 @@ function grind(g, years) {
 }
 // Salary rules are compared between action paths, so chance incidents (which
 // depend on the action) are off here.
-const capAt = (from, payRealismFrom = MAX_AGE, lifeRealismFrom = 0) => (profile, scenario, seed) =>
-  createGame(profile, scenario, seed, 0, 0, 0, 0, 0, 0, from, MAX_AGE, 0, 0, payRealismFrom, lifeRealismFrom);
+const capAt = (from, payRealismFrom = MAX_AGE, lifeRealismFrom = 0, driftFrom = 0) => (profile, scenario, seed) =>
+  createGame(profile, scenario, seed, 0, 0, 0, 0, 0, 0, from, MAX_AGE, 0, 0, payRealismFrom, lifeRealismFrom, 0, 0, 0, driftFrom);
 function replayAt(g, length) {
   return replay(g.profile, g.scenario, g.seed, g.decisions.slice(0, length),
     {}, false, g.dynamicFrom, g.worldFrom, g.retirementFrom,
-    g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom, g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom);
+    g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom, g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom, g.driftFrom);
 }
 
 test("long-run salaries level off near a job and region ceiling but keep variance", () => {
@@ -106,7 +106,7 @@ test("salary cap boundaries are validated by create, replay, encode and decode",
   }
 });
 
-test("consecutive care leave cannot cancel its cut and bypass the salary cap", () => {
+test("legacy consecutive care leave cannot cancel its cut and bypass the salary cap", () => {
   const profile = {
     ...quick(), income: 900, children: 2, childStage: "young",
     household: "shared", partner: "partner",
@@ -114,7 +114,9 @@ test("consecutive care leave cannot cancel its cut and bypass the salary cap", (
   let damped = 0;
   for (const scenario of Object.keys(SCENARIOS)) {
     for (let seed = 0; seed < 6; seed++) {
-      let g = advance(capAt(0)(profile, scenario, seed), "careLeave");
+      // The legacy inequality includes asymmetric downside noise. New
+      // symmetric noise can make capped downside smaller than uncapped.
+      let g = advance(capAt(0, MAX_AGE, 0, MAX_AGE)(profile, scenario, seed), "careLeave");
       for (let k = 0; k < 12; k++) {
         // Same state and choice, with and without the cap for this year.
         const capped = advance(g, "careLeave"),

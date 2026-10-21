@@ -139,10 +139,12 @@ export const directionSpan = (g) =>
 export const payRealism = (g) => g.decisions.length >= (g.payRealismFrom ?? 0);
 export const lifeRealism = (g) => g.decisions.length >= (g.lifeRealismFrom ?? 0);
 export const careerOffers = (g) => g.decisions.length >= (g.offersFrom ?? 0);
+const symmetricDrift = (g) => g.decisions.length >= (g.driftFrom ?? 0);
 const measuredPace = (g) => g.decisions.length >= (g.paceFrom ?? 0);
 // Keep temporary leave pay out of the salary basis of a later employer.
 function employmentSalary(g) {
   if (g.decisions.length < (g.reemploymentPayFrom ?? 0)) return g.salary;
+  if (g.history.at(-1)?.leaveSalary !== undefined) return g.history.at(-1).leaveSalary;
   const previous = g.history.at(-1)?.incident;
   const incidentRestore = onMentalLeave(g) ? 1 / 0.7
     : previous?.effects.temporary && previous.effects.salaryFactor
@@ -1003,6 +1005,7 @@ export function createGame(
   offersFrom = 0,
   paceFrom = 0,
   reemploymentPayFrom = 0,
+  driftFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -1054,7 +1057,10 @@ export function createGame(
     paceFrom > MAX_AGE ||
     !Number.isInteger(reemploymentPayFrom) ||
     reemploymentPayFrom < 0 ||
-    reemploymentPayFrom > MAX_AGE
+    reemploymentPayFrom > MAX_AGE ||
+    !Number.isInteger(driftFrom) ||
+    driftFrom < 0 ||
+    driftFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -1080,6 +1086,7 @@ export function createGame(
     offersFrom,
     paceFrom,
     reemploymentPayFrom,
+    driftFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -1706,6 +1713,11 @@ export function incidentAt(g, choice, employer = g.employer, outcome = null) {
     return { id, ...INCIDENTS[id], effects: { ...INCIDENTS[id].effects }, chance: id === "returnToWork" ? chance : 1 - chance, yearChance: 1 };
   }
   const rates = incidentRates(g, choice, employer, outcome);
+  // The same setback rarely repeats back to back (2026-10-21: one career had
+  // 上司やチームとの関係がこじれる six times): a recent one counts 0.3x.
+  if (symmetricDrift(g))
+    for (const h of g.history.slice(-3))
+      if (h.incident && rates[h.incident.id] && h.incident.tone !== "good") rates[h.incident.id] *= 0.3;
   const modern = careerOffers(g);
   const total = Object.values(rates).reduce((a, b) => a + b, 0);
   if (randomAt(g.seed, i, modern ? 181 : 141) >= total) return null;
@@ -2047,7 +2059,7 @@ const REALISTIC_CEILINGS = Object.freeze({
   other: 480,
 });
 // Soft ceiling for one employer: raises shrink above half of it and are
-// nearly gone at twice it. Losses are never damped, so variance remains.
+// nearly gone at twice it. Real cuts stay undamped; yearly noise is symmetric.
 export function salaryCeiling(g, employer = g.employer) {
   if (payRealism(g))
     return Math.round(Math.max(
@@ -2070,10 +2082,11 @@ export function salaryCeiling(g, employer = g.employer) {
       : [1, 1.1, 1.25, 1.45][RANKS[g.position?.rank]?.level ?? 0]);
   return Math.round(Math.max(base, g.profile.income * 1.3));
 }
-// Only raises are damped. Each factor below 1 (negative growth, care leave)
+// Raises are damped; the separate zero-mean noise gets the same scale in
+// both directions. Each real factor below 1 (negative growth, care leave)
 // is applied in full, so a loss or a later restoration never cancels a cut and
 // slips past the damping. The ratio uses full-time pay after care leave.
-function cappedSalary(g, employer, base, factors, transition, restore) {
+function cappedSalary(g, employer, base, factors, transition, restore, noise = 0) {
   const ratio = (base * restore) / salaryCeiling(g, employer);
   const realism = payRealism(g),
     start = 0.5;
@@ -2083,7 +2096,7 @@ function cappedSalary(g, employer, base, factors, transition, restore) {
   const merit = factors.reduce((m, f) => m * Math.max(f, 1), 1),
     cut = factors.reduce((m, f) => m * Math.min(f, 1), 1);
   return clamp(
-    base * (1 + (merit - 1) * damp) * cut * transition * restore,
+    base * (1 + (merit - 1) * damp + noise * damp) * cut * transition * restore,
     0,
     20000,
   );
@@ -3461,10 +3474,12 @@ export function advance(g, rawDecision) {
   if (outcome?.promotion)
     position = { ...position, rank: outcome.promotion, since: g.year };
   if (outcome?.unit) position = { ...position, unit: outcome.unit };
+  const previousLeaveSalary = g.history.at(-1)?.leaveSalary;
+  const salaryBase = previousLeaveSalary ?? g.salary;
   const previousIncident = g.history.at(-1)?.incident;
   const incidentRestore =
     onMentalLeave(g) && !incident?.effects.mentalLeave
-      ? 1 / 0.7
+      ? previousLeaveSalary !== undefined ? 1 : 1 / 0.7
       : previousIncident?.effects.temporary && previousIncident.effects.salaryFactor
       ? 1 / previousIncident.effects.salaryFactor
       : 1;
@@ -3508,14 +3523,18 @@ export function advance(g, rawDecision) {
       !["switch", "promote", "negotiate"].includes(choice) ? 0.001 : 0.1);
   const transitionCost =
     tech * adoption * exposure * (1 - g.skill / 125) * 0.075;
+  // Recalibrate the pre-50 employee focus raise by 0.1 percentage point so
+  // removing the noise bias keeps the existing measured IT pace range.
+  const focusGrowth = symmetricDrift(g) && g.age < 50 && choice === "focus" &&
+    inCompany({ ...g, employer }) ? 0.022 : 0.023;
   let growth = clamp(
     0.006 +
-      volatility +
+      (symmetricDrift(g) ? 0 : volatility) +
       aiBenefit -
       transitionCost +
       // Aiming for promotion is also a year of committed work.
       (["focus", "promote"].includes(choice)
-        ? 0.023
+        ? focusGrowth
         : ["transfer", "internalVenture"].includes(choice)
           ? 0.01
           : 0) +
@@ -3568,12 +3587,12 @@ export function advance(g, rawDecision) {
   const transitionIncome =
     (choice === "startup" ? 0.3 + randomAt(g.seed, i, 22) * 0.55 : 1) * rehire;
   const careRestore = world &&
-    (i < g.careLeaveSalaryFrom || g.salary > 0) &&
+    (i < g.careLeaveSalaryFrom || g.salary > 0 || previousLeaveSalary !== undefined) &&
     decisionId(g.decisions.at(-1)) === "careLeave" ? 1 / 0.85 : 1;
-  const salary = retired
+  const calculatedSalary = retired
     ? 0
     : onMentalLeave(g) && incident?.effects.mentalLeave
-      ? g.salary * careRestore * rehire
+      ? salaryBase * careRestore * rehire
     : reemployment
       // A new salary is 80–100% of the pre-loss salary, without an extra
       // raise or a restoration of the old temporary leave reduction.
@@ -3584,10 +3603,10 @@ export function advance(g, rawDecision) {
           g,
           employer,
           choice === "startup"
-            ? g.salary || 120
+            ? salaryBase || 120
             : choice === "switch" && typeof decision === "object"
-              ? g.salary || (g.employer.lastSalary ?? 0) * 0.9 || 180
-              : g.salary,
+              ? salaryBase || (g.employer.lastSalary ?? 0) * 0.9 || 180
+              : salaryBase,
           [
             1 + growth,
             outcome?.salaryFactor ?? 1,
@@ -3598,14 +3617,16 @@ export function advance(g, rawDecision) {
           ],
           transitionIncome,
           careRestore * incidentRestore,
+          symmetricDrift(g) ? volatility : 0,
         )
       : clamp(
         (choice === "startup"
-          ? g.salary || 120
+          ? salaryBase || 120
           : choice === "switch" && typeof decision === "object"
-            ? g.salary || (g.employer.lastSalary ?? 0) * 0.9 || 180
-            : g.salary) *
+            ? salaryBase || (g.employer.lastSalary ?? 0) * 0.9 || 180
+            : salaryBase) *
           (1 + growth) *
+          (symmetricDrift(g) ? 1 + volatility : 1) *
           transitionIncome *
           (outcome?.salaryFactor ?? 1) *
           (familyChange.outcome && outcome !== familyChange.outcome
@@ -3617,7 +3638,23 @@ export function advance(g, rawDecision) {
         0,
         20000,
       );
-  const income = salary + (g.age >= 65 ? p.pension : 0);
+  // Keep the contractual basis separate from paid salary throughout a leave.
+  // Older leave records have the former 70% basis; restore it only once.
+  const mentalLeave = symmetricDrift(g) && !retired &&
+    incident?.effects.mentalLeave && employer.role !== "independent" && inCompany({ ...g, employer });
+  const leaveSalary = mentalLeave
+    ? calculatedSalary * (previousLeaveSalary !== undefined ? 1 : 1 / 0.7)
+    : null;
+  let priorLeaveYears = 0;
+  if (mentalLeave)
+    for (let j = g.history.length - 1; j >= 0 && g.history[j].incident?.effects.mentalLeave; j--)
+      priorLeaveYears++;
+  // Annual approximation: one full year, then half a year, then no benefit.
+  const sicknessAllowance = mentalLeave
+    ? leaveSalary * (2 / 3) * clamp(1.5 - priorLeaveYears, 0, 1) : 0;
+  const salary = mentalLeave ? 0 : calculatedSalary;
+  const pension = g.age >= 65 ? p.pension : 0;
+  const income = salary + pension + sicknessAllowance;
   const businessSetup =
     choice === "startup" ? VENTURES[decision.venture].setup : 0;
   const businessOverhead = venture && !retired ? venture.overhead : 0;
@@ -3674,7 +3711,7 @@ export function advance(g, rawDecision) {
     // force asset sales or borrowing, or consume the six-month cash buffer.
     prepayment = Math.max(
       0,
-      Math.min(mortgage, cash - buffer, cash + income * 0.76 - reserved - buffer),
+      Math.min(mortgage, cash - buffer, cash + (income - sicknessAllowance) * 0.76 + sicknessAllowance - reserved - buffer),
     );
     cash -= prepayment;
     mortgage -= prepayment;
@@ -3686,7 +3723,7 @@ export function advance(g, rawDecision) {
   if (mortgageYears > 1) mortgageYears -= 1;
   const housingCost =
     housing === "own" ? loanPayment + homeValue * 0.01 : rent * 12;
-  const disposable = income * 0.76,
+  const disposable = (income - sicknessAllowance) * 0.76 + sicknessAllowance,
     bonus = choice === "explore" ? (randomAt(g.seed, i, 1) - 0.5) * 30 : 0;
   const expenses =
     livingCost * 12 * (1 + (world?.shock.costs ?? 0)) +
@@ -3820,6 +3857,7 @@ export function advance(g, rawDecision) {
     title: event.title,
     income,
     salary,
+    ...(mentalLeave ? { leaveSalary } : {}),
     savings,
     cash,
     investments,
@@ -3865,7 +3903,8 @@ export function advance(g, rawDecision) {
     // gains stay in investmentGain/propertyGain and do not enter cash flow.
     budget: {
       income: salary * 0.76,
-      pension: (income - salary) * 0.76,
+      pension: (symmetricDrift(g) ? pension : income - salary) * 0.76,
+      ...(symmetricDrift(g) ? { sicknessAllowance } : {}),
       living: -(expenses - housingCost - cost),
       housing: -(housingCost - loanPayment + homeTransaction),
       loanInterest: -loan.interest,
@@ -3950,6 +3989,7 @@ export function replay(
   offersFrom = 0,
   paceFrom = 0,
   reemploymentPayFrom = 0,
+  driftFrom = 0,
   directionBlocks,
 ) {
   if (
@@ -3980,6 +4020,7 @@ export function replay(
     offersFrom,
     paceFrom,
     reemploymentPayFrom,
+    driftFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -4033,6 +4074,7 @@ export function compareWorlds(g) {
       g.offersFrom,
       g.paceFrom,
       g.reemploymentPayFrom,
+      g.driftFrom,
       g.directionBlocks,
     ),
   );
@@ -4071,7 +4113,10 @@ export function encodeSave(g) {
     g.paceFrom > MAX_AGE ||
     !Number.isInteger(g.reemploymentPayFrom) ||
     g.reemploymentPayFrom < 0 ||
-    g.reemploymentPayFrom > MAX_AGE
+    g.reemploymentPayFrom > MAX_AGE ||
+    !Number.isInteger(g.driftFrom) ||
+    g.driftFrom < 0 ||
+    g.driftFrom > MAX_AGE
   )
     fail();
   const value = JSON.stringify({
@@ -4091,6 +4136,7 @@ export function encodeSave(g) {
     offersFrom: g.offersFrom,
     paceFrom: g.paceFrom,
     reemploymentPayFrom: g.reemploymentPayFrom,
+    driftFrom: g.driftFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
@@ -4154,6 +4200,9 @@ export function decodeSave(value) {
     // Keep recorded salaries/debt and the already presented current year.
     Object.hasOwn(d, "reemploymentPayFrom")
       ? d.reemploymentPayFrom
+      : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
+    Object.hasOwn(d, "driftFrom")
+      ? d.driftFrom
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
   );
   if (Object.hasOwn(d, "directionBlocks"))

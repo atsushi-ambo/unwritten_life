@@ -147,15 +147,15 @@ test("pre-fix care-leave histories keep their salary, cash and recorded investme
   assert.deepEqual(replay(restored.profile, restored.scenario, restored.seed,
     restored.decisions, restored.scenes, false, restored.dynamicFrom,
     restored.worldFrom, restored.retirementFrom, restored.careLeaveSalaryFrom,
-    restored.prepayFrom, restored.debtRepayFrom, restored.salaryCapFrom, restored.incidentFrom, restored.careerPathFrom, restored.careerEndFrom, restored.payRealismFrom, restored.lifeRealismFrom, restored.offersFrom, restored.paceFrom, restored.reemploymentPayFrom), restored);
+    restored.prepayFrom, restored.debtRepayFrom, restored.salaryCapFrom, restored.incidentFrom, restored.careerPathFrom, restored.careerEndFrom, restored.payRealismFrom, restored.lifeRealismFrom, restored.offersFrom, restored.paceFrom, restored.reemploymentPayFrom, restored.driftFrom), restored);
   const beforeInvestment = replay(restored.profile, restored.scenario, restored.seed,
     restored.decisions.slice(0, -1), {}, false, restored.dynamicFrom,
     restored.worldFrom, restored.retirementFrom, restored.careLeaveSalaryFrom,
-    restored.prepayFrom, restored.debtRepayFrom, restored.salaryCapFrom, restored.incidentFrom, restored.careerPathFrom, restored.careerEndFrom, restored.payRealismFrom, restored.lifeRealismFrom, restored.offersFrom, restored.paceFrom, restored.reemploymentPayFrom);
+    restored.prepayFrom, restored.debtRepayFrom, restored.salaryCapFrom, restored.incidentFrom, restored.careerPathFrom, restored.careerEndFrom, restored.payRealismFrom, restored.lifeRealismFrom, restored.offersFrom, restored.paceFrom, restored.reemploymentPayFrom, restored.driftFrom);
   assert.ok(beforeInvestment.cash > 30);
   assert.deepEqual(advance(beforeInvestment, "invest"), restored);
   const currentMath = replay(restored.profile, restored.scenario, restored.seed,
-    restored.decisions.slice(0, -1), {}, false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, restored.lifeRealismFrom, restored.offersFrom, restored.paceFrom, restored.reemploymentPayFrom);
+    restored.decisions.slice(0, -1), {}, false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, restored.lifeRealismFrom, restored.offersFrom, restored.paceFrom, restored.reemploymentPayFrom, restored.driftFrom);
   assert.ok(currentMath.cash < 30);
   assert.throws(() => decodeSave(JSON.stringify({ ...save, careLeaveSalaryFrom: 0 })));
   for (const other of compareWorlds(restored))
@@ -172,7 +172,7 @@ test("care-leave salary migration markers are bounded integers and activate only
     assert.throws(() => decodeSave(JSON.stringify({ ...save, careLeaveSalaryFrom })));
     assert.throws(() => createGame(before.profile, "steady", 70, 0, 0, 0, careLeaveSalaryFrom));
   }
-  let g = createGame(before.profile, "steady", 70, 0, 0, 0, 3);
+  let g = { ...createGame(before.profile, "steady", 70, 0, 0, 0, 3), driftFrom: MAX_AGE };
   for (const d of [{ id: "startup", venture: "ai", name: "合成事業" }, "careLeave"])
     g = advance(g, d);
   assert.equal(g.salary, 0);
@@ -310,11 +310,12 @@ test("pre-change retirement saves preserve boundary work history and the current
   for (const { id, save, expected } of fixtures) {
     assert.ok(!Object.hasOwn(save, "retirementFrom"));
     const restored = decodeSave(JSON.stringify(save));
-    const { retirementFrom, careLeaveSalaryFrom, prepayFrom, debtRepayFrom, salaryCapFrom, incidentFrom, careerPathFrom, careerEndFrom, payRealismFrom, lifeRealismFrom, offersFrom, paceFrom, reemploymentPayFrom, position, reflections, careerSeen, ...state } = restored;
+    const { retirementFrom, careLeaveSalaryFrom, prepayFrom, debtRepayFrom, salaryCapFrom, incidentFrom, careerPathFrom, careerEndFrom, payRealismFrom, lifeRealismFrom, offersFrom, paceFrom, reemploymentPayFrom, driftFrom, position, reflections, careerSeen, ...state } = restored;
     assert.equal(careerEndFrom, save.decisions.length);
     assert.equal(offersFrom, save.decisions.length + (save.scenes?.[String(save.decisions.length)] ? 1 : 0));
     assert.equal(paceFrom, save.decisions.length + (save.scenes?.[String(save.decisions.length)] ? 1 : 0));
     assert.equal(reemploymentPayFrom, paceFrom);
+    assert.equal(driftFrom, paceFrom);
     assert.equal(lifeRealismFrom, save.decisions.length + (save.scenes?.[String(save.decisions.length)] ? 1 : 0));
     // A scene already shown for the current year keeps the former rules for that year.
     assert.equal(payRealismFrom, save.decisions.length + (save.scenes?.[String(save.decisions.length)] ? 1 : 0));
@@ -354,7 +355,7 @@ test("pre-change retirement saves preserve boundary work history and the current
         restored.incidentFrom,
         restored.careerPathFrom,
         restored.careerEndFrom,
-        restored.payRealismFrom, restored.lifeRealismFrom, restored.offersFrom, restored.paceFrom, restored.reemploymentPayFrom,
+        restored.payRealismFrom, restored.lifeRealismFrom, restored.offersFrom, restored.paceFrom, restored.reemploymentPayFrom, restored.driftFrom,
       ),
       restored,
     );
