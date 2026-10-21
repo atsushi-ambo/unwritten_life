@@ -15,13 +15,13 @@ const focus = (g) => onMentalLeave(g) ? "rest" : "focus";
 // A mixed player: work, learn, connect and rest in turn.
 const mixed = (g) => onMentalLeave(g) ? "rest" : ["focus", "learn", "focus", "connect", "rest"][(g.directionBlocks?.length ?? 0) % 5];
 
-export function measureCurve({ job = "office", band = "new", region = "metro", seeds = 1000, from = 0, strategy = "focus" } = {}) {
+export function measureCurve({ job = "office", band = "new", region = "metro", seeds = 1000, from = 0, cycleFrom = from, strategy = "focus" } = {}) {
   const pick = strategy === "mixed" ? mixed : focus;
   const all = {}, stayers = {};
   let finished = 0, debt = 0;
   const worth = [];
   for (let seed = 1; seed <= seeds; seed++) {
-    let g = { ...createGame(curveProfile(job, band, region), "steady", seed * 7919), growthFrom: from };
+    let g = { ...createGame(curveProfile(job, band, region), "steady", seed * 7919), growthFrom: from, cycleFrom };
     while (!g.ended) g = advanceDirection(g, pick(g)).game;
     // A stayer has never left the first employer nor had a year without pay.
     let disrupted = false;

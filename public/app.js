@@ -1053,6 +1053,7 @@ function renderGame() {
         game.driftFrom,
         game.familyFrom,
         game.growthFrom,
+        game.cycleFrom,
       );
       showGame(true);
     });
@@ -1500,6 +1501,7 @@ $("undo-button").addEventListener("click", () => {
     game.driftFrom,
     game.familyFrom,
     game.growthFrom,
+    game.cycleFrom,
     blocks,
   );
   const reached = new Set(careerMilestones(game).map((m) => m.id));

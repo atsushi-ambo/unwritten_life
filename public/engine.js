@@ -143,6 +143,7 @@ export const familyMoney = (g) => g.decisions.length >= (g.familyFrom ?? 0);
 // Mean of worldAt().growth over seeds, years and employers (steady scenario).
 export const WORLD_GROWTH_MEAN = -0.0072;
 export const payCurve = (g) => g.decisions.length >= (g.growthFrom ?? 0);
+export const payCycles = (g) => g.decisions.length >= (g.cycleFrom ?? 0);
 const symmetricDrift = (g) => g.decisions.length >= (g.driftFrom ?? 0);
 const measuredPace = (g) => g.decisions.length >= (g.paceFrom ?? 0);
 // Keep temporary leave pay out of the salary basis of a later employer.
@@ -1017,6 +1018,7 @@ export function createGame(
   driftFrom = 0,
   familyFrom = 0,
   growthFrom = 0,
+  cycleFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -1077,7 +1079,10 @@ export function createGame(
     familyFrom > MAX_AGE ||
     !Number.isInteger(growthFrom) ||
     growthFrom < 0 ||
-    growthFrom > MAX_AGE
+    growthFrom > MAX_AGE ||
+    !Number.isInteger(cycleFrom) ||
+    cycleFrom < 0 ||
+    cycleFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -1106,6 +1111,7 @@ export function createGame(
     driftFrom,
     familyFrom,
     growthFrom,
+    cycleFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -3574,7 +3580,8 @@ export function advance(g, rawDecision) {
   // From growthFrom the AI and economy drags no longer cut pay every year, so
   // the focus raise falls to keep the measured pace and stay-put ranges
   // (about 2% a year with the seniority raise; scripts/simulate-pay-curve.mjs).
-  const focusGrowth = payCurve(g) ? 0.008 : symmetricDrift(g) && g.age < 50 && choice === "focus" &&
+  // From cycleFrom downturns no longer leave permanent cuts, so it is 0.5%.
+  const focusGrowth = payCycles(g) ? 0.005 : payCurve(g) ? 0.008 : symmetricDrift(g) && g.age < 50 && choice === "focus" &&
     inCompany({ ...g, employer }) ? 0.022 : 0.023;
   let growth = clamp(
     0.006 +
@@ -3623,8 +3630,13 @@ export function advance(g, rawDecision) {
       tech * (g.skill / 100 - 0.5) * 0.1;
   // Booms and downturns move pay around a flat long-run trend. From growthFrom
   // the mean of world.growth (scripts/simulate-pay-curve.mjs) is removed, so
-  // cycles no longer add up to a permanent yearly cut.
-  if (world) growth += world.growth - (payCurve(g) ? WORLD_GROWTH_MEAN : 0);
+  // cycles no longer add up to a permanent yearly cut. From cycleFrom the
+  // conditions set a level (bonuses, overtime, freezes) rather than a growth
+  // rate: pay follows the change from last year's conditions and returns when
+  // they normalise, as base pay in Japan rarely falls (simulate-pay-cycles.mjs).
+  if (world) growth += payCycles(g)
+    ? world.growth - worldAt({ ...g, year: g.year - 1 }, employer).growth
+    : world.growth - (payCurve(g) ? WORLD_GROWTH_MEAN : 0);
   // Employees are usually rehired at 60 on lower pay; the self-employed and
   // business owners are not.
   const rehire =
@@ -4055,6 +4067,7 @@ export function replay(
   driftFrom = 0,
   familyFrom = 0,
   growthFrom = 0,
+  cycleFrom = 0,
   directionBlocks,
 ) {
   if (
@@ -4088,6 +4101,7 @@ export function replay(
     driftFrom,
     familyFrom,
     growthFrom,
+    cycleFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -4144,6 +4158,7 @@ export function compareWorlds(g) {
       g.driftFrom,
       g.familyFrom,
       g.growthFrom,
+      g.cycleFrom,
       g.directionBlocks,
     ),
   );
@@ -4191,7 +4206,10 @@ export function encodeSave(g) {
     g.familyFrom > MAX_AGE ||
     !Number.isInteger(g.growthFrom) ||
     g.growthFrom < 0 ||
-    g.growthFrom > MAX_AGE
+    g.growthFrom > MAX_AGE ||
+    !Number.isInteger(g.cycleFrom) ||
+    g.cycleFrom < 0 ||
+    g.cycleFrom > MAX_AGE
   )
     fail();
   const value = JSON.stringify({
@@ -4214,6 +4232,7 @@ export function encodeSave(g) {
     driftFrom: g.driftFrom,
     familyFrom: g.familyFrom,
     growthFrom: g.growthFrom,
+    cycleFrom: g.cycleFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
@@ -4286,6 +4305,9 @@ export function decodeSave(value) {
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
     Object.hasOwn(d, "growthFrom")
       ? d.growthFrom
+      : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
+    Object.hasOwn(d, "cycleFrom")
+      ? d.cycleFrom
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
   );
   if (Object.hasOwn(d, "directionBlocks"))

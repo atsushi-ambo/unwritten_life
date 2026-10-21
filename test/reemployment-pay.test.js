@@ -18,7 +18,7 @@ const replayGame = (g, length = g.decisions.length) => replay(
   false, g.dynamicFrom, g.worldFrom, g.retirementFrom, g.careLeaveSalaryFrom,
   g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom,
   g.careerEndFrom, g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom,
-  g.reemploymentPayFrom, g.driftFrom, g.familyFrom, g.growthFrom,
+  g.reemploymentPayFrom, g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom,
 );
 function hire(g) {
   for (let i = 0; i < 10 && g.employer.kind === "seeking" && !g.ended; i++) g = advance(g, "connect");
@@ -54,10 +54,10 @@ test("layoff captures ordinary pay after care leave or illness; a new job applie
 test("a business started after care leave retains ordinary employee pay when it closes", () => {
   const before = advance(createGame(profile({ savings: 3000 }), "steady", 167), "careLeave");
   let business = advance(before, { id: "startup", venture: "ai", name: "合成事業" });
-  assert.equal(business.employer.lastSalary, before.salary / 0.85);
+  assert.ok(Math.abs(business.employer.lastSalary - before.salary / 0.85) < 1e-9);
   if (business.employer.kind === "venture") business = advance(business, "closeBusiness");
   assert.equal(business.employer.kind, "seeking");
-  assert.equal(business.employer.lastSalary, before.salary / 0.85);
+  assert.ok(Math.abs(business.employer.lastSalary - before.salary / 0.85) < 1e-9);
   const hired = hire(business);
   assert.ok(hired.salary >= before.salary / 0.85 * 0.8);
   assert.deepEqual(decodeSave(encodeSave(hired)), hired);
@@ -115,14 +115,16 @@ test("a low-paid graduate's layoff and re-employment can create debt without sta
   // Search seeds for a layoff followed by re-employment, rather than pin one
   // seed whose events shift whenever the incident odds are tuned.
   let checked = 0, withDebt = 0;
-  for (let seed = 1; seed <= 400 && checked < 5; seed++) {
+  for (let seed = 1; seed <= 600 && checked < 20; seed++) {
     let g = createGame(profile({ children: 0, savings: 30 }), "steady", seed), seen = false;
     for (let year = 0; year < 16 && !g.ended; year++) {
       const before = g;
       g = advance(g, onMentalLeave(g) ? "rest" : ["focus", "focus", "learn", "focus", "connect", "focus", "explore"][year % 7]);
       if (g.history.at(-1).outcome?.kind === "reemployed") {
         // Pay restarts from the last full salary, never a cut taken on leave.
-        assert.equal(g.salary, before.employer.lastSalary * g.history.at(-1).outcome.salaryFactor);
+        // An incident in the same year (illness, for example) applies once on top.
+        const h = g.history.at(-1);
+        assert.equal(g.salary, before.employer.lastSalary * h.outcome.salaryFactor * (h.incident?.effects.salaryFactor ?? 1));
         seen = true;
       }
     }
