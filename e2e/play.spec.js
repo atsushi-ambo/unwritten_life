@@ -69,8 +69,9 @@ test("partner income is a separate household budget line at 320px", async ({ pag
   const game = advance(quietGame({ ...syntheticProfile, partner: "partner", partnerIncome: 200 }), "rest");
   await page.goto("/");
   await page.locator("#import-save-file").setInputFiles(saveFile(game));
-  const budget = page.locator("#history .budget-window").first();
-  await budget.locator("summary").click();
+  const year = page.locator("#journey-years .journey-year").first();
+  await year.locator(".timeline-details > summary").click();
+  const budget = year.locator(".budget-window");
   const row = budget.locator(".budget-list > div").filter({ hasText: "パートナー収入（手取り）" });
   await expect(row.locator("dd")).toHaveText("+152");
   // The top band shows the player's own pay (not the partner's), rounded to 10万円.
@@ -85,8 +86,9 @@ test("mental leave shows sickness allowance separately from salary in the budget
   expect(game.history[0].budget.sicknessAllowance).toBeGreaterThan(0);
   await page.goto("/");
   await page.locator("#import-save-file").setInputFiles(saveFile(game));
-  const budget = page.locator("#history .budget-window").first();
-  await budget.locator("summary").click();
+  const year = page.locator("#journey-years .journey-year").first();
+  await year.locator(".timeline-details > summary").click();
+  const budget = year.locator(".budget-window");
   await expect(budget).toContainText("傷病手当金（給与の約2/3、最長1年6か月）");
   await expect(budget).not.toContainText("労働収入（手取り）");
   // The budget lists signed amounts in 万円 (its heading says so).
@@ -252,28 +254,25 @@ test("an inferred region submits while hidden and keeps advanced financial entri
   expect([p.region, p.municipality, p.monthlyCost, p.rent]).toEqual(["metro", "埼玉県久喜市", 27.3, 8.1]);
 });
 
-test("career log favorites filter the newest-first feed and disappear when their year is undone", async ({ page }) => {
+test("earlier directions fold away so only the current years and the choices stay open", async ({ page }) => {
   await page.goto("/");
   await page.locator("#import-save-file").setInputFiles(saveFile(quietGame()));
   await page.locator("#choices button").first().click();
   await finishDirection(page);
-  const favorite = page.getByRole("button", { name: "2026年の記録をお気に入り", exact: true });
-  await favorite.click();
-  await expect(favorite).toHaveAttribute("aria-pressed", "true");
-  await page.locator("#history-favorites-only").click();
+  await expect(page.locator("#journey-earlier")).toBeHidden();
   await page.locator("#choices button").first().click();
   await finishDirection(page);
-  await expect(page.locator("#history .history-row")).toHaveCount(1);
-  await expect(page.locator("#history")).toContainText("2026");
-  await favorite.click();
-  await expect(page.locator("#history .history-row")).toHaveCount(0);
-  await expect(page.locator("#history-favorites-only")).toBeFocused();
-  await page.locator("#history-favorites-only").click();
-  await expect(page.locator("#history .history-row")).toHaveCount(10);
-  await expect(page.locator("#history .history-row").first()).toContainText("2035");
-  await page.getByRole("button", { name: "2031年の記録をお気に入り", exact: true }).click();
+  await expect(page.locator("#journey-years .journey-year")).toHaveCount(5);
+  await expect(page.locator("#journey-earlier-summary")).toHaveText("これまでの5年を見る（2026〜2030年）");
+  await expect(page.locator("#journey-earlier .journey-year").first()).toBeHidden();
+  await page.locator("#journey-earlier-summary").click();
+  await expect(page.locator("#journey-earlier .journey-year")).toHaveCount(5);
+  await expect(page.locator("#journey-earlier .journey-year").first()).toBeVisible();
+  // The duplicate career log below the choices is gone.
+  await expect(page.locator("#history")).toHaveCount(0);
   await page.locator("#undo-button").click();
-  await expect(page.locator("#history-filter-status")).toContainText("★ 0件");
+  await expect(page.locator("#journey-earlier")).toBeHidden();
+  await expect(page.locator("#journey-years .journey-year")).toHaveCount(5);
   await expectFits(page);
 });
 
@@ -377,8 +376,9 @@ for (const width of [320, 390]) test(`touch commands, inline checkpoints and yea
   await tiles.last().tap();
   await expect(page.locator("#career-map .career-map-detail")).toHaveText(await tiles.last().getAttribute("aria-label"));
   await expect(tiles.last()).toHaveAttribute("aria-pressed", "true");
-  await page.locator("#history .history-favorite").first().tap();
-  await expect(page.locator("#history .history-favorite").first()).toHaveAttribute("aria-pressed", "true");
+  // Years before the current direction fold into one tappable box.
+  await page.locator("#journey-earlier-summary").tap();
+  await expect(page.locator("#journey-earlier .journey-year").first()).toBeVisible();
   await expectFits(page);
 });
 
@@ -582,7 +582,7 @@ test("local play advances, undo restores state, and mobile commands fit without 
   await expect(page.locator("#hud-year")).toHaveText("2026年");
   await expect(page.locator("#chapter-label")).toContainText("あなたのキャリア");
   await expect(page.locator("#choice-title")).toHaveText("コマンド / 次の5年の方針");
-  await expect(page.locator(".journal h2")).toHaveText("これまでのキャリアと暮らし。");
+  await expect(page.locator("#history")).toHaveCount(0);
   const original = await page.locator(".journey-hud").textContent();
   await expect(page.locator("#choices button")).toHaveCount(4);
   const commands = page.locator("#choices button");

@@ -62,8 +62,6 @@ import { storyRequest } from "./story.js";
 let knowledgeCatalog = KNOWLEDGE;
 let lastJourney = null;
 let timelineShown = 0, timelinePaused = false, timelineTimer;
-let favoriteYears = new Set();
-let favoritesOnly = false;
 let profileLevel = "quick";
 const $ = (id) => document.getElementById(id),
   saveKey = "unwritten-life:v2",
@@ -255,15 +253,15 @@ function showGame(focus = false) {
   }
   generationError = "";
   lastJourney = null;
-  favoriteYears = new Set();
-  favoritesOnly = false;
   revision++;
   resetTimeline();
   $("setup").hidden = true;
   $("game").hidden = false;
   renderGame();
   if (focus) {
-    window.scrollTo({ top: 0, behavior: "instant" });
+    // A resumed game opens at its latest years, not at the top of the page.
+    if (game.history.length) $("timeline").scrollIntoView({ block: "start", behavior: "instant" });
+    else window.scrollTo({ top: 0, behavior: "instant" });
     $("chapter-title").focus({ preventScroll: true });
   }
   void maybeGenerateScene();
@@ -456,42 +454,6 @@ function renderCareerResume() {
   card.append(map, reflections, copy, status, fallback);
   return card;
 }
-function renderHistory() {
-  const history = $("history");
-  history.replaceChildren();
-  $("history-favorites-only").setAttribute("aria-pressed", String(favoritesOnly));
-  const entries = [...game.history].reverse().filter((h) => !favoritesOnly || favoriteYears.has(h.year));
-  $("history-filter-status").textContent = `${favoritesOnly ? "お気に入り" : "すべての記録"} ${entries.length}件 / ★ ${favoriteYears.size}件`;
-  if (!entries.length)
-    history.append(node("p", favoritesOnly ? "お気に入りの記録はまだありません。すべての記録で☆を選べます。" : "最初の一ページは、これから。", "empty-history"));
-  for (const h of entries) {
-    const row = node("article", undefined, "history-row"),
-      year = node("div", String(h.year), "history-year"),
-      text = node("div"),
-      favorite = node("button", favoriteYears.has(h.year) ? "★" : "☆", "history-favorite");
-    favorite.type = "button";
-    favorite.dataset.year = h.year;
-    favorite.setAttribute("aria-label", `${h.year}年の記録をお気に入り`);
-    favorite.setAttribute("aria-pressed", String(favoriteYears.has(h.year)));
-    favorite.addEventListener("click", () => {
-      const index = [...history.querySelectorAll(".history-favorite")].indexOf(favorite);
-      if (favoriteYears.has(h.year)) favoriteYears.delete(h.year);
-      else favoriteYears.add(h.year);
-      renderHistory();
-      const next = history.querySelector(`button[data-year="${h.year}"]`) ?? history.querySelectorAll(".history-favorite")[Math.max(0, index - 1)];
-      (next ?? $("history-favorites-only")).focus({ preventScroll: true });
-    });
-    year.append(node("small", `${h.age}歳`), favorite);
-    text.append(node("h3", h.episode?.title ?? h.title), node("p", h.episode?.body ?? h.note));
-    appendBudget(text, h, true);
-    row.append(year, text, node("span", h.choiceLabel, "history-choice"));
-    history.append(row);
-  }
-}
-$("history-favorites-only").addEventListener("click", () => {
-  favoritesOnly = !favoritesOnly;
-  renderHistory();
-});
 function moveToStory() {
   if (window.matchMedia("(max-width: 640px)").matches)
     $("event-card").scrollIntoView({ block: "start", behavior: "instant" });
@@ -505,6 +467,7 @@ function commitChoice(decision) {
     lastJourney = journey;
     revision++;
     timelinePaused = false;
+    foldEarlierYears();
     renderGame();
     scheduleYear();
     void maybeGenerateScene();
@@ -712,7 +675,22 @@ function timelineSummary(entry, previous) {
   }
   return summary.join("");
 }
-function appendTimelineYear(h, index) {
+// Only the current direction's years stay open; earlier ones fold into one
+// box, so the choices stay close (2026-10-22: after 15 years they were
+// 5,900px down, below a second log that repeated the same years).
+function foldEarlierYears() {
+  const earlier = $("journey-earlier-years");
+  earlier.append(...[...$("journey-years").children]);
+  $("journey-years").replaceChildren();
+  updateEarlierYears();
+}
+function updateEarlierYears() {
+  const rows = [...$("journey-earlier-years").children];
+  $("journey-earlier").hidden = !rows.length;
+  $("journey-earlier-summary").textContent = rows.length
+    ? `これまでの${rows.length}年を見る（${rows[0].dataset.year}〜${rows.at(-1).dataset.year}年）` : "";
+}
+function appendTimelineYear(h, index, target = $("journey-years")) {
   const before = game.history[index - 1] ?? createGame(game.profile, game.scenario, game.seed);
   const row = node("article", undefined, "journey-year");
   row.dataset.year = h.year;
@@ -751,7 +729,7 @@ function appendTimelineYear(h, index) {
   row.append(details);
   for (const milestone of careerMilestones(game).filter((m) => m.step === index + 1))
     appendReflection(row, milestone);
-  $("journey-years").append(row);
+  target.append(row);
   return row;
 }
 function appendReflection(row, milestone) {
@@ -796,7 +774,12 @@ function resetTimeline() {
   timelineUserScrolledUpAt = -Infinity;
   timelineShown = game?.history.length ?? 0;
   $("journey-years").replaceChildren();
-  for (const [index, h] of (game?.history ?? []).entries()) appendTimelineYear(h, index);
+  $("journey-earlier-years").replaceChildren();
+  const history = game?.history ?? [],
+    open = game?.directionBlocks?.at(-1)?.[0] ?? Math.max(0, history.length - 5);
+  for (const [index, h] of history.entries())
+    appendTimelineYear(h, index, index < open ? $("journey-earlier-years") : $("journey-years"));
+  updateEarlierYears();
 }
 function renderTimelineControls() {
   const revealing = timelineRevealing();
@@ -1215,7 +1198,6 @@ function renderGame() {
   $("choice-title").parentElement.hidden = revealing || complete || !eventFor(game).generated;
   $("choice-title").textContent = `コマンド / ${directionSpan(game)}の方針`;
   $("undo-button").disabled = game.decisions.length === 0 || generating;
-  renderHistory();
   $("context-preview").textContent = JSON.stringify(
     storyRequest(game, { catalog: knowledgeCatalog }).context,
     null,
@@ -1513,7 +1495,6 @@ $("undo-button").addEventListener("click", () => {
   const reached = new Set(careerMilestones(game).map((m) => m.id));
   game.reflections = Object.fromEntries(Object.entries(reflections).filter(([id]) => reached.has(id)));
   game.careerSeen = careerSeenUntil({ careerSeen: seen }, game.decisions.length);
-  favoriteYears = new Set([...favoriteYears].filter((year) => year < game.year));
   revision++;
   resetTimeline();
   renderGame();

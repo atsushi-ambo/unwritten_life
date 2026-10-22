@@ -181,11 +181,18 @@ test("undo during the reveal cancels its timer and restores the preceding block"
   const h = harness(); h.choose(); h.$("journey-next").handlers.click();
   h.choose(); h.year();
   assert.equal(h.context.game.decisions.length, 10);
+  // The previous direction's years fold away; only the new block is open.
+  assert.equal(h.$("journey-earlier-years").children.length, 5);
+  assert.equal(h.$("journey-earlier").hidden, false);
+  assert.match(h.$("journey-earlier-summary").textContent, /これまでの5年を見る（2026〜2030年）/);
+  assert.equal(h.$("journey-years").children.length, 1);
   h.$("undo-button").handlers.click();
   assert.equal(h.context.game.decisions.length, 5);
   assert.equal(h.$("journey-years").children.length, 5);
   assert.equal(h.timer, undefined);
   assert.equal(h.context.timelineShown, 5);
+  assert.equal(h.$("journey-earlier-years").children.length, 0);
+  assert.equal(h.$("journey-earlier").hidden, true);
 });
 
 test("HUD, header, progress and career map follow the last revealed entry without changing game", () => {

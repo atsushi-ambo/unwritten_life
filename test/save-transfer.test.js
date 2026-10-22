@@ -33,6 +33,7 @@ function harness({ game = null, remember = false, stored = {} } = {}) {
       showModal() { this.open = true; },
       close() { this.open = false; this.listeners.close?.(); },
       focus() {},
+      scrollIntoView(options) { this.scrolls = [...(this.scrolls ?? []), options]; },
       click() { return this.listeners.click?.(); },
     });
     return elements.get(id);
@@ -42,7 +43,7 @@ function harness({ game = null, remember = false, stored = {} } = {}) {
   const context = createContext({
     $, game, remember, savedGame: null, corruptSave: null,
     pendingImportedGame: null, saveImportRevision: 0,
-    generating: false, revision: 0, lastJourney: null, favoriteYears: new Set(), favoritesOnly: false,
+    generating: false, revision: 0, lastJourney: null,
     saveKey, encodeSave, decodeSave, Blob, careerMilestones, pendingCareerReflection, recordCareerReflection,
     localStorage: {
       getItem: (key) => storage.get(key) ?? null,
@@ -270,4 +271,13 @@ test("save controls use external event handlers and a JSON file input", async ()
   assert.equal(attr(input, "type"), "file");
   assert.equal(attr(input, "accept"), "application/json");
   assert.equal(nodes.some((n) => n.attrs?.some((a) => /^on/i.test(a.name))), false);
+});
+
+test("resuming a game opens at its latest years; a new game opens at the top", () => {
+  const played = advance(initial(), "rest"), h = harness({ game: played });
+  runInContext("showGame(true)", h.context);
+  assert.equal(JSON.stringify(h.$("timeline").scrolls), JSON.stringify([{ block: "start", behavior: "instant" }]));
+  const fresh = harness({ game: initial() });
+  runInContext("showGame(true)", fresh.context);
+  assert.equal(fresh.$("timeline").scrolls, undefined);
 });

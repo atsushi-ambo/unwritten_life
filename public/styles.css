@@ -52,6 +52,17 @@
   gap: 16px;
   margin: 24px 0;
 }
+.journey-earlier {
+  margin: 16px 0 0;
+}
+.journey-earlier > summary {
+  cursor: pointer;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  background: var(--white);
+  font-weight: 600;
+}
+.journey-earlier .journey-year { animation: none; }
 .journey-year {
   padding: 18px 20px;
   background: var(--white);
@@ -960,48 +971,6 @@ progress::-moz-progress-bar {
   font-size: 9px;
   color: var(--muted);
 }
-.journal {
-  margin-top: 56px;
-}
-.journal .section-heading h2 {
-  font-size: 24px;
-}
-.history-row {
-  display: grid;
-  grid-template-columns: 80px 1fr auto;
-  gap: 20px;
-  padding: 18px 0;
-  border-top: 1px solid var(--line);
-  align-items: center;
-}
-.history-row .history-year {
-  font:
-    22px Georgia,
-    serif;
-}
-.history-row .history-year small {
-  display: block;
-  font: 9px var(--sans);
-  color: var(--muted);
-}
-.history-row h3 {
-  font: 500 15px var(--serif);
-  margin: 0 0 5px;
-}
-.history-row p {
-  font-size: 10px;
-  color: var(--muted);
-  margin: 0;
-}
-.history-choice {
-  font-size: 10px;
-  text-align: right;
-}
-.empty-history {
-  font: 15px var(--serif);
-  padding: 18px 0;
-  color: var(--muted);
-}
 .comparison-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1405,20 +1374,6 @@ progress::-moz-progress-bar {
   }
   .game-controls > span {
     font-size: 8px;
-  }
-  .journal {
-    margin-top: 35px;
-  }
-  .history-row {
-    grid-template-columns: 55px 1fr;
-    gap: 12px;
-  }
-  .history-choice {
-    grid-column: 2;
-    text-align: left;
-  }
-  .history-row .history-year {
-    font-size: 19px;
   }
   .comparison-grid {
     grid-template-columns: 1fr;
@@ -2127,22 +2082,6 @@ progress::-moz-progress-bar { background: #42745a; }
 .career-resume #copy-resume { white-space: normal; max-width: 100%; }
 #resume-copy-fallback { width: 100%; min-width: 0; font-size: 16px; user-select: text; -webkit-user-select: text; }
 .year-result h2 { font-weight: 700; }
-.history-row { border-top: 2px dashed var(--line); }
-.history-row .history-year { font: 700 19px Menlo, Consolas, monospace; }
-.history-favorite {
-  display: block;
-  width: 44px;
-  min-height: 44px;
-  margin-top: 6px;
-  padding: 0;
-  border: 2px solid var(--line);
-  background: var(--white);
-  color: var(--ink);
-  font-size: 22px;
-}
-.history-favorite[aria-pressed="true"] { color: #634017; background: #f6d98d; border-color: #634017; }
-#history-favorites-only[aria-pressed="true"] { background: #f6d98d; }
-.history-row p { font-size: 12px; line-height: 1.9; }
 .budget-window {
   min-width: 0;
   margin-top: 16px;
@@ -2158,7 +2097,6 @@ progress::-moz-progress-bar { background: #42745a; }
   font-weight: 700;
 }
 .budget-window summary { cursor: pointer; }
-.history-row > div { min-width: 0; }
 .budget-list { margin: 10px 0 0; font-size: 12px; }
 .budget-list > div {
   display: grid;
@@ -2179,7 +2117,6 @@ progress::-moz-progress-bar { background: #42745a; }
   font-weight: 700;
 }
 .budget-window .field-note { margin: 8px 0 0; font-size: 11px; }
-.history-choice { font-size: 12px; }
 .pill { border: 2px solid var(--green); background: #e3ebcf; font-size: 11px; }
 .game-controls > span, .model-notes { font-size: 12px; }
 #ai-status, #ai-timing { font-size: 12px; }
@@ -2226,7 +2163,7 @@ dialog p, dialog li { font-size: 14px; }
   .career-tile { min-height: 46px; font-size: 16px; }
   .map-age { font-size: 11px; }
   .career-map-legend, .career-map-detail.field-note { font-size: 12px; }
-  #history-favorites-only, #copy-resume { min-height: 44px; }
+  #copy-resume { min-height: 44px; }
   .game h1 { font-size: 25px; }
   .game .section-heading .button, .game-controls .text-button { font-size: 12px; }
   .world-context { padding: 18px; }

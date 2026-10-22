@@ -108,23 +108,6 @@ test("command cursor follows touch even when Safari leaves keyboard focus elsewh
 });
 
 
-test("favorites filter a newest-first log without changing a save, and preserve usable focus", () => {
-  const game = advance(advance(createGame(profile), "rest"), "studyDaily"), before = encodeSave(game);
-  const h = harness(game);
-  runInContext("renderHistory()", h.context);
-  const buttons = h.$("history").querySelectorAll(".history-favorite");
-  assert.deepEqual(buttons.map((b) => b.dataset.year), [2027, 2026]);
-  buttons[1].handlers.click();
-  assert.equal(h.focused.dataset.year, 2026);
-  h.$("history-favorites-only").handlers.click();
-  assert.equal(h.$("history-favorites-only").getAttribute("aria-pressed"), "true");
-  assert.deepEqual(h.$("history").querySelectorAll(".history-favorite").map((b) => b.dataset.year), [2026]);
-  h.$("history").querySelector(".history-favorite").handlers.click();
-  assert.equal(h.$("history").querySelectorAll(".history-favorite").length, 0);
-  assert.equal(h.focused, h.$("history-favorites-only"));
-  assert.equal(encodeSave(h.context.game), before);
-});
-
 test("command arrow keys wrap focus, Home and End jump, and modified keys retain native behavior", () => {
   const h = harness(createGame(profile)), buttons = Array.from({ length: 4 }, () => h.node("button"));
   h.$("choices").append(...buttons);
