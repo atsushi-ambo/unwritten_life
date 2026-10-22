@@ -830,6 +830,10 @@
                 <div class="journey-footer"><button id="journey-next" type="button" class="button secondary small">次の決断まで進む</button></div>
               </div>
               <p id="timeline-status" class="field-note" role="status"></p>
+              <details id="journey-earlier" class="journey-earlier" hidden>
+                <summary id="journey-earlier-summary"></summary>
+                <div id="journey-earlier-years" class="journey-years"></div>
+              </details>
               <div id="journey-years" class="journey-years" aria-live="polite" aria-relevant="additions"></div>
             </section>
             <div id="event-card" class="event-card"></div>
@@ -857,18 +861,6 @@
             </p>
           </div>
         </div>
-        <section class="journal">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">YOUR CAREER LOG</p>
-              <h2>これまでのキャリアと暮らし。</h2>
-            </div>
-            <button id="history-favorites-only" class="button secondary small" type="button" aria-pressed="false">★ お気に入りだけ</button>
-          </div>
-          <p class="field-note">☆で残したい年に印を。このプレイ中だけのお気に入りです。再開・読み込み・新しいゲームでリセットします。</p>
-          <p id="history-filter-status" class="field-note" role="status"></p>
-          <div id="history"></div>
-        </section>
       </section>
       <div id="notice" role="status" aria-live="polite"></div>
     </main>
