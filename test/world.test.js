@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
+  validateGeneratedScene,
   onMentalLeave, createGame,
   advance,
   availableChoices,
@@ -298,4 +299,41 @@ test("a successful outcome cannot turn an actual income fall into a generated pa
   );
   assert.ok(!scene.body.includes("収入も伸びた"));
   assert.ok(!scene.title.includes("給与が上がった"));
+});
+
+test("an AI reply that gives an opportunity a venture and name is accepted; the game still picks the business", () => {
+  for (let seed = 0; seed < 400; seed++) {
+    const g = createGame(p, "steady", seed), offer = opportunityAt(g);
+    if (!offer || !availableChoices(g).includes("opportunity")) continue;
+    const others = availableChoices(g).filter((id) => ["focus", "learn", "connect", "rest"].includes(id)).slice(0, 3);
+    const scene = {
+      title: "次の5年", body: "目の前の事業の話と今の仕事を比べ、次の5年を選ぶ。直前の結果から考える。", insight: "架空の場面。",
+      options: [
+        ...others.map((id) => ({ id, label: `合成の${id}`, hint: "時間の配分", reason: "本人の条件", decision: { id, intent: `${id}を試す` } })),
+        { id: "opportunity", label: "目の前の事業に乗る", hint: "資金と時間がかかる", reason: "声がかかった",
+          decision: { id: "opportunity", intent: "事業を引き継ぐ", venture: "ai", name: "AIが付けた名前" } },
+      ],
+    };
+    const validated = validateGeneratedScene(scene, g, { mode: "life", fresh: true });
+    // The server validates again after grounding; a validated scene must pass.
+    assert.deepEqual(validateGeneratedScene(validated, g, { mode: "life", fresh: true }), validated);
+    const plain = structuredClone(scene);
+    plain.options.at(-1).decision = { id: "opportunity", intent: "事業を引き継ぐ" };
+    const once = validateGeneratedScene(plain, g, { mode: "life", fresh: true });
+    assert.deepEqual(validateGeneratedScene(once, g, { mode: "life", fresh: true }), once);
+    const decision = validated.options.find((o) => o.id === "opportunity").decision;
+    // The business is the game's offer, never the AI's invented one.
+    assert.equal(decision.name, offer.name);
+    assert.equal(decision.venture, offer.venture);
+    assert.notEqual(decision.name, "AIが付けた名前");
+    const next = advance(g, decision);
+    assert.equal(next.employer.name, offer.name);
+    assert.equal(next.employer.id, offer.venture);
+    // Unknown fields on other options are still rejected.
+    const extra = structuredClone(scene);
+    extra.options[0].decision.salary = 900;
+    assert.throws(() => validateGeneratedScene(extra, g, { mode: "life", fresh: true }));
+    return;
+  }
+  assert.fail("no opportunity found");
 });

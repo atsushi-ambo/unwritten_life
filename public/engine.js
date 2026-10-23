@@ -2287,6 +2287,13 @@ export function validateGeneratedScene(
       const { facts, ...withoutFacts } = decision;
       decision = withoutFacts;
     }
+    // The game picks the business for an opportunity. Validation turns its
+    // decision into the offer's startup (venture, name), so a second pass over
+    // an already validated scene, or a model that adds those fields itself,
+    // rejected every scene offering one (2026-10-23). Reduce it to the plain
+    // form; the offer is derived again from the game.
+    if (o.id === "opportunity" && decision && typeof decision === "object" && !Array.isArray(decision))
+      decision = { id: "opportunity", ...(decision.intent === undefined ? {} : { intent: decision.intent }) };
     const fields = [
       "id",
       "intent",
