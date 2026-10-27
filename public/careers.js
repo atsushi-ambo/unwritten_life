@@ -145,7 +145,7 @@ export function discoveredCompanies(game) {
     if (!name) return;
     const key = employerKey(name);
     if (!key || excluded.has(key)) return;
-    const proposal = clean(decision.proposal, 120);
+    const proposal = clean(decision.proposal, 300);
     const fictional = decision.candidateKind === "fictional";
     if (companies.has(key)) {
       const entry = companies.get(key);

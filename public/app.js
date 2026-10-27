@@ -2309,7 +2309,10 @@ async function refreshModels() {
   if (!local) return;
   // The server's unverified default (qwen3:8b) is not a choice the player
   // made, so it must not hide the recommended model when that is installed.
-  const previous = $("ai-local-model").value || (aiState?.ready ? aiState.model : "");
+  // A model saved in this browser for this provider still wins.
+  const saved = readAISettings();
+  const previous = $("ai-local-model").value || (aiState?.ready ? aiState.model : "") ||
+    (saved?.provider === provider && typeof saved.model === "string" ? saved.model : "");
   $("ai-local-model").replaceChildren();
   renderLocalGuide();
   $("model-list-status").textContent =

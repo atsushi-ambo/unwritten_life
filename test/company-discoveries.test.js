@@ -48,7 +48,7 @@ test("malformed saves are ignored and unreliable dates are omitted", () => {
   const result = discoveredCompanies({
     profile: { age: "30" }, year: 2040, decisions: ["rest"],
     careerSeen: { bad: ["invalid"], 2: ["future"], 0: [null, {}, 4, " ", "x".repeat(61), "a\nb", "Good"] },
-    scenes: { 0: { options: [null, {}, suggestion("Good", "x".repeat(121), "fictional"),
+    scenes: { 0: { options: [null, {}, suggestion("Good", "x".repeat(301), "fictional"),
       suggestion("Other", {}, "real"), { decision: { id: "rest", name: "ignored" } }] }, 1: null },
   });
   assert.deepEqual(result, [
