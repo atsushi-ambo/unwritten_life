@@ -2070,10 +2070,10 @@ progress::-moz-progress-bar { background: #42745a; }
 .career-resume h3 { margin: 0; font-size: 20px; line-height: 1.7; }
 .career-resume h4 { margin: 24px 0 12px; border-bottom: 2px solid var(--ink); padding-bottom: 6px; font-size: 14px; }
 .resume-period { font-size: 13px; }
-.resume-timeline { padding-left: 18px; font-size: 13px; }
-.resume-timeline li { margin: 12px 0; padding-left: 6px; }
-.resume-timeline small, .resume-timeline b, .resume-timeline span { display: block; }
-.resume-timeline small { color: var(--muted); font-size: 11px; }
+.resume-timeline, .resume-discovery-list { padding-left: 18px; font-size: 13px; }
+.resume-timeline li, .resume-discovery-list li { margin: 12px 0; padding-left: 6px; overflow-wrap: anywhere; }
+.resume-timeline small, .resume-timeline b, .resume-timeline span, .resume-discovery-list small, .resume-discovery-list b { display: block; }
+.resume-timeline small, .resume-discovery-list small { color: var(--muted); font-size: 11px; }
 .resume-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; font-size: 12px; }
 .resume-totals > div { border: 1px solid var(--line); padding: 8px; }
 .resume-totals dd { margin: 4px 0 0; font-weight: 700; }

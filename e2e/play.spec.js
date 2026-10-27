@@ -296,6 +296,7 @@ test("ending resume shows the career map and milestone line, copies locally, and
   const line = "経験を、次の仕事へ。<script>一行</script>";
   game = recordCareerReflection(game, "age-30", line);
   game = advance(game, { id: "switch", target: "custom", name: "合成クラウド社", role: "tech", companyType: "unknown", facts: null });
+  game.careerSeen = { 0: ["発見用合成企業" + "A".repeat(40), "合成クラウド社"] };
   while (!game.ended) game = advance(game, "rest");
   await page.goto("/");
   await page.locator("#import-save-file").setInputFiles(saveFile(game));
@@ -303,12 +304,15 @@ test("ending resume shows the career map and milestone line, copies locally, and
   await expect(card).toBeVisible();
   await expect(card.locator(".resume-timeline")).toContainText("合成クラウド社");
   await expect(card.locator(".career-reflections")).toContainText(line);
+  await expect(card.locator(".resume-discoveries")).toContainText("この人生で出会った会社");
+  await expect(card.locator(".resume-discoveries")).toContainText("発見用合成企業");
+  await expect(card.locator(".resume-discoveries")).not.toContainText("合成クラウド社");
   await expect(card.locator("script")).toHaveCount(0);
   await expect(page.locator("#ending-map .career-tile")).toHaveCount(game.decisions.length);
   await page.locator("#copy-resume")[isMobile ? "tap" : "click"]();
   await expect(page.locator("#resume-copy-status")).toHaveText("コピーしました。");
   const text = await page.evaluate(() => window.__copiedResume);
-  for (const expected of ["わたしの履歴書", "勤務先と役割", "合成クラウド社", line, "退職後", "キャリアマップ"])
+  for (const expected of ["わたしの履歴書", "勤務先と役割", "合成クラウド社", "この人生で出会った会社", "発見用合成企業", line, "退職後", "キャリアマップ"])
     expect(text).toContain(expected);
   await page.evaluate(() => { window.__clipboardDenied = true; });
   await page.locator("#copy-resume")[isMobile ? "tap" : "click"]();

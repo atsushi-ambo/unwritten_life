@@ -7,9 +7,11 @@ import { createContext, runInContext } from "node:vm";
 test("model refresh preserves installed selections, prefers installed Gemma, and otherwise keeps the first model", async () => {
   const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
   const recommended = "gemma4:12b-it-q4_K_M";
-  for (const [previous, configured, models, expected] of [
+  for (const [previous, configured, models, expected, ready = false] of [
     ["qwen3:8b", recommended, ["other", recommended, "qwen3:8b"], "qwen3:8b"],
-    ["", "qwen3:8b", ["other", recommended, "qwen3:8b"], "qwen3:8b"],
+    // A verified connection keeps its model; the server's unverified default does not.
+    ["", "qwen3:8b", ["other", recommended, "qwen3:8b"], "qwen3:8b", true],
+    ["", "qwen3:8b", ["other", recommended, "qwen3:8b"], recommended],
     ["missing", "missing", ["other", recommended], recommended],
     ["", "missing", ["other", recommended], recommended],
     ["missing", "missing", ["other", "qwen3:8b"], "other"],
@@ -37,7 +39,7 @@ test("model refresh preserves installed selections, prefers installed Gemma, and
     $("ai-provider").value = "ollama";
     const context = createContext({
       $,
-      aiState: { model: configured },
+      aiState: { model: configured, ready },
       modelListRevision: 0, aiTesting: false, selectedConnectionType: () => "local",
       renderLocalGuide() {},
       node: (_tag, textContent) => ({ textContent }),

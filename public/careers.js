@@ -114,9 +114,69 @@ export const peakRankLabel = (rank, ranks) =>
 export const deathHeadline = (age) =>
   age < 70 ? `${age}歳で、思いがけず人生の幕が下りた。` : `${age}歳で、人生の幕を閉じた。`;
 export const yearSpan = (from, to) => from === to ? `${from}年` : `${from}〜${to}年`;
+export const COMPANY_DISCOVERY_NOTE = "AIが挙げた候補です。実在・事業・募集・給与は確認していません。気になった会社は公式サイトなどで確かめてください。";
+
+// Read-only projection of saved suggestions. Unknown metadata is not evidence
+// that a company exists; a fictional label always wins when records disagree.
+export function discoveredCompanies(game) {
+  const object = (value) => value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const clean = (value, max) => {
+    if (typeof value !== "string") return null;
+    const text = value.trim();
+    return text && text.length <= max && !/[\u0000-\u001f\u007f\u2028\u2029]/u.test(text) ? text : null;
+  };
+  const g = object(game), profile = object(g.profile);
+  const excluded = new Set();
+  const exclude = (raw) => { const name = clean(raw, 60); if (name) excluded.add(employerKey(name)); };
+  exclude(profile.company);
+  exclude(object(g.employer).name);
+  for (const h of Array.isArray(g.history) ? g.history : []) {
+    const e = object(object(h).employer);
+    if (!["seeking", "venture", "legacy"].includes(e.kind)) exclude(e.name);
+  }
+  const seen = object(g.careerSeen), scenes = object(g.scenes);
+  const turns = [...new Set([...Object.keys(seen), ...Object.keys(scenes)])]
+    .filter((key) => /^(?:0|[1-9]\d{0,2})$/.test(key) && Number(key) <= 110 &&
+      (!Array.isArray(g.decisions) || Number(key) <= g.decisions.length))
+    .sort((a, b) => Number(a) - Number(b));
+  const companies = new Map();
+  const add = (raw, turn, decision = {}) => {
+    const name = clean(raw, 60);
+    if (!name) return;
+    const key = employerKey(name);
+    if (!key || excluded.has(key)) return;
+    const proposal = clean(decision.proposal, 120);
+    const fictional = decision.candidateKind === "fictional";
+    if (companies.has(key)) {
+      const entry = companies.get(key);
+      entry.proposal ??= proposal;
+      entry.fictional ||= fictional;
+      return;
+    }
+    if (companies.size >= 12) return;
+    const entry = { name, proposal, fictional };
+    if (Array.isArray(g.decisions) && Number.isInteger(g.year) &&
+      g.year - g.decisions.length === 2026) entry.year = 2026 + turn;
+    if (Number.isInteger(profile.age) && profile.age >= 0 && profile.age + turn <= 110)
+      entry.age = profile.age + turn;
+    companies.set(key, entry);
+  };
+  for (const key of turns) {
+    const turn = Number(key);
+    for (const name of Array.isArray(seen[key]) ? seen[key] : []) add(name, turn);
+    const options = object(scenes[key]).options;
+    for (const option of Array.isArray(options) ? options : []) {
+      const d = object(object(option).decision);
+      if (d.id === "switch") add(d.name, turn, d);
+    }
+  }
+  return [...companies.values()];
+}
+
 export function careerRecordText(game, roles = {}, ranks = {}) {
   const record = careerRecord(game);
   const story = lifeStory(game, ranks);
+  const discoveries = discoveredCompanies(game);
   const man = (n) => `${Math.round(n).toLocaleString("ja-JP")}万円`;
   const lines = [
     "Unwritten Life / わたしの履歴書", story.headline,
@@ -126,6 +186,11 @@ export function careerRecordText(game, roles = {}, ranks = {}) {
     "", "勤務先と役割",
     `${game.profile.age}歳から${game.age}歳まで・${game.decisions.length}年間。ゲーム内の架空の経歴で、実際の職務経歴を証明するものではありません。`,
     ...record.tenures.map((t) => `${yearSpan(t.from, t.to)}（${t.years}年） ${t.employer}${t.role ? " / " + (roles[t.role]?.label ?? t.role) : ""}${t.rank && t.rank !== "unspecified" ? " / " + (ranks[t.rank]?.label ?? t.rank) : ""}${t.unit ? "（" + t.unit + "）" : ""}`),
+    "", "この人生で出会った会社", COMPANY_DISCOVERY_NOTE,
+    ...(discoveries.length ? discoveries.flatMap((company) => [
+      `${company.name}${company.fictional ? "（架空）" : ""}`,
+      ...(company.proposal ? [`  ${company.proposal}`] : []),
+    ]) : ["転職先の候補は挙がりませんでした。"]),
     "", "一年の主な活動（重複なし）",
     ...Object.entries(record.yearsByState).map(([key, years]) => `${CAREER_STATES[key].label}：${years}年`),
     "", "節目の一行",
