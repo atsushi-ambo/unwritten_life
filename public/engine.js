@@ -1,3 +1,4 @@
+export { discoveredCompanies } from "./careers.js";
 import {
   LEGACY_EMPLOYERS,
   VENTURES,

@@ -43,6 +43,8 @@ import {
   careerMilestones,
   careerRecord,
   careerRecordText,
+  discoveredCompanies,
+  COMPANY_DISCOVERY_NOTE,
   lifeStory,
   peakRankLabel,
   yearSpan,
@@ -409,7 +411,20 @@ function renderCareerResume() {
     row.append(node("dt", CAREER_STATES[key].label), node("dd", `${years}年`));
     totals.append(row);
   }
-  card.append(timeline, node("h4", "一年の主な活動"),
+  const discoveries = node("section", undefined, "resume-discoveries");
+  discoveries.append(node("h4", "この人生で出会った会社"), node("p", COMPANY_DISCOVERY_NOTE, "field-note"));
+  const companies = discoveredCompanies(game);
+  if (companies.length) {
+    const list = node("ul", undefined, "resume-discovery-list");
+    for (const company of companies) {
+      const row = node("li");
+      row.append(node("b", `${company.name}${company.fictional ? "（架空）" : ""}`));
+      if (company.proposal) row.append(node("small", company.proposal));
+      list.append(row);
+    }
+    discoveries.append(list);
+  } else discoveries.append(node("p", "転職先の候補は挙がりませんでした。", "field-note"));
+  card.append(timeline, discoveries, node("h4", "一年の主な活動"),
     node("p", "各年を主な活動で分類しています。学びや休養の年も、勤務先との在籍期間には含まれます。", "field-note"),
     totals);
   const map = node("section", undefined, "career-map ending-map");
@@ -2292,7 +2307,12 @@ async function refreshModels() {
     if ((aiState?.subscriptionModels?.[provider] ?? []).includes(selected)) $("ai-subscription-model").value = selected;
   }
   if (!local) return;
-  const previous = $("ai-local-model").value || aiState?.model;
+  // The server's unverified default (qwen3:8b) is not a choice the player
+  // made, so it must not hide the recommended model when that is installed.
+  // A model saved in this browser for this provider still wins.
+  const saved = readAISettings();
+  const previous = $("ai-local-model").value || (aiState?.ready ? aiState.model : "") ||
+    (saved?.provider === provider && typeof saved.model === "string" ? saved.model : "");
   $("ai-local-model").replaceChildren();
   renderLocalGuide();
   $("model-list-status").textContent =

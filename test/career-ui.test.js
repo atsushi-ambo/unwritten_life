@@ -6,7 +6,7 @@ import { createGame, advance, advanceDirection, pendingCareerOffer, availableCho
   validateGeneratedScene, recordCareerReflection, encodeSave, JOBS, RANKS } from "../public/engine.js";
 import { storyRequest } from "../public/story.js";
 import { fourReply } from "./fixtures/ai-replies.js";
-import { careerMap, careerRecord, careerRecordText, lifeStory, CAREER_STATES, peakRankLabel, yearSpan, deathHeadline } from "../public/careers.js";
+import { careerMap, careerRecord, careerRecordText, discoveredCompanies, COMPANY_DISCOVERY_NOTE, lifeStory, CAREER_STATES, peakRankLabel, yearSpan, deathHeadline } from "../public/careers.js";
 
 const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 const profile = { age: 29, region: "city", job: "tech", ai: "daily", priority: "balance", gender: "undisclosed", household: "solo", companyType: "small" };
@@ -45,7 +45,7 @@ function harness(game) {
     return elements.get(id);
   };
   const context = createContext({
-    game, node, $, JOBS, RANKS, careerMap, careerRecord, careerRecordText, lifeStory, CAREER_STATES, peakRankLabel, yearSpan, deathHeadline,
+    game, node, $, JOBS, RANKS, careerMap, careerRecord, careerRecordText, discoveredCompanies, COMPANY_DISCOVERY_NOTE, lifeStory, CAREER_STATES, peakRankLabel, yearSpan, deathHeadline,
     money: (n) => String(Math.round(n)), nf: new Intl.NumberFormat("ja-JP"),
     favoriteYears: new Set(), favoritesOnly: false, appendBudget() {},
     document: { createTextNode: (text) => node("#text", text), get activeElement() { return focused; } },
@@ -78,6 +78,22 @@ test("map labels, resume copy and selectable fallback use the actual UI handlers
   await card.querySelector("#copy-resume").handlers.click();
   assert.equal(fallback.hidden, false);
   assert.equal(fallback.value, h.copied);
+});
+
+test("resume discoveries render literal text, fictional labels and an empty field note", () => {
+  const game = createGame(profile);
+  let h = harness(game), card = runInContext("renderCareerResume()", h.context);
+  assert.ok(card.querySelector(".resume-discoveries").textContent.includes("転職先の候補は挙がりませんでした。"));
+  game.scenes = { 0: { options: [{ decision: {
+    id: "switch", name: "<script>合成企業</script>", candidateKind: "fictional", proposal: "<img>経験を活かす",
+  } }] } };
+  h = harness(game);
+  card = runInContext("renderCareerResume()", h.context);
+  const section = card.querySelector(".resume-discoveries");
+  assert.ok(section.textContent.includes("<script>合成企業</script>（架空）"));
+  assert.ok(section.textContent.includes("<img>経験を活かす"));
+  assert.ok(section.textContent.includes(COMPANY_DISCOVERY_NOTE));
+  assert.ok(!section.all().some((el) => ["script", "img", "a"].includes(el.tag)));
 });
 
 test("map years reveal their labels on tap and keyboard focus without hover", () => {
