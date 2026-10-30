@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createContext, runInContext } from "node:vm";
-import { choiceForecast, createGame, advance, advanceDirection, pendingCareerOffer, availableChoices, decisionId,
+import { branchReview, choiceForecast, createGame, advance, advanceDirection, pendingCareerOffer, availableChoices, decisionId,
   validateGeneratedScene, recordCareerReflection, encodeSave, JOBS, RANKS } from "../public/engine.js";
 import { storyRequest } from "../public/story.js";
 import { fourReply } from "./fixtures/ai-replies.js";
@@ -45,7 +45,7 @@ function harness(game) {
     return elements.get(id);
   };
   const context = createContext({
-    game, node, $, choiceForecast, JOBS, RANKS, careerMap, careerRecord, careerRecordText, discoveredCompanies, COMPANY_DISCOVERY_NOTE, lifeStory, CAREER_STATES, peakRankLabel, yearSpan, deathHeadline,
+    game, node, $, branchReview, choiceForecast, JOBS, RANKS, careerMap, careerRecord, careerRecordText, discoveredCompanies, COMPANY_DISCOVERY_NOTE, lifeStory, CAREER_STATES, peakRankLabel, yearSpan, deathHeadline,
     money: (n) => String(Math.round(n)), nf: new Intl.NumberFormat("ja-JP"),
     favoriteYears: new Set(), favoritesOnly: false, appendBudget() {},
     document: { createTextNode: (text) => node("#text", text), get activeElement() { return focused; } },

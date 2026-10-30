@@ -11,6 +11,7 @@ import {
   CHOICES,
   decisionId,
   choiceForecast,
+  branchReview,
   displayIntention,
   displayEpisode,
   availableChoices,
@@ -469,7 +470,30 @@ function renderCareerResume() {
       status.textContent = "コピーできませんでした。下のテキストを選択してコピーできます。";
     }
   });
-  card.append(map, reflections, copy, status, fallback);
+  const branches = node("section");
+  branches.id = "ending-branches";
+  branches.append(node("h4", "人生の分岐点"));
+  const points = branchReview(game);
+  if (!points.length) branches.append(node("p", "振り返れる成功率の記録はありません。", "field-note"));
+  for (const point of points) {
+    const item = node("section");
+    item.append(node("h5", `${point.age}歳・${point.label}`),
+      node("p", `当時の成功率 ${(point.chance * 100).toFixed(1)}% · 結果 ${point.success ? "成功" : "不成立"}`));
+    if (point.alternatives.length) {
+      item.append(node("p", "その年に提示されていた選択肢の初年度の成功率"));
+      if (point.selectedForecast) item.append(node("p", `選んだ行動：${point.selectedForecast.successText}`));
+      for (const alt of point.alternatives) item.append(node("p", `${alt.label}：${alt.forecast?.successText ?? "条件が確定していないか、実行できないため計算できません"}`));
+    }
+    if (point.comparison) {
+      const c = point.comparison;
+      item.append(node("p", c.score < 50 ? `「${c.label}」との比較：大差なし（差はいずれも50万円未満）` : `比較する別の選択肢：${c.label}`),
+        node("p", `実際に選んだ行動：5年後の純資産 ${money(c.actual.savings)}万円・年収 ${money(c.actual.income)}万円`),
+        node("p", `別の選択肢：5年後の純資産 ${money(c.alternative.savings)}万円・年収 ${money(c.alternative.income)}万円`));
+    } else item.append(node("p", "5年後の比較を計算できませんでした。"));
+    branches.append(item);
+  }
+  branches.append(node("p", "推定。同じ運命で、その後5年を中立に過ごした場合の比較。実際の人生はこうならない。選択した年を含む5年間を計算し、以後は休む行動で継続します。", "field-note"));
+  card.append(map, branches, reflections, copy, status, fallback);
   return card;
 }
 function moveToStory() {
