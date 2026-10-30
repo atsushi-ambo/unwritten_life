@@ -727,3 +727,31 @@ export function lifeStory(game, ranks = {}) {
     chapters,
   };
 }
+
+// Only fixed labels cross the image privacy boundary; event text may contain names.
+export function shareCardContent(story, rankLabel, headline = story.headline) {
+  const labels = { work: "仕事の転機", rise: "役職の変化", luck: "うれしい出来事", hardship: "困難な出来事", family: "家族の変化", life: "暮らしの変化", end: "仕事の区切り" };
+  const points = story.chapters.flatMap((c) => c.events)
+    .filter((e) => labels[e.kind]).slice(0, 3)
+    .map((e) => `${e.age}歳・${labels[e.kind]}`);
+  const s = story.stats, fmt = (n) => new Intl.NumberFormat("ja-JP").format(Math.round(n / 10) * 10);
+  return { headline, income: `${fmt(s.startIncome)} → ${fmt(s.peakIncome)}万円`, netWorth: `${fmt(s.startNetWorth)} → ${fmt(s.endNetWorth)}万円`, rank: rankLabel, moves: `${s.moves}回`, points };
+}
+
+// The caller supplies a text-width function; this has no browser dependencies.
+export function wrapCardText(value, width, maxLines, measure) {
+  const chars = Array.from(String(value).replace(/\s+/gu, " "));
+  const lines = [];
+  while (chars.length && lines.length < maxLines) {
+    let line = "";
+    while (chars.length && measure(line + chars[0]) <= width) line += chars.shift();
+    if (!line && chars.length) chars.shift();
+    if (lines.length === maxLines - 1 && chars.length) {
+      while (line && measure(line + "…") > width) line = Array.from(line).slice(0, -1).join("");
+      line += measure("…") <= width ? "…" : "";
+      chars.length = 0;
+    }
+    lines.push(line);
+  }
+  return lines;
+}
