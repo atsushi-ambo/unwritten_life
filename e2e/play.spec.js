@@ -395,6 +395,8 @@ for (const width of [320, 390]) test(`touch commands, inline checkpoints and yea
   await expect(page.locator("#career-map .career-map-detail")).toHaveText(await tiles.last().getAttribute("aria-label"));
   await expect(tiles.last()).toHaveAttribute("aria-pressed", "true");
   // Years before the current direction fold into one tappable box.
+  // The commands are docked at the bottom on narrow screens; scroll the box clear of them.
+  await page.locator("#journey-earlier-summary").evaluate((el) => el.scrollIntoView({ block: "start" }));
   await page.locator("#journey-earlier-summary").tap();
   await expect(page.locator("#journey-earlier .journey-year").first()).toBeVisible();
   await expectFits(page);
@@ -956,4 +958,25 @@ test("開始時に景気の背景を選び、世界バッジに表示する", as
   await page.locator('[name="era"][value="boom"]').check();
   await page.locator("#quick-start").click();
   await expect(page.locator("#world-badge")).toContainText("好況が続く世界");
+});
+
+for (const width of [320, 390]) test(`mobile choices and text reveal at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 740 });
+  const game = applyScene(quietGame(), fourReply(storyRequest(quietGame()).context));
+  await page.goto('/');
+  await page.evaluate(() => localStorage.setItem('unwritten-life:text-reveal', 'on'));
+  await page.locator('#import-save-file').setInputFiles(saveFile(game));
+  const body = page.locator('#event-card > p').nth(1);
+  await body.click();
+  await expect(body.locator('[aria-hidden]')).toHaveText(await body.getAttribute('aria-label'));
+  await page.locator('#choices').scrollIntoViewIfNeeded();
+  const bounds = await page.evaluate(() => {
+    const choices = document.querySelector('#choices').getBoundingClientRect();
+    return { bottom: choices.bottom, height: choices.height, viewport: innerHeight };
+  });
+  expect(bounds.bottom).toBeLessThanOrEqual(bounds.viewport + 1);
+  expect(bounds.height).toBeLessThan(bounds.viewport);
+  await page.locator('#event-card').scrollIntoViewIfNeeded();
+  await page.keyboard.press('1');
+  await expect(page.locator('#timeline')).toBeVisible();
 });

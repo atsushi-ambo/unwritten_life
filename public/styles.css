@@ -2293,3 +2293,17 @@ dialog p, dialog li { font-size: 14px; }
 #book-content ul { padding-left: 1.5rem; }
 .book-notice:not(:empty) { position: fixed; bottom: 1rem; right: 1rem; z-index: 20; padding: .6rem 1rem; background: var(--ink, #222); color: var(--paper, #fff); border-radius: .4rem; }
 @media (prefers-reduced-motion: reduce) { .book-notice { animation: none; transition: none; } }
+
+@media (max-width: 640px) {
+  .choices:not(:empty) {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    max-height: 42vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
+  }
+  .choices .choice { min-height: 44px; padding: 8px 10px 8px 28px; }
+  .choices .choice b { display: block; line-height: 1.4; overflow-wrap: anywhere; }
+}
