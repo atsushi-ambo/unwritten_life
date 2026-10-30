@@ -855,3 +855,17 @@ test("ending shows turning point estimates", async ({ page }) => {
   await expect(page.locator("#ending-branches")).toContainText("当時の成功率");
   await expect(page.locator("#ending-branches")).toContainText("同じ運命で、その後5年を中立に過ごした場合の比較");
 });
+
+
+test("ending allows replay from a saved scene with another choice", async ({ page }) => {
+  const scene = { title: "選択", body: "次を考える", options: ["focus", "learn", "rest"].map(id => ({ id, label: id === "focus" ? "仕事" : id === "learn" ? "学ぶ" : "休む", hint: "選ぶ" })) };
+  let game = quietGame();
+  while (!game.ended) game = advance(applyScene(game, scene), "focus");
+  await page.goto("/");
+  await page.locator("#import-save-file").setInputFiles(saveFile(game));
+  await page.locator("#ending-branches").getByRole("button", { name: "この年から別の選択で再挑戦" }).first().click();
+  await page.getByRole("dialog", { name: "やり直しの確認" }).getByRole("button", { name: "やり直す", exact: true }).click();
+  await expect(page.locator("#choices")).toContainText("学ぶ");
+  await page.locator('#choices [data-choice="learn"]').click();
+  await expect(page.locator("#journey-next")).toBeVisible();
+});

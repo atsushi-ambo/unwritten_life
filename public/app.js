@@ -12,6 +12,7 @@ import {
   decisionId,
   choiceForecast,
   branchReview,
+  rewindTo,
   displayIntention,
   displayEpisode,
   availableChoices,
@@ -490,11 +491,49 @@ function renderCareerResume() {
         node("p", `実際に選んだ行動：5年後の純資産 ${money(c.actual.savings)}万円・年収 ${money(c.actual.income)}万円`),
         node("p", `別の選択肢：5年後の純資産 ${money(c.alternative.savings)}万円・年収 ${money(c.alternative.income)}万円`));
     } else item.append(node("p", "5年後の比較を計算できませんでした。"));
+    const retry = node("button", "この年から別の選択で再挑戦");
+    retry.type = "button";
+    retry.addEventListener("click", () => confirmRewind(point.step));
+    item.append(retry);
     branches.append(item);
   }
   branches.append(node("p", "推定。同じ運命で、その後5年を中立に過ごした場合の比較。実際の人生はこうならない。選択した年を含む5年間を計算し、以後は休む行動で継続します。", "field-note"));
-  card.append(map, branches, reflections, copy, status, fallback);
+  const years = node("section");
+  years.append(node("h4", "年齢を選んでやり直す"));
+  game.decisions.forEach((_, step) => {
+    const button = node("button", `${game.history[step]?.age ?? game.profile.age + step}歳からやり直す`);
+    button.type = "button";
+    button.addEventListener("click", () => confirmRewind(step));
+    years.append(button);
+  });
+  card.append(map, branches, years, reflections, copy, status, fallback);
   return card;
+}
+function confirmRewind(step) {
+  const dialog = node("dialog");
+  dialog.setAttribute("aria-label", "やり直しの確認");
+  dialog.append(node("h3", "この年からやり直しますか？"),
+    node("p", "この年以降の選択と場面は消えます。端末への保存を有効にしている場合、その保存もやり直し後の状態に置き換わります。いまの結末を残すには、先にセーブを書き出してください。"));
+  const save = node("button", "いまの結末を保存"), cancel = node("button", "キャンセル"), retry = node("button", "やり直す");
+  for (const button of [save, cancel, retry]) button.type = "button";
+  save.addEventListener("click", () => exportSave(game));
+  cancel.addEventListener("click", () => dialog.close());
+  retry.addEventListener("click", () => {
+    try {
+      game = rewindTo(game, step);
+      lastJourney = null;
+      revision++;
+      clearTimeout(timelineTimer);
+      resetTimeline();
+      dialog.close();
+      renderGame();
+      moveToStory();
+    } catch (error) { toast(error.message); }
+  });
+  dialog.addEventListener("close", () => dialog.remove());
+  dialog.append(save, cancel, retry);
+  document.body.append(dialog);
+  dialog.showModal();
 }
 function moveToStory() {
   if (window.matchMedia("(max-width: 640px)").matches)
