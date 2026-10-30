@@ -3,10 +3,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import {
-  createGame, advance, encodeSave, decodeSave, replay, compareWorlds,
+  createGame as originalCreateGame, advance, encodeSave, decodeSave, replay, compareWorlds,
   MAX_AGE, salaryCeiling, onMentalLeave, advanceDirection, availableChoices,
   optionalProfileInputs, profileInputForLevel, PROFILE_DEFAULTS,
 } from "../public/engine.js";
+
+// Preserve the historical incident distribution in existing scenarios.
+const createGame = (...args) => originalCreateGame(...[...args, ...Array(Math.max(0, 25 - args.length)).fill(undefined)].map((v, i) => i === 24 && v === undefined ? 110 : v));
 import { paceProfile } from "../scripts/simulate-pace.mjs";
 import { careProfile, measureDrift } from "../scripts/simulate-drift.mjs";
 import { readyAI, replyFor, ollamaText } from "./fixtures/ai-replies.js";
@@ -19,7 +22,7 @@ const replayGame = (g, length = g.decisions.length) => replay(
   false, g.dynamicFrom, g.worldFrom, g.retirementFrom, g.careLeaveSalaryFrom,
   g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom,
   g.careerEndFrom, g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom,
-  g.reemploymentPayFrom, g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, g.oddsFrom,
+  g.reemploymentPayFrom, g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, g.oddsFrom, g.lifeEventsFrom,
 );
 
 test("yearly noise has the same slope on both sides of zero near the ceiling, with no negative mean drift", () => {

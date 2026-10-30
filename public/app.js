@@ -1163,6 +1163,7 @@ function renderGame() {
         game.cycleFrom,
         game.spendFrom,
         game.oddsFrom,
+        game.lifeEventsFrom,
       );
       showGame(true);
     });
@@ -1612,6 +1613,7 @@ $("undo-button").addEventListener("click", () => {
     game.cycleFrom,
     game.spendFrom,
     game.oddsFrom,
+    game.lifeEventsFrom,
     blocks,
   );
   const reached = new Set(careerMilestones(game).map((m) => m.id));

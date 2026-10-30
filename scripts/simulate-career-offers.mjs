@@ -3,14 +3,14 @@ import { createGame, advance, availableChoices, pendingCareerOffer, onMentalLeav
 import { simulationProfile } from './simulate-life-realism.mjs';
 
 const move = (n) => ({ id: 'switch', target: 'custom', name: `合成勤務先${n}`, role: 'tech', companyType: 'small' });
-const start = (seed, from) => createGame(simulationProfile({ age: 25 }), 'steady', seed * 7919,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, from, 0);
+const start = (seed, from, lifeEventsFrom) => createGame(simulationProfile({ age: 25 }), 'steady', seed * 7919,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, from, 0, ...Array(7).fill(0), lifeEventsFrom);
 // This is the exact PR #49 promotion policy, with only offersFrom varied.
-export function measurePromotionOffers({ seeds = 2000, from = 0 } = {}) {
+export function measurePromotionOffers({ seeds = 2000, from = 0, lifeEventsFrom = 0 } = {}) {
   const c = { staffLead: 0, managerSpecialist: 0, directorPrincipal: 0, endedBefore50: 0, seekingAt50: 0,
     managerEver: 0, directorEver: 0, neverPromoted: 0, offers: 0 };
   for (let seed = 1; seed <= seeds; seed++) {
-    let g = start(seed, from), peak = 0, promotions = 0;
+    let g = start(seed, from, lifeEventsFrom), peak = 0, promotions = 0;
     for (let year = 0; g.age < 50 && !g.ended; year++) {
       const allowed = availableChoices(g), offer = pendingCareerOffer(g);
       const action = onMentalLeave(g) ? 'rest' : g.employer.kind === 'seeking' ? move(year)
@@ -37,11 +37,11 @@ export function measurePromotionOffers({ seeds = 2000, from = 0 } = {}) {
 // wait for promotion offers rather than applying),
 // balanced (consider alternate scouts), mobile (consider every scout).
 // Synthetic names avoid fabricating facts about real employers. No AI/network.
-export function measureCareerVariety({ seeds = 2000, from = 0, strategy = 'balanced' } = {}) {
+export function measureCareerVariety({ seeds = 2000, from = 0, lifeEventsFrom = 0, strategy = 'balanced' } = {}) {
   const c = { changes: [0, 0, 0, 0], promotions: [0, 0, 0, 0], scouts: [0, 0, 0, 0],
     leaves: [0, 0, 0, 0], promotionOffers: 0, noPromotionOffer: 0, meanScouts: 0, meanPromotions: 0, meanLeaves: 0, leaveYears: 0, workingYears: 0, fastManager: 0, changesOverSix: 0 };
   for (let seed = 1; seed <= seeds; seed++) {
-    let g = start(seed, from), changes = 0, promotions = 0, scouts = 0, leaves = 0, offers = 0, fast = false;
+    let g = start(seed, from, lifeEventsFrom), changes = 0, promotions = 0, scouts = 0, leaves = 0, offers = 0, fast = false;
     for (let year = 0; !g.ended && g.age < 65; year++) {
       const allowed = availableChoices(g), offer = pendingCareerOffer(g);
       let action;

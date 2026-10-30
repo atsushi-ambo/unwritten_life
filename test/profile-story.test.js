@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  createGame,
+  createGame as originalCreateGame,
   advance,
   advanceYears,
   eventFor,
@@ -11,6 +11,9 @@ import {
   encodeSave,
   decodeSave,
 } from "../public/engine.js";
+
+// Preserve the historical incident distribution in existing scenarios.
+const createGame = (...args) => originalCreateGame(...[...args, ...Array(Math.max(0, 25 - args.length)).fill(undefined)].map((v, i) => i === 24 && v === undefined ? 110 : v));
 import { storyRequest } from "../public/story.js";
 
 const base = {

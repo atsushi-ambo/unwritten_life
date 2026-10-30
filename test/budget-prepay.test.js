@@ -3,11 +3,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createContext, runInContext } from "node:vm";
 import {
-  createGame, advance, advanceYears, availableChoices, suggestedChoices,
+  createGame as originalCreateGame, advance, advanceYears, availableChoices, suggestedChoices,
   eventFor, amortizeYear, encodeSave, decodeSave, replay, compareWorlds,
   applyScene, validateGeneratedScene, profileStoryContext, MAX_AGE, CHOICES,
   careerSeenUntil, previousDirectionStep,
 } from "../public/engine.js";
+
+// Preserve the historical incident distribution in existing scenarios.
+const createGame = (...args) => originalCreateGame(...[...args, ...Array(Math.max(0, 25 - args.length)).fill(undefined)].map((v, i) => i === 24 && v === undefined ? 110 : v));
 import { storyRequest, sceneSchema } from "../public/story.js";
 import { careerMilestones } from "../public/careers.js";
 
@@ -42,7 +45,7 @@ function checkBudget(before, next) {
 function replayAt(g, length, scenes = {}) {
   return replay(g.profile, g.scenario, g.seed, g.decisions.slice(0, length),
     scenes, false, g.dynamicFrom, g.worldFrom, g.retirementFrom,
-    g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom, g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom, g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, g.oddsFrom);
+    g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom, g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom, g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, g.oddsFrom, g.lifeEventsFrom);
 }
 const scene = {
   title: "住まいと手元の備えを考える",

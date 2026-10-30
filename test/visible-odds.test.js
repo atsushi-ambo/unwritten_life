@@ -18,7 +18,7 @@ const move = { id: "switch", target: "custom", name: "合成テスト社", role:
   candidateKind: "real", workModel: "product", proposal: "経験を生かす", rank: "lead", intent: "上の役割を目指す" };
 const boundaries = ["dynamicFrom", "worldFrom", "retirementFrom", "careLeaveSalaryFrom", "prepayFrom", "debtRepayFrom",
   "salaryCapFrom", "incidentFrom", "careerPathFrom", "careerEndFrom", "payRealismFrom", "lifeRealismFrom", "offersFrom",
-  "paceFrom", "reemploymentPayFrom", "driftFrom", "familyFrom", "growthFrom", "cycleFrom", "spendFrom", "oddsFrom"];
+  "paceFrom", "reemploymentPayFrom", "driftFrom", "familyFrom", "growthFrom", "cycleFrom", "spendFrom", "oddsFrom", "lifeEventsFrom"];
 const replayGame = (g, length = g.decisions.length) => replay(g.profile, g.scenario, g.seed, g.decisions.slice(0, length),
   Object.fromEntries(Object.entries(g.scenes).filter(([step]) => Number(step) <= length)), false,
   ...boundaries.map((key) => g[key]), g.directionBlocks?.filter(([, end]) => end <= length));
@@ -50,12 +50,14 @@ test("old history and saved current scenes retain pre-edit hashes, while future 
   for (const { save, historyHash, nextHash } of fixtures) {
     const g = decodeSave(JSON.stringify(save));
     assert.equal(g.oddsFrom, save.decisions.length + (nextHash ? 1 : 0));
+    assert.equal(g.lifeEventsFrom, save.decisions.length + (nextHash ? 1 : 0));
     assert.equal(hash(g), historyHash);
     assert.deepEqual(g.scenes, save.scenes);
     assert.equal(g.history[0].intention, "newSkill");
     assert.deepEqual(decodeSave(encodeSave(g)), g);
     assert.deepEqual(replayGame(g), g);
     assert.equal(replayGame(g, 0).oddsFrom, g.oddsFrom);
+    assert.equal(replayGame(g, 0).lifeEventsFrom, g.lifeEventsFrom);
     for (const w of compareWorlds(g)) assert.equal(w.oddsFrom, g.oddsFrom);
     if (nextHash) {
       const next = advance(g, g.scenes[1].options[0].decision);

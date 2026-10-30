@@ -21,7 +21,7 @@ const replayGame = (g, decisions = g.decisions) => replay(g.profile, g.scenario,
   decisions, g.scenes, false, g.dynamicFrom, g.worldFrom, g.retirementFrom,
   g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom,
   g.incidentFrom, g.careerPathFrom, g.careerEndFrom, g.payRealismFrom,
-  g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom, g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, g.oddsFrom, decisions.length === g.decisions.length ? g.directionBlocks : undefined);
+  g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom, g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, g.oddsFrom, g.lifeEventsFrom, decisions.length === g.decisions.length ? g.directionBlocks : undefined);
 const within = (n, lo, hi, label) => assert.ok(n >= lo && n <= hi, `${label}: ${n}`);
 function findIncident(id, make = start, predicate = () => true) {
   for (let seed = 1; seed < 30000; seed++) {
@@ -307,14 +307,14 @@ test("AI scenes without offer prose or options are accepted and cached; prompts 
 });
 
 test("cohorts retain different careers and rare extremes with tolerant promotion and lifetime distributions", () => {
-  const before = measurePromotionOffers({ seeds: 1000, from: MAX_AGE }), after = measurePromotionOffers({ seeds: 1000 });
+  const before = measurePromotionOffers({ seeds: 1000, from: MAX_AGE, lifeEventsFrom: 110 }), after = measurePromotionOffers({ seeds: 1000, lifeEventsFrom: 110 });
   within(before.managerEver, 0.45, 0.68, "former manager ever");
   within(after.staffLead, 0.5, 0.68, "staff/lead at 50");
   within(after.managerSpecialist, 0.25, 0.35, "manager/specialist at 50");
   within(after.directorPrincipal, 0.03, 0.07, "director/principal at 50");
   assert.ok(after.managerEver < before.managerEver - 0.1);
   within(after.neverPromoted, 0.01, 0.1, "never promoted even when trying often");
-  const cohorts = ["stay", "balanced", "mobile"].map((strategy) => measureCareerVariety({ seeds: 1000, strategy }));
+  const cohorts = ["stay", "balanced", "mobile"].map((strategy) => measureCareerVariety({ seeds: 1000, strategy, lifeEventsFrom: 110 }));
   const [stay, balanced, mobile] = cohorts;
   within(stay.changes[0], 0.6, 0.8, "stayed with employer");
   for (const [i, [lo, hi]] of [[0.06, 0.16], [0.25, 0.43], [0.25, 0.43], [0.15, 0.34]].entries())
