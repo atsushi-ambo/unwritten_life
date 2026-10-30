@@ -895,3 +895,58 @@ test("a life event appears in the timeline with its human-readable title", async
   await expect(year.locator(".incident-note")).toContainText("パートナーと別れる");
   await expect(year.locator(".incident-note")).not.toContainText("partnerSeparation");
 });
+
+test('図鑑は保存同意時だけ再読込後も残り削除できる', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('#demo-button').click();
+  await page.locator('#book-button').click();
+  await expect(page.locator('#book-content')).toContainText('みどりテクノロジー');
+  await page.reload();
+  await page.locator('#book-button').click();
+  await expect(page.locator('#book-content')).not.toContainText('みどりテクノロジー');
+  await page.locator('#book-dialog [data-close]').click();
+  await page.locator('#demo-button').click();
+  await page.locator('#back-setup').click();
+  await page.locator('[data-profile-level="advanced"]').click();
+  await page.locator('[name="company"]').fill('合成図鑑会社');
+  await page.locator('#remember').check();
+  await page.locator('#quick-start').click();
+  await page.locator('#book-button').click();
+  await expect(page.locator('#book-content')).toContainText('合成図鑑会社');
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('unwritten-life:book:v1')));
+  expect(stored.companies).not.toContain('みどりテクノロジー（架空）');
+  await page.reload();
+  await page.locator('#book-button').click();
+  await expect(page.locator('#book-content section').first()).toContainText('会社（1）');
+  await expect(page.locator('#book-content section').first()).toContainText('合成図鑑会社');
+  await page.locator('#book-delete').click();
+  await page.locator('#book-delete-confirm').click();
+  await expect(page.locator('#book-content section').first()).toContainText('？？？');
+  await page.reload();
+  await page.locator('#book-button').click();
+  await expect(page.locator('#book-content section').first()).toContainText('？？？');
+  await page.locator('#book-dialog [data-close]').click();
+  await page.locator('#resume-button').click();
+  await page.locator('#book-button').click();
+  await expect(page.locator('#book-content')).not.toContainText('合成図鑑会社');
+  await page.locator('#book-dialog [data-close]').click();
+  await page.locator('#choices button').first().click();
+  await finishDirection(page);
+  await page.locator('#book-button').click();
+  await expect.poll(async () => page.evaluate(() => JSON.parse(localStorage.getItem('unwritten-life:book:v1') || '{}').choices?.length || 0)).toBeGreaterThan(0);
+});
+
+
+test('セーブがなくても保存済み図鑑を表示する', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => {
+    localStorage.removeItem('unwritten-life:v2');
+    localStorage.setItem('unwritten-life:book:v1', JSON.stringify({ companies: ['保存済み会社'], choices: [], incidents: [] }));
+  });
+  await page.reload();
+  await page.locator('#book-button').click();
+  await expect(page.locator('#book-content')).toContainText('保存済み会社');
+  const download = page.waitForEvent('download');
+  await page.locator('#book-export').click();
+  expect((await download).suggestedFilename()).toBe('unwritten-life-book.json');
+});

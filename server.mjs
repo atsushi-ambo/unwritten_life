@@ -12,6 +12,7 @@ const serverRevision = await makeServerRevision();
 const assets = new Map([
   ["/", ["index.html", "text/html"]],
   ["/index.html", ["index.html", "text/html"]],
+  ["/book.js", ["book.js", "text/javascript"]],
   ["/app.js", ["app.js", "text/javascript"]],
   ["/engine.js", ["engine.js", "text/javascript"]],
   ["/world.js", ["world.js", "text/javascript"]],

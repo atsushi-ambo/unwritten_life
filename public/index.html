@@ -24,6 +24,7 @@
         ></a
       >
       <nav aria-label="メイン">
+        <button class="text-button" id="book-button">発見の図鑑</button>
         <button class="text-button" id="ai-settings-button">AIの接続 ↗</button>
         <button class="text-button" id="about-button">
           このゲームについて <span>↗</span></button
@@ -871,6 +872,18 @@
         前提とプライバシー ↗
       </button>
     </footer>
+    <div id="book-notice" class="book-notice" aria-live="polite"></div>
+    <dialog id="book-dialog" aria-labelledby="book-title">
+      <div class="dialog-top"><h2 id="book-title">発見の図鑑</h2><button type="button" data-close aria-label="閉じる">×</button></div>
+      <div id="book-content"></div>
+      <button type="button" id="book-export" class="button secondary small">図鑑を書き出す</button>
+      <button type="button" id="book-delete" class="button secondary small">図鑑を削除</button>
+    </dialog>
+    <dialog id="book-delete-dialog" aria-labelledby="book-delete-title">
+      <div class="dialog-top"><h2 id="book-delete-title">図鑑を削除しますか？</h2><button type="button" data-close aria-label="閉じる">×</button></div>
+      <p>この端末の図鑑の記録を削除します。</p>
+      <button type="button" id="book-delete-confirm" class="button">削除する</button>
+    </dialog>
     <dialog id="save-import-dialog" aria-labelledby="save-import-title">
       <div class="dialog-top">
         <h2 id="save-import-title">セーブを読み込みますか？</h2>

@@ -29,6 +29,7 @@ export async function buildMobile(output) {
     throw new Error("ソースへの出力はできません。");
   const files = [
     "app.js",
+    "book.js",
     "engine.js",
     "world.js",
     "careers.js",
@@ -55,7 +56,7 @@ export async function buildMobile(output) {
       ? sources
           .get(file)
           .replace(
-            /(\bfrom\s+["'])\.\/(engine|world|careers|story)\.js(["'])/g,
+            /(\bfrom\s+["'])\.\/(engine|world|careers|story|book)\.js(["'])/g,
             `$1./$2.js?v=${revision}$3`,
           )
       : sources.get(file);
