@@ -382,6 +382,14 @@ export const worldEnabled = (g) => g.decisions.length >= (g.worldFrom ?? 0);
 // All coefficients below are game design assumptions, not estimated forecasts.
 // Capability and diffusion differ; adoption can lag because of institutions,
 // cost and implementation. The slow/steady/fast curves are sensitivity cases.
+// Thresholds partition the unchanged, independent cycle roll. Conflict still forces downturn.
+export const ERAS = Object.freeze({
+  standard: Object.freeze({ label: "ふつう", downturn: 0.23, expansion: 0.72 }),
+  boom: Object.freeze({ label: "好況が続く世界", downturn: 0.12, expansion: 0.55 }),
+  stagnation: Object.freeze({ label: "停滞が長引く世界", downturn: 0.30, expansion: 0.85 }),
+  recession: Object.freeze({ label: "不況と再編が続く世界", downturn: 0.45, expansion: 0.90 }),
+});
+
 export function worldAt(g, employer = g.employer) {
   const t = g.year - 2026,
     epoch = Math.floor(t / 3);
@@ -437,10 +445,11 @@ export function worldAt(g, employer = g.employer) {
       market: 0.06,
       costs: 0,
     };
+  const era = ERAS[g.era ?? "standard"];
   const economy =
-    shock.growth < -0.03 || cycle < 0.23
+    shock.growth < -0.03 || cycle < era.downturn
       ? { id: "downturn", label: "日本経済：後退局面", growth: -0.025 }
-      : cycle > 0.72
+      : cycle > era.expansion
         ? { id: "expansion", label: "日本経済：拡大局面", growth: 0.02 }
         : { id: "mixed", label: "日本経済：まだらな成長", growth: 0 };
   const firmRoll = roll(g.seed ^ companyKey(employer), epoch, 72);
