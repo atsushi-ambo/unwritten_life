@@ -950,3 +950,10 @@ test('セーブがなくても保存済み図鑑を表示する', async ({ page 
   await page.locator('#book-export').click();
   expect((await download).suggestedFilename()).toBe('unwritten-life-book.json');
 });
+
+test("開始時に景気の背景を選び、世界バッジに表示する", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('[name="era"][value="boom"]').check();
+  await page.locator("#quick-start").click();
+  await expect(page.locator("#world-badge")).toContainText("好況が続く世界");
+});

@@ -720,3 +720,20 @@ test("a new graduate's first scene is told as the first year at work", () => {
     assert.equal(storyRequest(createGame(other, "steady", 7), { mode: "life" }).context.firstYearOfWork, undefined, occupation);
   }
 });
+
+test("AI separates economic eras in cache and rejects invalid saves", async () => {
+  const contexts = [], ai = await readyAI(async (_url, options) => {
+    contexts.push(JSON.parse(options.body).messages[1].content);
+    return { status: 200, text: ollamaText(replyFor(options)) };
+  });
+  const save = JSON.parse(encodeSave(createGame(p)));
+  for (const era of ["standard", "boom", "stagnation", "recession"]) {
+    const data = JSON.stringify({ ...save, era });
+    assert.equal((await ai.generate(data)).cached, false);
+    assert.equal((await ai.generate(data)).cached, true);
+  }
+  assert.equal(contexts.length, 4);
+  const before = ai.status().calls;
+  await assert.rejects(() => ai.generate(JSON.stringify({ ...save, era: null })));
+  assert.equal(ai.status().calls, before);
+});

@@ -598,3 +598,23 @@ test("hosted offer, pace and pay boundaries validate before requests, attempt re
   }
   assert.equal(calls, 27);
 });
+
+test("hosted validates economic era before reservation and sends the selected premise", async (t) => {
+  const { db, sql } = database(t);
+  let context, calls = 0;
+  const api = makeHostedAPI({ db, origin, apiKey: "synthetic-key", now: () => 1000,
+    fetchAI: async (_url, options) => {
+      calls++;
+      context = JSON.parse(JSON.parse(options.body).messages[1].content);
+      return Response.json({ choices: [{ message: { content: JSON.stringify(replyFor(options)) } }] });
+    },
+  });
+  const auth = await session(api), saved = JSON.parse(save());
+  for (const era of [null, "unknown", 1]) {
+    assert.equal((await api.scene(request(auth, { save: JSON.stringify({ ...saved, era }) }), user)).status, 400);
+  }
+  assert.equal(calls, 0);
+  assert.equal(sql.prepare("SELECT count(*) AS n FROM ai_attempts").get().n, 0);
+  assert.equal((await api.scene(request(auth, { save: JSON.stringify({ ...saved, era: "recession" }) }), user)).status, 200);
+  assert.equal(context.economicEra.era, "recession");
+});

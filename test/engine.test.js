@@ -310,7 +310,8 @@ test("pre-change retirement saves preserve boundary work history and the current
   for (const { id, save, expected } of fixtures) {
     assert.ok(!Object.hasOwn(save, "retirementFrom"));
     const restored = decodeSave(JSON.stringify(save));
-    const { retirementFrom, careLeaveSalaryFrom, prepayFrom, debtRepayFrom, salaryCapFrom, incidentFrom, careerPathFrom, careerEndFrom, payRealismFrom, lifeRealismFrom, offersFrom, paceFrom, reemploymentPayFrom, driftFrom, familyFrom, growthFrom, cycleFrom, spendFrom, oddsFrom, lifeEventsFrom, lifestyle, position, reflections, careerSeen, ...state } = restored;
+    const { era, retirementFrom, careLeaveSalaryFrom, prepayFrom, debtRepayFrom, salaryCapFrom, incidentFrom, careerPathFrom, careerEndFrom, payRealismFrom, lifeRealismFrom, offersFrom, paceFrom, reemploymentPayFrom, driftFrom, familyFrom, growthFrom, cycleFrom, spendFrom, oddsFrom, lifeEventsFrom, lifestyle, position, reflections, careerSeen, ...state } = restored;
+    assert.equal(era, "standard");
     assert.equal(careerEndFrom, save.decisions.length);
     assert.equal(offersFrom, save.decisions.length + (save.scenes?.[String(save.decisions.length)] ? 1 : 0));
     assert.equal(paceFrom, save.decisions.length + (save.scenes?.[String(save.decisions.length)] ? 1 : 0));

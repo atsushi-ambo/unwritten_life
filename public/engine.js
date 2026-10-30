@@ -9,7 +9,7 @@ import {
   PROFILE_INDUSTRIES,
   careerMilestones,
 } from "./careers.js";
-import { worldAt, worldEnabled, opportunityAt, TONES } from "./world.js";
+import { worldAt, worldEnabled, opportunityAt, TONES, ERAS } from "./world.js";
 // All monetary values are illustrative, in 2026 purchasing-power units of ¥10,000.
 export const VERSION = 2;
 export const START_YEAR = 2026;
@@ -1025,10 +1025,12 @@ export function createGame(
   spendFrom = 0,
   oddsFrom = 0,
   lifeEventsFrom = 0,
+  era = "standard",
 ) {
   const p = validateProfile(profile);
   if (
     !Object.hasOwn(SCENARIOS, scenario) ||
+    typeof era !== "string" || !Object.hasOwn(ERAS, era) ||
     !Number.isInteger(seed) ||
     seed < 0 ||
     seed > 0xffffffff ||
@@ -1104,6 +1106,7 @@ export function createGame(
   return {
     profile: p,
     scenario,
+    era,
     seed,
     decisions: [],
     dynamicFrom,
@@ -4219,6 +4222,7 @@ export function replay(
   oddsFrom = 0,
   lifeEventsFrom = 0,
   directionBlocks,
+  era = "standard",
 ) {
   if (
     !Array.isArray(decisions) ||
@@ -4255,6 +4259,7 @@ export function replay(
     spendFrom,
     oddsFrom,
     lifeEventsFrom,
+    era,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -4316,11 +4321,13 @@ export function compareWorlds(g) {
       g.oddsFrom,
       g.lifeEventsFrom,
       g.directionBlocks,
+      g.era,
     ),
   );
 }
 export function encodeSave(g) {
   if (
+    (Object.hasOwn(g, "era") && (typeof g.era !== "string" || !Object.hasOwn(ERAS, g.era))) ||
     !Number.isInteger(g.prepayFrom) ||
     g.prepayFrom < 0 ||
     g.prepayFrom > MAX_AGE ||
@@ -4401,6 +4408,7 @@ export function encodeSave(g) {
     lifeEventsFrom: g.lifeEventsFrom,
     profile: g.profile,
     scenario: g.scenario,
+    era: g.era ?? "standard",
     seed: g.seed,
     decisions: g.decisions,
     scenes: g.scenes,
@@ -4484,6 +4492,8 @@ export function decodeSave(value) {
     Object.hasOwn(d, "lifeEventsFrom")
       ? d.lifeEventsFrom
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
+    undefined,
+    Object.hasOwn(d, "era") ? d.era : "standard",
   );
   if (Object.hasOwn(d, "directionBlocks"))
     game.directionBlocks = validateDirectionBlocks(d.directionBlocks, game.decisions.length);
@@ -4535,7 +4545,7 @@ function branchState(g, step, includeScene = false) {
     g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom,
     g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom,
     g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, g.oddsFrom, g.lifeEventsFrom,
-    g.directionBlocks?.filter(([, end]) => end <= step));
+    g.directionBlocks?.filter(([, end]) => end <= step), g.era);
 }
 
 export function rewindTo(g, step) {
