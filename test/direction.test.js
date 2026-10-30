@@ -14,7 +14,7 @@ const quiet = (p = profile, seed = 42) => createGame(p, "steady", seed, 0, 0, 0,
 const replayGame = (g) => replay(g.profile, g.scenario, g.seed, g.decisions, g.scenes, false,
   g.dynamicFrom, g.worldFrom, g.retirementFrom, g.careLeaveSalaryFrom, g.prepayFrom,
   g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom,
-  g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom, g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, g.directionBlocks);
+  g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom, g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, g.oddsFrom, g.directionBlocks);
 
 test("a five-year direction preserves every decision, passes a reflection milestone and replays exactly", () => {
   const base = quiet(), snapshot = structuredClone(base);

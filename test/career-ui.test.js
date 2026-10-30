@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createContext, runInContext } from "node:vm";
-import { createGame, advance, advanceDirection, pendingCareerOffer, availableChoices, decisionId,
+import { choiceForecast, createGame, advance, advanceDirection, pendingCareerOffer, availableChoices, decisionId,
   validateGeneratedScene, recordCareerReflection, encodeSave, JOBS, RANKS } from "../public/engine.js";
 import { storyRequest } from "../public/story.js";
 import { fourReply } from "./fixtures/ai-replies.js";
@@ -45,12 +45,13 @@ function harness(game) {
     return elements.get(id);
   };
   const context = createContext({
-    game, node, $, JOBS, RANKS, careerMap, careerRecord, careerRecordText, discoveredCompanies, COMPANY_DISCOVERY_NOTE, lifeStory, CAREER_STATES, peakRankLabel, yearSpan, deathHeadline,
+    game, node, $, choiceForecast, JOBS, RANKS, careerMap, careerRecord, careerRecordText, discoveredCompanies, COMPANY_DISCOVERY_NOTE, lifeStory, CAREER_STATES, peakRankLabel, yearSpan, deathHeadline,
     money: (n) => String(Math.round(n)), nf: new Intl.NumberFormat("ja-JP"),
     favoriteYears: new Set(), favoritesOnly: false, appendBudget() {},
     document: { createTextNode: (text) => node("#text", text), get activeElement() { return focused; } },
     navigator: { clipboard: { async writeText(text) { if (denied) throw Error("denied"); copied = text; } } },
   });
+  runInContext(app.slice(app.indexOf("function appendChoiceForecast("), app.indexOf("function renderCareActions(")), context);
   runInContext(app.slice(app.indexOf("function renderCareerMap("), app.indexOf("function moveToStory()")), context);
   return { $, context, node, get focused() { return focused; }, get copied() { return copied; }, denyClipboard() { denied = true; } };
 }

@@ -145,6 +145,7 @@ export const familyMoney = (g) => g.decisions.length >= (g.familyFrom ?? 0);
 export const WORLD_GROWTH_MEAN = -0.0072;
 export const payCurve = (g) => g.decisions.length >= (g.growthFrom ?? 0);
 export const payCycles = (g) => g.decisions.length >= (g.cycleFrom ?? 0);
+const visibleOdds = (g) => g.decisions.length >= (g.oddsFrom ?? 0);
 export const lifestyleSpending = (g) => g.decisions.length >= (g.spendFrom ?? 0);
 const symmetricDrift = (g) => g.decisions.length >= (g.driftFrom ?? 0);
 const measuredPace = (g) => g.decisions.length >= (g.paceFrom ?? 0);
@@ -1022,6 +1023,7 @@ export function createGame(
   growthFrom = 0,
   cycleFrom = 0,
   spendFrom = 0,
+  oddsFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -1088,7 +1090,10 @@ export function createGame(
     cycleFrom > MAX_AGE ||
     !Number.isInteger(spendFrom) ||
     spendFrom < 0 ||
-    spendFrom > MAX_AGE
+    spendFrom > MAX_AGE ||
+    !Number.isInteger(oddsFrom) ||
+    oddsFrom < 0 ||
+    oddsFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -1119,6 +1124,7 @@ export function createGame(
     growthFrom,
     cycleFrom,
     spendFrom,
+    oddsFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -1420,7 +1426,7 @@ function familyTurn(g, choice) {
     extraCost: 0,
   });
   if (choice === "meet") {
-    if (roll < 0.52) family.partner = true;
+    if (roll < FAMILY_CHANCES.meet) family.partner = true;
     outcome = life(
       family.partner
         ? "出会いから、共に暮らす関係へ。"
@@ -1440,12 +1446,12 @@ function familyTurn(g, choice) {
   }
   if (choice === "familyPlan") {
     family.lastPlan = g.decisions.length;
-    if (roll < 0.58) family.childAges.push(0);
+    if (roll < FAMILY_CHANCES.familyPlan) family.childAges.push(0);
     outcome = life(
-      roll < 0.58
+      roll < FAMILY_CHANCES.familyPlan
         ? "新しい家族を迎える暮らしが始まった。"
         : "家族の準備は、もう少し続く。",
-      roll < 0.58
+      roll < FAMILY_CHANCES.familyPlan
         ? "育て方や周囲の支援を整え、新しい家族との生活へ。子どもの世話と仕事の時間をどう分けるか、次の選択が生まれた。"
         : "話し合いや支援の準備には時間が必要だった。希望どおりの時期には進まなかったが、暮らしや希望を選び直せる。",
     );
@@ -1833,86 +1839,11 @@ const FOCUS_TITLES = [
   ["仕事を続けたが、成果につながりにくい一年。", "目の前の仕事に取り組み、経験を重ねた。",
     "試行錯誤を続け、次の課題が見えてきた。", "日々の仕事を支えながら、手応えを探した。"],
 ];
-function yearlyOutcome(g, choice, employer, decision = null) {
-  const i = g.decisions.length;
-  if (
-    i < g.dynamicFrom ||
-    g.retired ||
-    g.age >= g.profile.retirementAge ||
-    choice === "retire" || onMentalLeave(g)
-  )
-    return null;
-  const roll = randomAt(g.seed, i, 31),
-    ability = worldEnabled(g)
-      ? workSuccessChance(g, employer, choice)
-      : clamp(0.35 + g.skill * 0.004 + g.health * 0.002, 0.2, 0.85);
-  if (choice === "closeBusiness")
-    return {
-      kind: "closure",
-      title: "事業を整理し、次の働き方へ。",
-      body: "事業の収入と継続費用を止めた。経験は残り、転職や生活の立て直しを選べる。",
-      salaryFactor: 0,
-      extraCost: 0,
-    };
-  if (employer.kind === "venture") {
-    // Game calibration (2026-10-21), not a Japanese business failure statistic:
-    // closures can happen before a second setback, including the first year.
-    if (lifeRealism(g) && randomAt(g.seed, i, 161) <
-      0.11 + (g.cash < g.livingCost * 12 ? 0.04 : 0))
-      return {
-        kind: "failure",
-        title: "事業が続かず、いったん撤退。",
-        body: "受注や資金の見通しが立たず、事業を閉じることになった。事業収入と運営費を止め、次の仕事と暮らしを立て直す。",
-        salaryFactor: 0,
-        extraCost: 15,
-      };
-    const risk = clamp(
-      0.18 +
-        (g.cash < g.livingCost * 12 ? 0.12 : 0) +
-        technologyAt(g) * (1 - g.skill / 100) * 0.12 +
-        (choice === "expand" ? 0.12 : 0) -
-        (choice === "pivot" ? 0.08 : 0) +
-        (worldEnabled(g)
-          ? (0.5 - worldAt(g, employer).demand) * 0.25 - g.skill * 0.0005
-          : 0),
-      0.1,
-      0.55,
-    );
-    if (roll < risk) {
-      const failed = g.businessSetbacks >= 1;
-      return {
-        kind: failed ? "failure" : "setback",
-        title: failed
-          ? "事業が続かず、いったん撤退。"
-          : "顧客が伸びず、事業の収支が悪化。",
-        body: failed
-          ? "不調が続き、事業を閉じることになった。事業収入と運営費を止め、次の仕事と暮らしを立て直す。"
-          : "見込んだ受注が得られず、事業収入が減った。次は事業の方向転換や撤退も選べる。",
-        salaryFactor: failed ? 0 : 0.55,
-        extraCost: failed ? 15 : 20,
-      };
-    }
-    if (roll > 1 - ability * 0.5 || (choice === "pivot" && roll > 0.55))
-      return {
-        kind: "success",
-        title:
-          choice === "pivot"
-            ? "方向転換が、次の顧客につながった。"
-            : "仕事が紹介され、事業に手応え。",
-        body: worldEnabled(g)
-          ? "顧客との仕事に手応えがあった。事業を広げる道が見えてきたが、開業や運営の費用もかかる。収入と家計の変化を確かめ、次の一歩を選べる。"
-          : "顧客との仕事が増え、事業収入が伸びた。次は追加投資して広げるか、暮らしとのバランスを選べる。",
-        salaryFactor: choice === "expand" ? 1.3 : 1.15,
-        extraCost: 0,
-      };
-    return {
-      kind: "steady",
-      title: "小さな受注を積み重ねた一年。",
-      body: "事業を続け、運営費を払いながら顧客との関係を育てた。大きく広げる前に、次の一歩を考える。",
-      salaryFactor: 1,
-      extraCost: 0,
-    };
-  }
+const WORK_ACTIONS = ["pilot", "negotiate", "focus", "learn", "studyDaily", "switch", "explore", "mentor"];
+function actionModel(g, choice, employer, decision) {
+  const ability = worldEnabled(g)
+    ? workSuccessChance(g, employer, choice)
+    : clamp(0.35 + g.skill * 0.004 + g.health * 0.002, 0.2, 0.85);
   if (["promote", "transfer", "internalVenture"].includes(choice)) {
     // The odds are game assumptions: ability, time in the stage, the
     // employer's situation and relationships, never a real company's rules.
@@ -1944,7 +1875,6 @@ function yearlyOutcome(g, choice, employer, decision = null) {
         : 1;
     const calibratedSeat = careerOffers(g) && choice === "promote"
       ? seat * [0.42, 0.59, 0.9][level] : seat;
-    const seatOpen = accepted || randomAt(g.seed, g.decisions.length, careerOffers(g) ? 186 : 151) < calibratedSeat;
     const merit =
       choice === "promote"
         ? clamp(
@@ -1962,6 +1892,151 @@ function yearlyOutcome(g, choice, employer, decision = null) {
         : choice === "transfer"
           ? clamp(0.45 + g.connection * 0.003 + g.skill * 0.002, 0.3, 0.8)
           : clamp(ability * 0.7 * firm, 0.15, 0.55);
+    return { ability, chance, accepted, target, calibratedSeat, merit };
+  }
+  const steppingUp = choice === "switch" && decision?.rank &&
+    RANKS[decision.rank].level > RANKS[g.position?.rank ?? "unspecified"].level;
+  return { ability, chance: ability * (steppingUp ? 0.75 : 1) };
+}
+function ventureModel(g, choice, employer, ability) {
+  const risk = clamp(
+    0.18 +
+      (g.cash < g.livingCost * 12 ? 0.12 : 0) +
+      technologyAt(g) * (1 - g.skill / 100) * 0.12 +
+      (choice === "expand" ? 0.12 : 0) -
+      (choice === "pivot" ? 0.08 : 0) +
+      (worldEnabled(g)
+        ? (0.5 - worldAt(g, employer).demand) * 0.25 - g.skill * 0.0005
+        : 0),
+    0.1,
+    0.55,
+  );
+  const closure = lifeRealism(g) ? 0.11 + (g.cash < g.livingCost * 12 ? 0.04 : 0) : 0;
+  const successAbove = choice === "pivot" ? Math.min(1 - ability * 0.5, 0.55) : 1 - ability * 0.5;
+  return { risk, closure, successAbove,
+    chance: (1 - closure) * (1 - Math.max(risk, successAbove)),
+    setback: closure + (1 - closure) * risk };
+}
+const FAMILY_CHANCES = { meet: 0.52, familyPlan: 0.58 };
+
+// Display-only preview: never draw a seed or call advance (no future results).
+// Re-employment replaces the work outcome; report it separately, and show the
+// action's odds conditional on that separate draw not finding a job.
+export function choiceForecast(g, rawDecision) {
+  const decision = validateDecision(rawDecision, g), choice = decisionId(decision),
+    employer = nextEmployer(g, decision), c = CHOICES[choice];
+  let chance = null, label = "成否の抽選なし", setback = null;
+  const active = g.decisions.length >= g.dynamicFrom && !g.retired && g.age < g.profile.retirementAge &&
+    choice !== "retire" && !onMentalLeave(g);
+  const model = active ? actionModel(g, choice, employer, decision) : null;
+  if (active && employer.kind === "venture" && choice !== "closeBusiness") {
+    const venture = ventureModel(g, choice, employer, model.ability);
+    chance = venture.chance;
+    setback = venture.setback;
+    label = "事業で手応えを得る（黒字の確率ではありません）";
+  } else if (worldEnabled(g) && Object.hasOwn(FAMILY_CHANCES, choice)) {
+    chance = FAMILY_CHANCES[choice];
+    label = choice === "meet" ? "パートナーとの関係が育つ" : "新しい家族を迎える";
+  } else if (active && (WORK_ACTIONS.includes(choice) || ["promote", "transfer", "internalVenture"].includes(choice))) {
+    chance = model.chance;
+    label = ({ switch: "転職後の役割に適応する（採用の確率ではありません）",
+      promote: "昇格する（席の空きと評価を含む）", transfer: "社内異動が実現する",
+      internalVenture: "社内公募に選ばれる", learn: "学びを仕事に生かす",
+      studyDaily: "学びが仕事の評価につながる", focus: "仕事の成果が評価される",
+      pilot: "試した仕組みが仕事で役立つ", negotiate: "待遇の相談が通る",
+      explore: "挑戦が新しい仕事につながる", mentor: "経験を伝えて協働につなげる" })[choice];
+  }
+  const reemployment = reemploymentChance(g, choice);
+  const percent = (n) => `${(n * 100).toFixed(1)}%`;
+  const successText = chance === null ? `初年度：${label}`
+    : `初年度の成功率 ${percent(chance)}：${label}${reemployment && WORK_ACTIONS.includes(choice) ? "（別の再就職抽選が不成立の場合）" : ""}`;
+  const burdens = [
+    ...(chance === null ? [] : [setback === null ? `上記の成果に届かない ${percent(1 - chance)}`
+      : `事業の不調・撤退 ${percent(setback)}（それ以外に横ばいの年もあります）`]),
+    ...(c.cost > 0 ? [`行動の費用 ${c.cost}万円`] : []),
+    ...(choice === "startup" && decision.venture
+      ? [`開業費${VENTURES[decision.venture].setup}万円・年間運営費${VENTURES[decision.venture].overhead}万円`] : []),
+    ...(c.health < 0 ? [`行動によるゆとり ${c.health}`] : []),
+    ...(c.connection < 0 ? [`行動によるつながり ${c.connection}`] : []),
+    ...(choice === "careLeave" ? ["この年の労働収入を15%抑える"] : []),
+    ...(g.employer.kind === "seeking" && ["rest", "recover", "careLeave"].includes(choice)
+      ? ["この1年は仕事探しを休む"] : []),
+  ];
+  return { chance, label, setback, reemployment, successText,
+    riskText: `リスク・負担：${burdens.join(" / ") || "暮らしや収支は別の出来事でも変わります"}`,
+    note: `${reemployment ? `別の再就職抽選 ${percent(reemployment)}。` : ""}ゲーム内の仮定。初年度のみ。別の出来事による変化や、5年間の成果を保証する数値ではありません。` };
+}
+
+function yearlyOutcome(g, choice, employer, decision = null) {
+  const i = g.decisions.length;
+  if (
+    i < g.dynamicFrom ||
+    g.retired ||
+    g.age >= g.profile.retirementAge ||
+    choice === "retire" || onMentalLeave(g)
+  )
+    return null;
+  const roll = randomAt(g.seed, i, 31),
+    model = actionModel(g, choice, employer, decision),
+    ability = model.ability;
+  if (choice === "closeBusiness")
+    return {
+      kind: "closure",
+      title: "事業を整理し、次の働き方へ。",
+      body: "事業の収入と継続費用を止めた。経験は残り、転職や生活の立て直しを選べる。",
+      salaryFactor: 0,
+      extraCost: 0,
+    };
+  if (employer.kind === "venture") {
+    const { risk, closure, successAbove } = ventureModel(g, choice, employer, ability);
+    // Game calibration (2026-10-21), not a Japanese business failure statistic:
+    // closures can happen before a second setback, including the first year.
+    if (lifeRealism(g) && randomAt(g.seed, i, 161) < closure)
+      return {
+        kind: "failure",
+        title: "事業が続かず、いったん撤退。",
+        body: "受注や資金の見通しが立たず、事業を閉じることになった。事業収入と運営費を止め、次の仕事と暮らしを立て直す。",
+        salaryFactor: 0,
+        extraCost: 15,
+      };
+    if (roll < risk) {
+      const failed = g.businessSetbacks >= 1;
+      return {
+        kind: failed ? "failure" : "setback",
+        title: failed
+          ? "事業が続かず、いったん撤退。"
+          : "顧客が伸びず、事業の収支が悪化。",
+        body: failed
+          ? "不調が続き、事業を閉じることになった。事業収入と運営費を止め、次の仕事と暮らしを立て直す。"
+          : "見込んだ受注が得られず、事業収入が減った。次は事業の方向転換や撤退も選べる。",
+        salaryFactor: failed ? 0 : 0.55,
+        extraCost: failed ? 15 : 20,
+      };
+    }
+    if (roll > successAbove)
+      return {
+        kind: "success",
+        title:
+          choice === "pivot"
+            ? "方向転換が、次の顧客につながった。"
+            : "仕事が紹介され、事業に手応え。",
+        body: worldEnabled(g)
+          ? "顧客との仕事に手応えがあった。事業を広げる道が見えてきたが、開業や運営の費用もかかる。収入と家計の変化を確かめ、次の一歩を選べる。"
+          : "顧客との仕事が増え、事業収入が伸びた。次は追加投資して広げるか、暮らしとのバランスを選べる。",
+        salaryFactor: choice === "expand" ? 1.3 : 1.15,
+        extraCost: 0,
+      };
+    return {
+      kind: "steady",
+      title: "小さな受注を積み重ねた一年。",
+      body: "事業を続け、運営費を払いながら顧客との関係を育てた。大きく広げる前に、次の一歩を考える。",
+      salaryFactor: 1,
+      extraCost: 0,
+    };
+  }
+  if (["promote", "transfer", "internalVenture"].includes(choice)) {
+    const { chance, accepted, target, calibratedSeat, merit } = model;
+    const seatOpen = accepted || randomAt(g.seed, g.decisions.length, careerOffers(g) ? 186 : 151) < calibratedSeat;
     const success = choice === "promote" ? accepted || (seatOpen && roll < merit) : roll < chance;
     const text = {
       promote: success
@@ -1995,23 +2070,9 @@ function yearlyOutcome(g, choice, employer, decision = null) {
         : {}),
     };
   }
-  if (
-    [
-      "pilot",
-      "negotiate",
-      "focus",
-      "learn",
-      "studyDaily",
-      "switch",
-      "explore",
-      "mentor",
-    ].includes(choice)
-  ) {
-    const steppingUp =
-      choice === "switch" &&
-      decision?.rank &&
-      RANKS[decision.rank].level > RANKS[g.position?.rank ?? "unspecified"].level;
-    const success = roll < ability * (steppingUp ? 0.75 : 1);
+  if (WORK_ACTIONS.includes(choice)) {
+    const chance = model.chance;
+    const success = roll < chance;
     const titles = {
       pilot: [
         "試した仕組みが、仕事で役立った。",
@@ -2048,7 +2109,7 @@ function yearlyOutcome(g, choice, employer, decision = null) {
     };
     return {
       kind: success ? "success" : "setback",
-      ...(worldEnabled(g) ? { chance: ability } : {}),
+      ...(worldEnabled(g) ? { chance: visibleOdds(g) ? chance : ability } : {}),
       title: measuredPace(g) && choice === "focus"
         ? variedYearTitle(g, FOCUS_TITLES[success ? 0 : 1])
         : titles[choice][success ? 0 : 1],
@@ -2265,6 +2326,16 @@ function validateLifeOptions(scene, g, mode) {
   }
   return scene;
 }
+export const bareInternalId = (value) => typeof value === "string" && /^[a-z][a-z0-9_]*$/iu.test(value.trim());
+export function displayIntention(record) {
+  return [record.intention, record.choiceLabel, CHOICES[record.choice]?.label]
+    .find((value) => typeof value === "string" && value.trim() && !bareInternalId(value)) ?? "これからの暮らしを考える";
+}
+export function displayEpisode(record) {
+  return (record.episode?.body ?? record.outcome?.body ?? record.note ?? "")
+    .replace(/選んだ方針は「([^」]*)」。?/gu, (whole, intent) =>
+      bareInternalId(intent) ? `選んだ方針は「${displayIntention(record)}」。` : whole);
+}
 export function validateGeneratedScene(
   raw,
   g,
@@ -2326,6 +2397,7 @@ export function validateGeneratedScene(
       Object.keys(decision).some((k) => !fields.includes(k))
     )
       fail();
+    if (bareInternalId(decision.intent)) fail();
     const fieldLeak =
       /target\s*:\s*custom|["\\](?:intent|target|role|workModel|companyType|candidateKind)["\\]*\s*:/iu;
     if (
@@ -3386,7 +3458,8 @@ export function advanceDirection(game, decision, { years = 5 } = {}) {
       // Someone worn down eases off instead of pushing on (2026-10-21: focus
       // every follow-through year drained ゆとり to 0 for a decade, and pay
       // fell each year with it).
-      const tired = working && next.health < 35 && allowed.includes("rest") && !["learn", "studyDaily"].includes(id);
+      const tired = working && next.health < 35 && allowed.includes("rest") &&
+        (visibleOdds(next) || !["learn", "studyDaily"].includes(id));
       action = tired ? "rest" : [...preferred, working ? "focus" : "rest"].find((a) => allowed.includes(a));
       if (!action) {
         stopReason = "状況が変わり、この方針を続けられなくなりました。";
@@ -3443,10 +3516,10 @@ export function previousDirectionStep(game) {
   const block = game.directionBlocks?.at(-1);
   return block?.[1] === game.decisions.length ? block[0] : Math.max(0, game.decisions.length - 1);
 }
-function reemploymentOutcome(g, choice) {
+function reemploymentChance(g, choice) {
   if (!lifeRealism(g) || g.employer.kind !== "seeking" || isRetiredAt(g) ||
     ["switch", "startup", "retire", "rest", "recover", "careLeave"].includes(choice))
-    return null;
+    return 0;
   const lastWorking = g.history.findLastIndex((h) => h.employer.kind !== "seeking");
   const yearsSeeking = g.history.length - lastWorking - 1;
   // Annual game assumption, not an estimated personal hazard. JILPT No.168
@@ -3456,6 +3529,11 @@ function reemploymentOutcome(g, choice) {
   // https://www.jil.go.jp/institute/research/2017/168.html
   // 65% first search year, then 75%; older ages have fewer opportunities.
   const chance = (yearsSeeking <= 1 ? 0.65 : 0.75) * (g.age >= 60 ? 0.3 : g.age >= 55 ? 0.6 : 1);
+  return chance;
+}
+function reemploymentOutcome(g, choice) {
+  const chance = reemploymentChance(g, choice);
+  if (!chance) return null;
   if (randomAt(g.seed, g.decisions.length, 171) >= chance) return null;
   return {
     kind: "reemployed",
@@ -4107,6 +4185,7 @@ export function replay(
   growthFrom = 0,
   cycleFrom = 0,
   spendFrom = 0,
+  oddsFrom = 0,
   directionBlocks,
 ) {
   if (
@@ -4142,6 +4221,7 @@ export function replay(
     growthFrom,
     cycleFrom,
     spendFrom,
+    oddsFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -4200,6 +4280,7 @@ export function compareWorlds(g) {
       g.growthFrom,
       g.cycleFrom,
       g.spendFrom,
+      g.oddsFrom,
       g.directionBlocks,
     ),
   );
@@ -4253,7 +4334,10 @@ export function encodeSave(g) {
     g.cycleFrom > MAX_AGE ||
     !Number.isInteger(g.spendFrom) ||
     g.spendFrom < 0 ||
-    g.spendFrom > MAX_AGE
+    g.spendFrom > MAX_AGE ||
+    !Number.isInteger(g.oddsFrom) ||
+    g.oddsFrom < 0 ||
+    g.oddsFrom > MAX_AGE
   )
     fail();
   const value = JSON.stringify({
@@ -4278,6 +4362,7 @@ export function encodeSave(g) {
     growthFrom: g.growthFrom,
     cycleFrom: g.cycleFrom,
     spendFrom: g.spendFrom,
+    oddsFrom: g.oddsFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
@@ -4356,6 +4441,9 @@ export function decodeSave(value) {
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
     Object.hasOwn(d, "spendFrom")
       ? d.spendFrom
+      : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
+    Object.hasOwn(d, "oddsFrom")
+      ? d.oddsFrom
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
   );
   if (Object.hasOwn(d, "directionBlocks"))
