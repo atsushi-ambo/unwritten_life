@@ -1,5 +1,8 @@
 import { test, expect } from "@playwright/test";
-import { createGame, advance, pendingCareerOffer, profileInputForLevel, recordCareerReflection, encodeSave, decodeSave } from "../public/engine.js";
+import { applyScene, choiceForecast, createGame, advance, pendingCareerOffer, profileInputForLevel, recordCareerReflection, encodeSave, decodeSave } from "../public/engine.js";
+
+import { fourReply } from "../test/fixtures/ai-replies.js";
+import { storyRequest } from "../public/story.js";
 
 import { paceProfile } from "../scripts/simulate-pace.mjs";
 
@@ -810,4 +813,34 @@ test("without a connected AI the game asks for one before it starts", async ({ p
   await expect(page.locator("#ai-dialog")).toBeHidden();
   await expect(page.locator("#game")).toBeVisible();
   await expect(page.locator("#choices button")).toHaveCount(4);
+});
+
+
+test("four cards show engine odds and low-health care commands remain usable without generated choices", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  let game = quietGame();
+  while (game.health >= 29) game = advance(game, { id: "studyDaily", intent: "設計を学ぶ" });
+  game = applyScene(game, fourReply(storyRequest(game).context));
+  await page.goto("/");
+  await page.locator("#import-save-file").setInputFiles(saveFile(game));
+  const cards = page.locator("#choices .choice");
+  await expect(cards).toHaveCount(4);
+  for (const [i, option] of game.scenes[game.decisions.length].options.entries()) {
+    const forecast = choiceForecast(game, option.decision ?? option.id);
+    await expect(cards.nth(i).locator(".choice-odds")).toHaveText(forecast.successText);
+    await expect(cards.nth(i).locator(".choice-risk")).toHaveText(forecast.riskText);
+    if (forecast.chance !== null)
+      await expect(cards.nth(i).locator(".choice-odds")).toHaveAttribute("data-probability", String(forecast.chance));
+  }
+  await expect(page.locator(".health-warning")).toContainText("ゆとりが少なく");
+  for (const id of ["rest", "connect", "switch"])
+    await expect(page.locator(`[data-care-action="${id}"]`)).toBeVisible();
+  await expectFits(page);
+  const pending = { ...game, scenes: {} };
+  await page.route("**/api/scene", (route) => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "合成AI停止" }) }));
+  await page.locator("#import-save-file").setInputFiles(saveFile(pending));
+  await page.locator("#save-import-confirm").click();
+  await expect(page.locator('[data-care-action="rest"]')).toBeVisible();
+  await page.locator('[data-care-action="rest"]').click();
+  await expect(page.locator("#journey-next")).toBeVisible();
 });

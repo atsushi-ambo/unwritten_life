@@ -10,6 +10,9 @@ import {
   PRIORITIES,
   CHOICES,
   decisionId,
+  choiceForecast,
+  displayIntention,
+  displayEpisode,
   availableChoices,
   isRetiredAt,
   createGame,
@@ -716,7 +719,7 @@ function appendTimelineYear(h, index, target = $("journey-years")) {
       ? h.incident.title : h.outcome?.title ?? h.episode?.title ?? h.title),
   );
   if (index === 0 || game.directionBlocks?.some(([start]) => start === index))
-    row.append(node("p", `選んだ方針は「${h.intention ?? h.choiceLabel}」。`, "timeline-direction"));
+    row.append(node("p", `選んだ方針は「${displayIntention(h)}」。`, "timeline-direction"));
   const summary = timelineSummary(h, game.history[index - 1]);
   if (summary) row.append(node("p", summary, "timeline-summary"));
   const incident = incidentNote(h);
@@ -726,7 +729,7 @@ function appendTimelineYear(h, index, target = $("journey-years")) {
     `年収 ${nf.format(Math.round(h.income))}万円（${signed(Math.round(h.income) - Math.round(before.income))}） · 純資産 ${nf.format(Math.round(h.savings))}万円（${signed(Math.round(h.savings) - Math.round(before.savings))}）`,
   ));
   const details = node("details", undefined, "timeline-details"),
-    original = h.episode?.body ?? h.outcome?.body ?? h.note;
+    original = displayEpisode(h);
   details.append(node("summary", "詳しく見る"), node("p", original, "timeline-original"));
   if (h.outcome?.body && !original.includes(h.outcome.body))
     details.append(node("p", h.outcome.body));
@@ -890,6 +893,44 @@ document.addEventListener("keydown", (event) => {
   event.preventDefault();
   toggleTimelinePause();
 });
+function appendChoiceForecast(container, decision) {
+  // Legacy unconfigured career cards open a form; the destination is not yet known.
+  if (["switch", "startup"].includes(decision) && typeof decision === "string") {
+    container.append(node("small", "初年度の成功率・リスク：選ぶ企業・事業が決まった段階で確認できます（この画面では未表示）", "choice-odds"));
+    return;
+  }
+  const forecast = choiceForecast(game, decision);
+  const odds = node("small", forecast.successText, "choice-odds");
+  if (forecast.chance !== null) odds.dataset.probability = String(forecast.chance);
+  container.append(odds, node("small", forecast.riskText, "choice-risk"),
+    node("small", forecast.note, "choice-odds-note"));
+}
+function renderCareActions() {
+  const container = $("career-actions");
+  if (game.ended) return;
+  if (game.health < 30) {
+    const warning = node("p", game.health < 10
+      ? "心と体のゆとりがとても少なくなっています。休養や人との時間を選べます。"
+      : "心と体のゆとりが少なくなっています。休養や働き方の見直しを考えられます。", "health-warning");
+    warning.setAttribute("role", "status");
+    container.append(warning);
+  }
+  const actions = node("div", undefined, "care-actions");
+  for (const [id, label] of [["rest", "休養する"], ["connect", "つながりを育てる"], ["switch", "仕事を探す・転職先を選ぶ"]]) {
+    const button = node("button", label, "button secondary small");
+    button.type = "button";
+    button.dataset.careAction = id;
+    button.disabled = generating || timelineRevealing() || !availableChoices(game).includes(id);
+    button.title = !availableChoices(game).includes(id) ? "今の状態では選べません" : CHOICES[id].hint;
+    button.addEventListener("click", () => {
+      if (button.disabled || !button.isConnected || game.ended) return;
+      if (id === "switch") openCareer(id);
+      else commitChoice(id);
+    });
+    actions.append(button);
+  }
+  container.append(actions);
+}
 function renderGame() {
   renderRevealedStatus();
   renderTimelineControls();
@@ -1006,6 +1047,7 @@ function renderGame() {
   const choices = $("choices");
   choices.replaceChildren();
   $("career-actions").replaceChildren();
+  renderCareActions();
   if (complete) {
     const end = game.history.at(-1)?.careerEnd;
     card.append(
@@ -1057,6 +1099,7 @@ function renderGame() {
         game.growthFrom,
         game.cycleFrom,
         game.spendFrom,
+        game.oddsFrom,
       );
       showGame(true);
     });
@@ -1064,8 +1107,7 @@ function renderGame() {
     actions.append(again, compare);
     card.append(actions);
   } else if (!eventFor(game).generated) {
-    // Scenes and choices come from the connected AI only. Until it answers,
-    // the year waits; there are no rule-written options to fall back to.
+    // Story choices wait for AI; permanent care/search commands remain available.
     card.append(node("p", `AIが考える場面 / ${game.year}`, "eyebrow"));
     if (generating) {
       card.append(
@@ -1171,6 +1213,7 @@ function renderGame() {
           `${option.hint}${offer ? ` / 開業費${offer.setup}万円・年間運営費${VENTURES[offer.venture].overhead}万円` : ""} / 行動：${c.label}`,
         ),
       );
+      appendChoiceForecast(copy, option.decision ?? option.id);
       if (option.reason)
         copy.append(node("small", `あなたとの接点：${option.reason}`));
       // Ending the career ends the story; say so in the game's own words.
@@ -1505,6 +1548,7 @@ $("undo-button").addEventListener("click", () => {
     game.growthFrom,
     game.cycleFrom,
     game.spendFrom,
+    game.oddsFrom,
     blocks,
   );
   const reached = new Set(careerMilestones(game).map((m) => m.id));
@@ -1932,6 +1976,7 @@ function renderCareerOffers() {
         toast(error.message);
       }
     });
+    appendChoiceForecast(button, offer.decision);
     card.append(button);
     const details = node("details", undefined, "career-offer-details");
     details.append(

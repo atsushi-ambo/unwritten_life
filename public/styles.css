@@ -2281,3 +2281,9 @@ dialog p, dialog li { font-size: 14px; }
 /* An option that ends the story is marked by the game, not the AI. */
 .choice-ending-note { color: var(--accent); font-weight: 600; }
 .choice-pause-note { color: var(--muted); font-weight: 600; }
+
+/* Engine-authored odds and always available care/search entry points. */
+.choice-odds { font-weight: 700; }
+.choice-risk, .choice-odds-note { line-height: 1.5; }
+.care-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-block: .75rem; }
+.health-warning { padding: .75rem; border: 2px solid currentColor; border-radius: .5rem; color: #a33c27; }

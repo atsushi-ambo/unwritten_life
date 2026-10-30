@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createContext, runInContext } from "node:vm";
 import {
-  createGame, advance, availableChoices, encodeSave, decodeSave,
+  choiceForecast, createGame, advance, availableChoices, encodeSave, decodeSave,
   validateProfile, optionalProfileInputs, profileInputForLevel,
 } from "../public/engine.js";
 import { storyRequest } from "../public/story.js";
@@ -73,7 +73,7 @@ test("career offers receive one interest item per year so a list cannot fill eve
 test("career renderer shows only AI offers, waits while generating, and preserves generated decisions", async () => {
   const elements = new Map();
   const node = (tag, textContent = "") => ({
-    tag, textContent, children: [], listeners: {},
+    tag, textContent, children: [], listeners: {}, dataset: {},
     append(...items) { this.children.push(...items); },
     replaceChildren(...items) { this.children = items; },
     addEventListener(type, fn) { this.listeners[type] = fn; },
@@ -84,13 +84,14 @@ test("career renderer shows only AI offers, waits while generating, and preserve
   };
   const decisions = [];
   const context = createContext({
-    $, node, revision: 1, careerMode: "switch", careerDraft: null,
+    $, node, choiceForecast, revision: 1, careerMode: "switch", careerDraft: null,
     careerGenerating: false, generating: false, careerError: "",
     game: createGame(profile), timelineRevealing: () => false,
     takeCareerDecision: (d) => decisions.push(d),
     toast: (message) => assert.fail(message),
   });
   const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+  runInContext(app.slice(app.indexOf("function appendChoiceForecast("), app.indexOf("function renderCareActions(")), context);
   runInContext(app.slice(app.indexOf("function renderCareerOffers()"), app.indexOf('$("career-manual-toggle").addEventListener')), context);
   runInContext("renderCareerOffers()", context);
   assert.equal($("career-offers").children.length, 0);
@@ -105,7 +106,8 @@ test("career renderer shows only AI offers, waits while generating, and preserve
   assert.match($("career-generation-status").textContent, /考えています/);
   context.careerDraft = { revision: 1, scene: { options: [{
     id: "switch", label: "経験を試す", reason: "経験との接点", hint: "不確実な挑戦",
-    decision: { id: "switch", name: "合成候補", candidateKind: "real", proposal: "架空の職務" },
+    decision: { id: "switch", target: "custom", role: "tech", companyType: "unknown", workModel: "product",
+      name: "合成候補", candidateKind: "real", proposal: "架空の職務", intent: "経験を試す" },
   }] } };
   runInContext("renderCareerOffers()", context);
   assert.equal($("career-offers").children.length, 0);
