@@ -1,3 +1,4 @@
+import { revealEnabled, revealCount } from "./text-reveal.js";
 import { emptyBook, recordGame, validateBook, bookView, bookBaseline } from "./book.js";
 import {
   START_YEAR,
@@ -1232,6 +1233,7 @@ function renderGame() {
     );
   }
   const card = $("event-card");
+  finishReveal();
   card.replaceChildren();
   const choices = $("choices");
   choices.replaceChildren();
@@ -1350,6 +1352,7 @@ function renderGame() {
       node("p", event.body),
       node("p", event.insight, "insight"),
     );
+    if (revealSetting.checked) animateBody(card.children[2], event.body);
     if (event.profileBasis?.length) {
       const basis = node("details", undefined, "profile-basis");
       basis.append(node("summary", "この場面に反映したプロフィール"));
@@ -2908,6 +2911,52 @@ if (hosted) {
   for (const el of document.querySelectorAll("[data-pc-only]"))
     el.hidden = true;
 }
+const revealSetting = $("text-reveal-setting");
+let savedReveal = null;
+try { savedReveal = localStorage.getItem("unwritten-life:text-reveal"); } catch {}
+revealSetting.checked = revealEnabled(savedReveal, matchMedia("(prefers-reduced-motion: reduce)").matches);
+let finishReveal = () => {};
+revealSetting.addEventListener("change", () => {
+  try { localStorage.setItem("unwritten-life:text-reveal", revealSetting.checked ? "on" : "off"); } catch {}
+  if (!revealSetting.checked) finishReveal();
+});
+function animateBody(element, value) {
+  const chars = Array.from(value);
+  element.setAttribute("aria-label", value);
+  const visual = document.createElement("span");
+  visual.setAttribute("aria-hidden", "true");
+  element.replaceChildren(visual);
+  let stopped = false;
+  const start = performance.now();
+  finishReveal = () => { stopped = true; visual.textContent = value; };
+  function tick(now) {
+    if (stopped || !element.isConnected) return;
+    const count = revealCount(chars.length, now - start);
+    visual.textContent = chars.slice(0, count).join("");
+    if (count < chars.length) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+$("event-card").addEventListener("click", () => finishReveal());
+document.addEventListener("keydown", (event) => {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.repeat || document.querySelector("dialog[open]") ||
+      event.target.closest("input, textarea, select, [contenteditable]")) return;
+  const choices = $("choices");
+  if (choices.hidden || !choices.getClientRects().length) return;
+  if (["Enter", " "].includes(event.key)) finishReveal();
+  const buttons = [...choices.querySelectorAll("button[data-choice]:not(:disabled)")];
+  // Shortcuts apply only when nothing else has focus or focus is on the choices,
+  // so links, summaries and page scrolling keep their normal behaviour.
+  const idle = event.target === document.body || event.target === document.documentElement;
+  if (/^[1-4]$/.test(event.key) && (idle || choices.contains(event.target))) {
+    const button = buttons[Number(event.key) - 1];
+    if (button) { event.preventDefault(); button.click(); }
+  } else if (["ArrowUp", "ArrowDown"].includes(event.key) && choices.contains(event.target) && buttons.length) {
+    const at = buttons.indexOf(event.target.closest("button")), step = event.key === "ArrowDown" ? 1 : -1;
+    event.preventDefault();
+    buttons[(at + step + buttons.length) % buttons.length].focus();
+  }
+});
 readStoredGame();
 loadBook();
 updateMunicipalityRegion();
