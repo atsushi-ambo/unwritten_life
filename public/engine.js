@@ -1024,6 +1024,7 @@ export function createGame(
   cycleFrom = 0,
   spendFrom = 0,
   oddsFrom = 0,
+  lifeEventsFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -1093,7 +1094,8 @@ export function createGame(
     spendFrom > MAX_AGE ||
     !Number.isInteger(oddsFrom) ||
     oddsFrom < 0 ||
-    oddsFrom > MAX_AGE
+    oddsFrom > MAX_AGE ||
+    !Number.isInteger(lifeEventsFrom) || lifeEventsFrom < 0 || lifeEventsFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -1125,6 +1127,7 @@ export function createGame(
     cycleFrom,
     spendFrom,
     oddsFrom,
+    lifeEventsFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -4186,6 +4189,7 @@ export function replay(
   cycleFrom = 0,
   spendFrom = 0,
   oddsFrom = 0,
+  lifeEventsFrom = 0,
   directionBlocks,
 ) {
   if (
@@ -4222,6 +4226,7 @@ export function replay(
     cycleFrom,
     spendFrom,
     oddsFrom,
+    lifeEventsFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -4281,6 +4286,7 @@ export function compareWorlds(g) {
       g.cycleFrom,
       g.spendFrom,
       g.oddsFrom,
+      g.lifeEventsFrom,
       g.directionBlocks,
     ),
   );
@@ -4337,7 +4343,8 @@ export function encodeSave(g) {
     g.spendFrom > MAX_AGE ||
     !Number.isInteger(g.oddsFrom) ||
     g.oddsFrom < 0 ||
-    g.oddsFrom > MAX_AGE
+    g.oddsFrom > MAX_AGE ||
+    !Number.isInteger(g.lifeEventsFrom) || g.lifeEventsFrom < 0 || g.lifeEventsFrom > MAX_AGE
   )
     fail();
   const value = JSON.stringify({
@@ -4363,6 +4370,7 @@ export function encodeSave(g) {
     cycleFrom: g.cycleFrom,
     spendFrom: g.spendFrom,
     oddsFrom: g.oddsFrom,
+    lifeEventsFrom: g.lifeEventsFrom,
     profile: g.profile,
     scenario: g.scenario,
     seed: g.seed,
@@ -4445,6 +4453,9 @@ export function decodeSave(value) {
     Object.hasOwn(d, "oddsFrom")
       ? d.oddsFrom
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
+    Object.hasOwn(d, "lifeEventsFrom")
+      ? d.lifeEventsFrom
+      : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
   );
   if (Object.hasOwn(d, "directionBlocks"))
     game.directionBlocks = validateDirectionBlocks(d.directionBlocks, game.decisions.length);
@@ -4495,7 +4506,7 @@ function branchState(g, step, includeScene = false) {
     g.dynamicFrom, g.worldFrom, g.retirementFrom, g.careLeaveSalaryFrom, g.prepayFrom,
     g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom,
     g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom,
-    g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, g.oddsFrom,
+    g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, g.oddsFrom, g.lifeEventsFrom,
     g.directionBlocks?.filter(([, end]) => end <= step));
 }
 
