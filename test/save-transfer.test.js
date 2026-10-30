@@ -8,6 +8,7 @@ import {
   createGame, advance, advanceYears, advanceDirection, previousDirectionStep, optionalProfileInputs, profileInputForLevel,
   encodeSave, decodeSave, availableChoices, decisionId, replay, recordCareerReflection, careerSeenUntil,
 } from "../public/engine.js";
+import { bookBaseline } from "../public/book.js";
 import { careerMilestones, pendingCareerReflection } from "../public/careers.js";
 
 const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
@@ -44,7 +45,7 @@ function harness({ game = null, remember = false, stored = {} } = {}) {
     $, game, remember, savedGame: null, corruptSave: null,
     pendingImportedGame: null, saveImportRevision: 0,
     generating: false, revision: 0, lastJourney: null,
-    saveKey, encodeSave, decodeSave, Blob, careerMilestones, pendingCareerReflection, recordCareerReflection,
+    saveKey, bookSeen: new Set(), bookBaseline, encodeSave, decodeSave, Blob, careerMilestones, pendingCareerReflection, recordCareerReflection,
     localStorage: {
       getItem: (key) => storage.get(key) ?? null,
       setItem: (key, value) => storage.set(key, value),

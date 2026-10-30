@@ -10,7 +10,7 @@ test("phone build contains only public assets and is always the hosted OpenAI ed
   const dir = await mkdtemp(resolve(tmpdir(), "unwritten-mobile-test-"));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const result = await buildMobile(dir);
-  assert.equal(result.files.length, 8);
+  assert.equal(result.files.length, 9);
   assert.deepEqual((await readdir(dir)).sort(), result.files.sort());
   const html = await readFile(resolve(dir, "index.html"), "utf8");
   checkCareerCopy(html);

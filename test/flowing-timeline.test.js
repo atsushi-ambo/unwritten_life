@@ -1,3 +1,4 @@
+import { bookBaseline } from "../public/book.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -42,7 +43,7 @@ function harness({ storedSpeed = null, storageDenied = false, reducedMotion = fa
     return elements.get(key);
   };
   const context = createContext({
-    $, node, displayIntention, displayEpisode, game: base(), RANKS, REGIONS, MAX_AGE, careerMap, CAREER_STATES, createGame, advanceDirection, previousDirectionStep, directionSpan,
+    bookBaseline, bookSeen: new Set(), $, node, displayIntention, displayEpisode, game: base(), RANKS, REGIONS, MAX_AGE, careerMap, CAREER_STATES, createGame, advanceDirection, previousDirectionStep, directionSpan,
     availableChoices, decisionId, recordCareerReflection, careerMilestones, careerSeenUntil, replay,
     timelineShown: 0, timelinePaused: false, timelineTimer: undefined, lastJourney: null,
     generating: false, revision: 1, favoriteYears: new Set(),
@@ -65,7 +66,7 @@ function harness({ storedSpeed = null, storageDenied = false, reducedMotion = fa
     performance: { now: () => now },
     setTimeout(fn, ms) { const key = ++id; timers.set(key, { fn, ms }); return key; },
     clearTimeout: (key) => timers.delete(key),
-    maybeGenerateScene() { requests++; }, moveToStory() {},
+    maybeGenerateScene() { requests++; }, moveToStory() {}, updateBook() {},
     persist() { saves++; },
     renderGame() { runInContext("renderRevealedStatus(); renderTimelineControls()", context); context.persist(); },
   });

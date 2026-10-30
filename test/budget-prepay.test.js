@@ -1,3 +1,4 @@
+import { bookBaseline } from "../public/book.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -375,7 +376,7 @@ test("the UI undo handler preserves the migrated boundary when undoing prepaymen
   const migrated = decodeSave(JSON.stringify(saved)),
     paid = advance(migrated, "prepay"), button = {},
     context = createContext({
-      game: paid, generating: false, lastJourney: {}, revision: 0, replay, previousDirectionStep, careerMilestones, careerSeenUntil, favoriteYears: new Set(),
+      bookBaseline, bookSeen: new Set(), game: paid, generating: false, lastJourney: {}, revision: 0, replay, previousDirectionStep, careerMilestones, careerSeenUntil, favoriteYears: new Set(),
       $: () => ({ addEventListener(_type, handler) { button.click = handler; } }),
       renderGame() {}, moveToStory() {}, resetTimeline() {}, maybeGenerateScene() {},
     });
@@ -395,7 +396,7 @@ test("UI undo and retry preserve the debt repayment boundary", () => {
   for (let i = 0; i < 3; i++) g = advance(g, "rest");
   const paid = advance(g, "rest"), button = {},
     context = createContext({
-      game: paid, generating: false, lastJourney: {}, revision: 0, replay, previousDirectionStep, createGame, careerMilestones, careerSeenUntil, favoriteYears: new Set(),
+      bookBaseline, bookSeen: new Set(), game: paid, generating: false, lastJourney: {}, revision: 0, replay, previousDirectionStep, createGame, careerMilestones, careerSeenUntil, favoriteYears: new Set(),
       $: () => ({ addEventListener(_type, handler) { button.click = handler; } }),
       again: { addEventListener(_type, handler) { button.retry = handler; } },
       renderGame() {}, moveToStory() {}, resetTimeline() {}, maybeGenerateScene() {}, showGame() {},

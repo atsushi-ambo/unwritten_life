@@ -1,3 +1,4 @@
+import { emptyBook, recordGame, validateBook, bookView, bookBaseline } from "./book.js";
 import {
   START_YEAR,
   MAX_AGE,
@@ -109,6 +110,53 @@ let careerDraft = null,
   generationError = "",
   cloudConsented = false,
   pendingStart = null;
+const bookKey = "unwritten-life:book:v1";
+let book = emptyBook(), savedBook = emptyBook(), bookLoaded = false, bookSeen = new Set();
+function loadBook() {
+  if (bookLoaded) return;
+  bookLoaded = true;
+  try {
+    const saved = validateBook(JSON.parse(localStorage.getItem(bookKey) || "null"));
+    savedBook = saved;
+    book = validateBook(Object.fromEntries(Object.keys(saved).map((key) => [key, [...saved[key], ...book[key]]])));
+  } catch { /* Keep the in-memory discoveries. */ }
+}
+function updateBook() {
+  if (remember) loadBook();
+  const before = JSON.stringify(book);
+  const options = { end: timelineShown, includeCurrent: !timelineRevealing() };
+  const result = recordGame(book, game, bookSeen, options);
+  if (remember) savedBook = recordGame(savedBook, game, bookSeen, options).book;
+  book = result.book;
+  bookSeen = result.baseline;
+  if (before !== JSON.stringify(book)) {
+    $("book-notice").textContent = "図鑑に追加";
+    clearTimeout(window.bookNoticeTimer);
+    window.bookNoticeTimer = setTimeout(() => { $("book-notice").textContent = ""; }, 3000);
+  }
+  if (remember) try { localStorage.setItem(bookKey, JSON.stringify(savedBook)); } catch { toast("図鑑を保存できませんでした。"); }
+}
+function renderBook() {
+  const view = bookView(book), content = $("book-content");
+  content.replaceChildren(node("p", view.note, "field-note"));
+  for (const [key, title] of [["companies", "会社"], ["choices", "方法と道"], ["incidents", "できごと"]]) {
+    const shelf = view[key], section = node("section"), list = node("ul");
+    section.append(node("h3", `${title}（${key === "companies" ? shelf.total : book[key].length + " / " + shelf.total}）`));
+    for (const item of shelf.items) list.append(node("li", item));
+    if (!shelf.items.length) list.append(node("li", "？？？"));
+    section.append(list); content.append(section);
+  }
+}
+$("book-button").addEventListener("click", () => { renderBook(); $("book-dialog").showModal(); });
+$("book-export").addEventListener("click", () => downloadSave(JSON.stringify(book, null, 2), "unwritten-life-book.json"));
+$("book-delete").addEventListener("click", () => $("book-delete-dialog").showModal());
+$("book-delete-confirm").addEventListener("click", () => {
+  try {
+    localStorage.removeItem(bookKey);
+    localStorage.removeItem("unwritten-life:book-cleared:v1");
+    book = emptyBook(); savedBook = emptyBook(); bookLoaded = true; renderBook(); $("book-delete-dialog").close(); toast("図鑑を削除しました。"); }
+  catch { toast("図鑑を削除できませんでした。"); }
+});
 const aiSettingsKey = "unwritten-life:ai";
 const generationTimes = new Map();
 const connectionKey = (state) =>
@@ -245,7 +293,7 @@ function readProfile() {
       : null;
   return p;
 }
-function showGame(focus = false) {
+function showGame(focus = false, fresh = false) {
   if (serverStale) { toast(staleNotice); return; }
   if (!aiReady()) {
     if (hosted) {
@@ -255,12 +303,13 @@ function showGame(focus = false) {
     const next = game;
     pendingStart = () => {
       game = next;
-      showGame(focus);
+      showGame(focus, fresh);
     };
     void openAISettings(true);
     return;
   }
   generationError = "";
+  bookSeen = fresh ? new Set() : bookBaseline(game);
   lastJourney = null;
   revision++;
   resetTimeline();
@@ -953,6 +1002,7 @@ function scheduleYear() {
   timelineTimer = setTimeout(() => {
     const row = appendTimelineYear(game.history[timelineShown], timelineShown);
     timelineShown++;
+    updateBook();
     renderRevealedStatus();
     if (timelineRevealing()) {
       renderTimelineControls();
@@ -1069,6 +1119,7 @@ function renderCareActions() {
   container.append(actions);
 }
 function renderGame() {
+  updateBook();
   renderRevealedStatus();
   renderTimelineControls();
   const revealing = timelineRevealing();
@@ -1598,7 +1649,7 @@ $("profile-form").addEventListener("submit", (e) => {
       crypto.getRandomValues(new Uint32Array(1))[0],
     );
     remember = $("remember").checked;
-    showGame(true);
+    showGame(true, true);
   } catch (error) {
     $("form-error").textContent = error.message;
   }
@@ -1627,7 +1678,7 @@ $("demo-button").addEventListener("click", () => {
     7612026,
   );
   remember = false;
-  showGame(true);
+  showGame(true, true);
   toast("架空の人物で体験中。保存はオフです。");
 });
 $("resume-button").addEventListener("click", () => {
@@ -1693,6 +1744,7 @@ $("undo-button").addEventListener("click", () => {
   const reached = new Set(careerMilestones(game).map((m) => m.id));
   game.reflections = Object.fromEntries(Object.entries(reflections).filter(([id]) => reached.has(id)));
   game.careerSeen = careerSeenUntil({ careerSeen: seen }, game.decisions.length);
+  bookSeen = bookBaseline(game);
   revision++;
   resetTimeline();
   renderGame();
@@ -2852,6 +2904,7 @@ if (hosted) {
     el.hidden = true;
 }
 readStoredGame();
+loadBook();
 updateMunicipalityRegion();
 status()
   .then(restoreAI)

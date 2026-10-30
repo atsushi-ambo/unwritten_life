@@ -2287,3 +2287,9 @@ dialog p, dialog li { font-size: 14px; }
 .choice-risk, .choice-odds-note { line-height: 1.5; }
 .care-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-block: .75rem; }
 .health-warning { padding: .75rem; border: 2px solid currentColor; border-radius: .5rem; color: #a33c27; }
+
+#book-dialog { width: min(42rem, calc(100vw - 2rem)); max-height: 85vh; overflow: auto; }
+#book-content { overflow-wrap: anywhere; }
+#book-content ul { padding-left: 1.5rem; }
+.book-notice:not(:empty) { position: fixed; bottom: 1rem; right: 1rem; z-index: 20; padding: .6rem 1rem; background: var(--ink, #222); color: var(--paper, #fff); border-radius: .4rem; }
+@media (prefers-reduced-motion: reduce) { .book-notice { animation: none; transition: none; } }
