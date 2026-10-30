@@ -1409,6 +1409,8 @@ export function partnerIncomeAt(g, incident = null) {
   // The entered income belongs to the partner the player started with; a
   // partner met later has no entered income, so none is invented.
   if (!familyMoney(g) || !g.family.partner || g.profile.partner !== "partner" ||
+    g.history.some((h) => h.incident?.id === "partnerSeparation") ||
+    incident?.id === "partnerSeparation" ||
     incident?.id === "partnerJobLoss" ||
     g.history.at(-1)?.incident?.id === "partnerJobLoss") return 0;
   return g.profile.partnerIncome;
@@ -1581,6 +1583,11 @@ function narrateVentureYear(g, outcome, money) {
 // workplace harassment and mental-health leave; they are not predictions.
 // `temporary` salary cuts (a leave, treatment) return the following year.
 export const INCIDENTS = Object.freeze({
+  meetPartner: { kind: "life", tone: "good", rate: 0, title: "出会いから共に暮らし始める", body: "思いがけない出会いを経て、パートナーと暮らし始めた。", effects: { connection: 4 } },
+  unplannedBirth: { kind: "life", tone: "neutral", rate: 0, title: "予期しない妊娠を経て子どもを迎える", body: "予期しない妊娠を経て、子どもを迎える暮らしが始まった。", effects: { freedom: -4, connection: 2 } },
+  partnerSeparation: { kind: "life", tone: "hard", rate: 0.008, title: "パートナーと別れる", body: "パートナーとの暮らしを終え、それぞれの生活を始めた。", effects: { extraCost: 50, freedom: -4, connection: -5 } },
+  parentPassing: { kind: "life", tone: "hard", rate: 0, title: "親を看取る", body: "介護を続けてきた親を看取った。", effects: { extraCost: 30, freedom: -3, connection: -3 } },
+  relocation: { kind: "life", tone: "neutral", rate: 0.008, title: "仕事に伴い転居する", body: "仕事の都合で住まいを移し、新しい土地での暮らしが始まった。", effects: { extraCost: 50, connection: -3 } },
   scout: {
     kind: "work", tone: "good", rate: 0.085,
     title: "スカウトの連絡が来た",
@@ -1761,6 +1768,19 @@ export function incidentRates(g, choice, employer = g.employer, outcome = null) 
     rates.parentCare = INCIDENTS.parentCare.rate;
   rates.oldFriend = INCIDENTS.oldFriend.rate;
   rates.windfall = INCIDENTS.windfall.rate;
+  if (g.decisions.length >= g.lifeEventsFrom && choice !== "careLeave") {
+    if (!g.family.partner && choice !== "meet" && g.age < 75)
+      rates.meetPartner = g.age < 30 ? 0.025 : g.age < 45 ? 0.018 : g.age < 60 ? 0.01 : 0.005;
+    if (g.family.partner && choice !== "familyPlan" && g.family.childAges.length < 6 && g.age >= 18 && g.age < 50)
+      rates.unplannedBirth = g.age < 30 ? 0.012 : g.age < 40 ? 0.008 : 0.002;
+    if (g.family.partner) rates.partnerSeparation = INCIDENTS.partnerSeparation.rate;
+    const careIndex = g.history.findIndex((h) => h.incident?.id === "parentCare");
+    if (careIndex >= 0 && !g.history.some((h) => h.incident?.id === "parentPassing")) {
+      const elapsed = g.history.length - careIndex;
+      rates.parentPassing = elapsed < 3 ? 0.03 : elapsed < 7 ? 0.06 : 0.1;
+    }
+    if (working && inCompany({ ...g, employer })) rates.relocation = INCIDENTS.relocation.rate;
+  }
   return rates;
 }
 // At most one incident a year. The roll, the pick and the severity use their
@@ -2344,6 +2364,8 @@ export function validateGeneratedScene(
   g,
   { personalized = true, mode = "life", fresh = false } = {},
 ) {
+  // Incidents and their numeric effects are engine-owned, never AI output.
+  if (raw && ["incident", "incidents", "effects", "chance", "yearChance"].some((key) => Object.hasOwn(raw, key))) fail();
   mode = careerSceneMode(g, mode);
   if (!personalized) {
     if (raw?.options?.some((o) => o.decision !== undefined)) fail();
@@ -3587,6 +3609,12 @@ export function advance(g, rawDecision) {
       } : {}),
     };
   const incident = incidentAt(g, reemployment ? "switch" : choice, employer, outcome);
+  if (incident?.id === "meetPartner") familyChange.family.partner = true;
+  if (incident?.id === "partnerSeparation") familyChange.family.partner = false;
+  if (incident?.id === "unplannedBirth") {
+    familyChange.family.childAges.push(0);
+    if (!familyMoney(g)) familyChange.cost += 36;
+  }
   if (incident?.effects.layoff) {
     // No pay while looking for work; severance and benefits arrive as cash,
     // and the next job starts from the previous pay rather than from zero.

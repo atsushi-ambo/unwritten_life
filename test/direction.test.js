@@ -1,9 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  createGame, advance, advanceDirection, previousDirectionStep, decisionId,
+  createGame as originalCreateGame, advance, advanceDirection, previousDirectionStep, decisionId,
   replay, encodeSave, decodeSave, availableChoices, compareWorlds, validateGeneratedScene, directionYears, directionSpan,
 } from "../public/engine.js";
+
+// Preserve the historical incident distribution in existing scenarios.
+const createGame = (...args) => originalCreateGame(...[...args, ...Array(Math.max(0, 25 - args.length)).fill(undefined)].map((v, i) => i === 24 && v === undefined ? 110 : v));
 import { readyAI, replyFor, ollamaText, fourReply } from "./fixtures/ai-replies.js";
 import { storyRequest } from "../public/story.js";
 

@@ -3,9 +3,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import {
-  createGame, advance, encodeSave, decodeSave, replay, compareWorlds,
+  createGame as originalCreateGame, advance, encodeSave, decodeSave, replay, compareWorlds,
   profileInputForLevel, onMentalLeave, MAX_AGE,
 } from "../public/engine.js";
+
+// Preserve the historical incident distribution in existing scenarios.
+const createGame = (...args) => originalCreateGame(...[...args, ...Array(Math.max(0, 25 - args.length)).fill(undefined)].map((v, i) => i === 24 && v === undefined ? 110 : v));
 import { readyAI, replyFor, ollamaText } from "./fixtures/ai-replies.js";
 
 const profile = (extra = {}) => ({

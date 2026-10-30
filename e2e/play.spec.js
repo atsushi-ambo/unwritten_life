@@ -12,9 +12,12 @@ const syntheticProfile = {
   savings: 500, monthlyCost: 12, companyType: "small", company: "合成SI社",
 };
 const saveFile = (game) => ({ name: "synthetic-save.json", mimeType: "application/json", buffer: Buffer.from(encodeSave(game)) });
+// Pin the historical incident distribution (lifeEventsFrom is the 25th createGame argument).
+const legacyGame = (profile, scenario, seed) =>
+  createGame(profile, scenario, seed, ...Array(21).fill(0), 110);
 const quietGame = (profile = syntheticProfile) => createGame(profile, "steady", 42, 0, 0, 0, 0, 0, 0, 0, 110);
 function offerGame(id) {
-  let game = createGame({
+  let game = legacyGame({
     ...profileInputForLevel({}, "quick", { band: "new", region: "city" }),
     age: 35, rank: "lead", savings: 1500,
   }, "steady", id === "scout" ? 2 : 19);
@@ -84,7 +87,7 @@ test("partner income is a separate household budget line at 320px", async ({ pag
 
 test("mental leave shows sickness allowance separately from salary in the budget", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 740 });
-  const game = advance(createGame(paceProfile(), "steady", 5819), "focus");
+  const game = advance(legacyGame(paceProfile(), "steady", 5819), "focus");
   expect(game.salary).toBe(0);
   expect(game.history[0].budget.sicknessAllowance).toBeGreaterThan(0);
   await page.goto("/");
@@ -295,7 +298,7 @@ test("ending resume shows the career map and milestone line, copies locally, and
       },
     } });
   });
-  let game = advance(createGame(syntheticProfile, "steady", 42), "rest");
+  let game = advance(legacyGame(syntheticProfile, "steady", 42), "rest");
   const line = "経験を、次の仕事へ。<script>一行</script>";
   game = recordCareerReflection(game, "age-30", line);
   game = advance(game, { id: "switch", target: "custom", name: "合成クラウド社", role: "tech", companyType: "unknown", facts: null });
@@ -868,4 +871,19 @@ test("ending allows replay from a saved scene with another choice", async ({ pag
   await expect(page.locator("#choices")).toContainText("学ぶ");
   await page.locator('#choices [data-choice="learn"]').click();
   await expect(page.locator("#journey-next")).toBeVisible();
+});
+
+test("a life event appears in the timeline with its human-readable title", async ({ page }) => {
+  let game;
+  for (let seed = 0; seed < 5000; seed++) {
+    const candidate = advance(createGame({ ...syntheticProfile, partner: "partner" }, "steady", seed), "rest");
+    if (candidate.history[0].incident?.id === "partnerSeparation") { game = candidate; break; }
+  }
+  expect(game).toBeTruthy();
+  await page.goto("/");
+  await page.locator("#import-save-file").setInputFiles(saveFile(game));
+  const year = page.locator("#journey-years .journey-year").first();
+  await year.locator(".timeline-details > summary").click();
+  await expect(year.locator(".incident-note")).toContainText("パートナーと別れる");
+  await expect(year.locator(".incident-note")).not.toContainText("partnerSeparation");
 });

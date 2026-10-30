@@ -3,11 +3,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createContext, runInContext } from "node:vm";
 import {
-  createGame, advance, advanceYears, availableChoices, suggestedChoices,
+  createGame as originalCreateGame, advance, advanceYears, availableChoices, suggestedChoices,
   eventFor, amortizeYear, encodeSave, decodeSave, replay, compareWorlds,
   applyScene, validateGeneratedScene, profileStoryContext, MAX_AGE, CHOICES,
   careerSeenUntil, previousDirectionStep,
 } from "../public/engine.js";
+
+// Preserve the historical incident distribution in existing scenarios.
+const createGame = (...args) => originalCreateGame(...[...args, ...Array(Math.max(0, 25 - args.length)).fill(undefined)].map((v, i) => i === 24 && v === undefined ? 110 : v));
 import { storyRequest, sceneSchema } from "../public/story.js";
 import { careerMilestones } from "../public/careers.js";
 
