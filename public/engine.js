@@ -4488,3 +4488,61 @@ function validateReflections(raw, game) {
 export function recordCareerReflection(game, id, text) {
   return { ...game, reflections: validateReflections({ ...game.reflections, [id]: text }, game) };
 }
+
+// Rebuild the state at the choice, preserving every saved simulation boundary.
+function branchState(g, step) {
+  return replay(g.profile, g.scenario, g.seed, g.decisions.slice(0, step), Object.fromEntries(Object.entries(g.scenes ?? {}).filter(([key]) => Number(key) < step)), false,
+    g.dynamicFrom, g.worldFrom, g.retirementFrom, g.careLeaveSalaryFrom, g.prepayFrom,
+    g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom,
+    g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom,
+    g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, g.oddsFrom);
+}
+
+// Five simulated years including the choice year. A death before year five
+// makes a five-year comparison unavailable, rather than inventing a result.
+function branchProjection(state, decision) {
+  let next = advance(state, decision);
+  for (let year = 1; year < 5; year++) {
+    if (next.ended) return null;
+    next = advance(next, "rest");
+  }
+  return { savings: next.savings, income: next.income };
+}
+
+export function branchReview(g) {
+  const candidates = (g.history ?? []).flatMap((h, i) => {
+    const chance = h.outcome?.chance;
+    if (i < (g.oddsFrom ?? g.decisions.length) || !Number.isFinite(chance) ||
+        !["success", "setback"].includes(h.outcome?.kind) ||
+        !g.scenes?.[String(i)]?.options?.length) return []; // continuation years have no choice to compare
+    return [{ step: i, age: h.age, label: h.choiceLabel, chance, success: h.outcome.kind === "success" }];
+  }).sort((a, b) => a.chance - b.chance || a.step - b.step).slice(0, 3);
+  return candidates.sort((a, b) => a.step - b.step).map((point) => {
+    const result = { ...point, selectedForecast: null, alternatives: [], comparison: null };
+    try {
+      const state = branchState(g, point.step);
+      const selected = g.decisions[point.step];
+      const options = g.scenes?.[String(point.step)]?.options ?? [];
+      let selectedIndex = options.findIndex((o) => JSON.stringify(o.decision ?? o.id) === JSON.stringify(selected));
+      if (selectedIndex < 0) selectedIndex = options.findIndex((o) => o.id === decisionId(selected));
+      result.selectedForecast = choiceForecast(state, selected);
+      const actual = branchProjection(state, selected);
+      for (const [index, option] of options.entries()) {
+        if (index === selectedIndex) continue;
+        const decision = option.decision ?? option.id;
+        try {
+          const forecast = choiceForecast(state, decision);
+          result.alternatives.push({ label: option.label, forecast });
+          const projected = actual && branchProjection(state, decision);
+          if (!projected) continue;
+          const savingsDiff = projected.savings - actual.savings;
+          const incomeDiff = projected.income - actual.income;
+          const score = Math.max(Math.abs(savingsDiff), Math.abs(incomeDiff));
+          if (!result.comparison || score > result.comparison.score)
+            result.comparison = { label: option.label, actual, alternative: projected, savingsDiff, incomeDiff, score };
+        } catch { result.alternatives.push({ label: option.label, forecast: null }); }
+      }
+    } catch { /* Old or incomplete saves still show their recorded outcome. */ }
+    return result;
+  });
+}

@@ -844,3 +844,14 @@ test("four cards show engine odds and low-health care commands remain usable wit
   await page.locator('[data-care-action="rest"]').click();
   await expect(page.locator("#journey-next")).toBeVisible();
 });
+
+test("ending shows turning point estimates", async ({ page }) => {
+  const scene = { title: "選択", body: "次を考える", options: ["focus", "learn", "rest"].map((id) => ({ id, label: id === "focus" ? "仕事" : id === "learn" ? "学ぶ" : "休む", hint: "選ぶ" })) };
+  let game = quietGame();
+  while (!game.ended) game = advance(applyScene(game, scene), "focus");
+  await page.goto("/");
+  await page.locator("#import-save-file").setInputFiles(saveFile(game));
+  await expect(page.locator("#ending-branches")).toContainText("人生の分岐点");
+  await expect(page.locator("#ending-branches")).toContainText("当時の成功率");
+  await expect(page.locator("#ending-branches")).toContainText("同じ運命で、その後5年を中立に過ごした場合の比較");
+});
