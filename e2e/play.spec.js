@@ -308,6 +308,14 @@ test("ending resume shows the career map and milestone line, copies locally, and
   await page.locator("#import-save-file").setInputFiles(saveFile(game));
   const card = page.locator("#ending-resume");
   await expect(card).toBeVisible();
+  const downloadPromise = page.waitForEvent("download");
+  await card.locator("#save-timeline-card").click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("unwritten-life-card.png");
+  const stream = await download.createReadStream();
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  expect([...Buffer.concat(chunks).subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
   await expect(card.locator(".resume-timeline")).toContainText("合成クラウド社");
   await expect(card.locator(".career-reflections")).toContainText(line);
   await expect(card.locator(".resume-discoveries")).toContainText("この人生で出会った会社");

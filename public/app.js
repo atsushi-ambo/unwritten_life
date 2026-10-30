@@ -51,6 +51,8 @@ import {
   discoveredCompanies,
   COMPANY_DISCOVERY_NOTE,
   lifeStory,
+  shareCardContent,
+  wrapCardText,
   peakRankLabel,
   yearSpan,
   deathHeadline,
@@ -385,6 +387,78 @@ function renderLifeStory() {
     section.append(node("p", "大きな転機のない、穏やかな歩みでした。", "field-note"));
   return section;
 }
+function renderShareCard() {
+  const section = node("section");
+  const save = node("button", "カードを画像で保存", "button");
+  save.type = "button";
+  save.id = "save-timeline-card";
+  const share = node("button", "カードを共有", "button");
+  share.type = "button";
+  const status = node("p", "", "field-note");
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  const story = lifeStory(game, RANKS);
+  // Career-end titles may contain an employer name; reconstruct those headlines.
+  const end = game.history.at(-1)?.careerEnd;
+  const titles = { leaveBusiness: "事業を離れ、仕事に区切りをつけた", stepDown: `${peakRankLabel(game.position?.rank, RANKS)}を退任し、仕事に区切りをつけた`, early: "早めに仕事から離れ、次の暮らしへ進んだ", retire: "定年を迎え、仕事から退いた" };
+  const headline = end ? `${game.age}歳、${titles[end.reason] ?? "仕事に区切りをつけた"}。` : story.headline;
+  const data = shareCardContent(story, peakRankLabel(story.stats.peakRank, RANKS), headline);
+  const summary = node("p", `画像の説明：Unwritten Life。${data.headline} 年収 ${data.income}、純資産 ${data.netWorth}、いちばん上の役職 ${data.rank}、転職 ${data.moves}。${data.points.join("、")}。ゲーム内の架空の経歴です。`, "field-note");
+  const filename = "unwritten-life-card.png";
+  const makeBlob = () => new Promise((resolve, reject) => {
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1200; canvas.height = 630;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#243f35"; ctx.fillRect(0, 0, 1200, 630);
+      ctx.fillStyle = "#e4d8ad"; ctx.font = "bold 25px system-ui, sans-serif"; ctx.fillText("UNWRITTEN LIFE", 60, 55);
+      const draw = (text, x, y, width, size, lines = 1, color = "#fffef9") => {
+        ctx.font = `bold ${size}px system-ui, sans-serif`; ctx.fillStyle = color;
+        wrapCardText(text, width, lines, (s) => ctx.measureText(s).width).forEach((line, i) => ctx.fillText(line, x, y + i * (size + 8)));
+      };
+      draw(data.headline, 60, 110, 1080, 36, 2);
+      draw("年収（はじめ → ピーク）", 60, 225, 500, 21, 1, "#e4d8ad");
+      draw(data.income, 60, 270, 500, 30);
+      draw("純資産（はじめ → おわり）", 620, 225, 520, 21, 1, "#e4d8ad");
+      draw(data.netWorth, 620, 270, 520, 30);
+      draw("いちばん上の役職", 60, 325, 500, 21, 1, "#e4d8ad");
+      draw(data.rank, 60, 365, 500, 27, 2);
+      draw(`転職 ${data.moves}`, 620, 345, 520, 27);
+      draw("人生の転機", 60, 445, 1080, 21, 1, "#e4d8ad");
+      data.points.forEach((point, i) => draw(point, 60, 485 + i * 32, 1080, 21));
+      draw("ゲーム内の架空の経歴です。", 60, 600, 1080, 18, 1, "#dcded2");
+      canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("PNG")), "image/png");
+    } catch (error) { reject(error); }
+  });
+  const download = (blob) => {
+    const url = URL.createObjectURL(blob), link = document.createElement("a");
+    link.href = url; link.download = filename; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
+  save.addEventListener("click", async () => {
+    status.textContent = "画像を作成しています。";
+    try { download(await makeBlob()); status.textContent = "ダウンロードを開始しました。"; }
+    catch { status.textContent = "画像を作成できませんでした。"; }
+  });
+  share.hidden = true;
+  if (typeof navigator.share === "function" && typeof navigator.canShare === "function" && typeof File !== "undefined") {
+    try { share.hidden = !navigator.canShare({ files: [new File([], filename, { type: "image/png" })] }); } catch { /* unsupported */ }
+  }
+  // Safari needs the click's user activation for navigator.share, so the PNG is
+  // prepared ahead of time and the click only awaits an already settled promise.
+  let ready = null;
+  if (!share.hidden) { ready = makeBlob(); ready.catch(() => { ready = null; }); }
+  share.addEventListener("click", async () => {
+    status.textContent = "画像を作成しています。";
+    try {
+      const blob = await (ready ?? makeBlob());
+      try { await navigator.share({ files: [new File([blob], filename, { type: "image/png" })] }); status.textContent = "共有画面を開きました。"; }
+      catch { download(blob); status.textContent = "ダウンロードを開始しました。"; }
+    } catch { status.textContent = "画像を作成できませんでした。"; }
+  });
+  section.append(save, share, status, summary, node("p", "会社名や名前、AIが生成した場面の文章は含まれません。画像は端末内で作成します。", "field-note"));
+  return section;
+}
 function renderCareerResume() {
   const record = careerRecord(game);
   const card = node("section", undefined, "career-resume");
@@ -394,7 +468,7 @@ function renderCareerResume() {
   // points are already in the story's decades, so they are not listed again.
   const title = node("h3", "勤務先と役割");
   title.id = "resume-title";
-  card.append(renderLifeStory(), title, node("p", `${game.profile.age}歳から${game.age}歳まで・${game.decisions.length}年間。ゲーム内の架空の経歴で、実際の職務経歴を証明するものではありません。`, "resume-period"));
+  card.append(renderLifeStory(), renderShareCard(), title, node("p", `${game.profile.age}歳から${game.age}歳まで・${game.decisions.length}年間。ゲーム内の架空の経歴で、実際の職務経歴を証明するものではありません。`, "resume-period"));
   const timeline = node("ol", undefined, "resume-timeline");
   for (const t of record.tenures) {
     const row = node("li");
