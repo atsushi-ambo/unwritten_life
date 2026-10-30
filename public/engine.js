@@ -4490,12 +4490,22 @@ export function recordCareerReflection(game, id, text) {
 }
 
 // Rebuild the state at the choice, preserving every saved simulation boundary.
-function branchState(g, step) {
-  return replay(g.profile, g.scenario, g.seed, g.decisions.slice(0, step), Object.fromEntries(Object.entries(g.scenes ?? {}).filter(([key]) => Number(key) < step)), false,
+function branchState(g, step, includeScene = false) {
+  return replay(g.profile, g.scenario, g.seed, g.decisions.slice(0, step), Object.fromEntries(Object.entries(g.scenes ?? {}).filter(([key]) => Number(key) < step || (includeScene && Number(key) === step))), false,
     g.dynamicFrom, g.worldFrom, g.retirementFrom, g.careLeaveSalaryFrom, g.prepayFrom,
     g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom,
     g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom,
-    g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, g.oddsFrom);
+    g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, g.oddsFrom,
+    g.directionBlocks?.filter(([, end]) => end <= step));
+}
+
+export function rewindTo(g, step) {
+  if (!Number.isInteger(step) || step < 0 || step >= g.decisions.length) throw new RangeError("Invalid rewind step");
+  const result = branchState(g, step, true);
+  const reached = new Set(careerMilestones(result).map((m) => m.id));
+  result.reflections = Object.fromEntries(Object.entries(g.reflections ?? {}).filter(([id]) => reached.has(id)));
+  result.careerSeen = careerSeenUntil(g, step);
+  return result;
 }
 
 // Five simulated years including the choice year. A death before year five

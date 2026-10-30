@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { branchReview, createGame, advance, applyScene, choiceForecast } from '../public/engine.js';
+import { rewindTo, branchReview, createGame, advance, applyScene, choiceForecast } from '../public/engine.js';
 
 const profile = { age: 30, region: 'city', job: 'tech', income: 500, ai: 'sometimes', priority: 'balance', gender: 'undisclosed', household: 'solo', savings: 500, stocks: 100, monthlyCost: 12, rent: 7, housing: 'rent', companyType: 'unknown', company: '', pension: 180 };
 const scene = { title: '選択', body: '次を考える', options: ['focus', 'learn', 'rest'].map(id => ({ id, label: id === 'focus' ? '仕事' : id === 'learn' ? '学ぶ' : '休む', hint: '選ぶ' })) };
@@ -24,4 +24,21 @@ test('実行不能な選択肢を除外し、旧セーブでも落ちない', ()
   assert.notEqual(branchReview(game)[0].comparison?.label, '高額な起業');
   delete game.oddsFrom;
   assert.deepEqual(branchReview(game), []);
+});
+
+
+test('選んだ年へ副作用なく戻り、同じ選択を再現する', () => {
+  let game = applyScene(createGame(profile, 'steady', 567), scene);
+  game = advance(game, 'focus');
+  game = advance(applyScene(game, scene), 'rest');
+  const original = structuredClone(game);
+  const rewind = rewindTo(game, 0);
+  assert.deepEqual(game, original);
+  assert.deepEqual(rewind, rewindTo(game, 0));
+  assert.deepEqual(rewind.scenes['0'], game.scenes['0']);
+  assert.equal(rewind.scenes['1'], undefined);
+  assert.deepEqual(advance(rewind, 'focus').history[0], game.history[0]);
+  for (const step of [-1, 2, 0.5, NaN]) assert.throws(() => rewindTo(game, step), RangeError);
+  delete game.oddsFrom;
+  assert.equal(rewindTo(game, 0).decisions.length, 0);
 });
