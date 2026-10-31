@@ -1715,6 +1715,25 @@ export function careerIncidentFactors(g, choice) {
   const success = recent.some((h) => h.outcome?.kind === "success" || h.incident?.id === "bigRole");
   return { strain, transition, success };
 }
+// Stars use thresholds on favorable multipliers: <= .8, < .98, <= 1.02,
+// < 1.2, and >= 1.2 map to 1..5. Stability/load invert risk.
+export function payType(employer = {}) {
+  const table = {
+    services: [0.97, 1, 1.25], product: [1.05, 1.15, 1.1],
+    inhouse: [1, 0.9, 0.9], public: [0.93, 0.5, 0.7],
+    self: [1, 1, 1], unknown: [1, 1, 1],
+  };
+  const [pay, risk, load] = table[employer.workModel] ?? table.unknown;
+  const stability = risk * (employer.companyType === "large" ? 0.85 : 1);
+  const stars = (x) => x <= 0.8 ? 1 : x < 0.98 ? 2 : x <= 1.02 ? 3 : x < 1.2 ? 4 : 5;
+  return { pay, stability, load, stars: { pay: stars(pay), stability: stars(1 / stability), load: stars(1 / load) } };
+}
+export function payTypeLabel(employer) {
+  const type = payType(employer);
+  if (type.pay === 1 && type.stability === 1 && type.load === 1) return "";
+  const mark = (n) => ["×", "△", "○", "◎", "◎"][n - 1];
+  return `給与${mark(type.stars.pay)} 安定${mark(type.stars.stability)} ゆとり${mark(type.stars.load)}`;
+}
 export function incidentRates(g, choice, employer = g.employer, outcome = null) {
   const working =
     !g.retired && g.age < g.profile.retirementAge && choice !== "retire" &&
@@ -1747,6 +1766,11 @@ export function incidentRates(g, choice, employer = g.employer, outcome = null) 
       rates.harassment = 0.012 * strain;
       rates.burnout = 0.003 * strain;
     }
+  }
+  if (g.decisions.length >= g.payTypeFrom && working) {
+    const type = payType(employer);
+    rates.burnout *= type.load;
+    if (rates.layoff !== undefined) rates.layoff *= type.stability;
   }
   if (careerOffers(g) && !isRetiredAt(g) && g.age + 1 < g.profile.retirementAge && choice !== "retire" &&
     (inCompany({ ...g, employer }) || employer.kind === "seeking")) {
@@ -2205,6 +2229,7 @@ const REALISTIC_CEILINGS = Object.freeze({
 // Soft ceiling for one employer: raises shrink above half of it and are
 // nearly gone at twice it. Real cuts stay undamped; yearly noise is symmetric.
 export function salaryCeiling(g, employer = g.employer) {
+  const multiplier = g.decisions.length >= g.payTypeFrom ? payType(employer).pay : 1;
   if (payRealism(g))
     return Math.round(Math.max(
       REALISTIC_CEILINGS[employer.role] *
@@ -2213,7 +2238,7 @@ export function salaryCeiling(g, employer = g.employer) {
         (employer.kind === "venture" ? 1.8 : 1) *
         (employer.kind === "venture" ? 1 : [1, 1.12, 1.3, 1.5][RANKS[g.position?.rank]?.level ?? 0]),
       g.profile.income * 1.15,
-    ));
+    ) * multiplier);
   const base =
     SALARY_CEILINGS[employer.role] *
     { metro: 1.2, city: 1, rural: 0.85 }[g.region] *
@@ -2224,7 +2249,7 @@ export function salaryCeiling(g, employer = g.employer) {
     (employer.kind === "venture"
       ? 1
       : [1, 1.1, 1.25, 1.45][RANKS[g.position?.rank]?.level ?? 0]);
-  return Math.round(Math.max(base, g.profile.income * 1.3));
+  return Math.round(Math.max(base, g.profile.income * 1.3) * multiplier);
 }
 // Raises are damped; the separate zero-mean noise gets the same scale in
 // both directions. Each real factor below 1 (negative growth, care leave)

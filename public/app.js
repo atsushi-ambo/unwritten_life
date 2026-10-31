@@ -13,6 +13,7 @@ import {
   CHOICES,
   decisionId,
   choiceForecast,
+  payTypeLabel,
   branchReview,
   rewindTo,
   displayIntention,
@@ -1164,6 +1165,12 @@ function renderGame() {
   ]
     .filter(Boolean)
     .join(" / ");
+  const treatment = game.decisions.length >= game.payTypeFrom ? payTypeLabel(game.employer) : "";
+  if (treatment) {
+    const note = node("small", ` / ${treatment}`);
+    note.title = "ゲーム上の待遇タイプ。実在企業の評価ではありません";
+    $("profile-caption").append(note);
+  }
   $("world-badge").textContent = `AIの未来：${SCENARIOS[game.scenario].label} / 景気の背景：${ERAS[game.era ?? "standard"].label}`;
   // Income and net worth sit in the top band; the sidebar keeps the four
   // indicators and folds the money breakdown away.
@@ -1424,6 +1431,14 @@ function renderGame() {
             `候補：${option.decision.name} / ${JOBS[option.decision.role].label}（架空の転職・AIの候補は未確認）`,
           ),
         );
+      if (option.decision?.id === "switch" && game.decisions.length >= game.payTypeFrom) {
+        const label = payTypeLabel(option.decision);
+        if (label) {
+          const note = node("small", label);
+          note.title = "ゲーム上の待遇タイプ。実在企業の評価ではありません";
+          copy.append(note);
+        }
+      }
       button.append(
         node("span", "▶", "command-cursor"),
         node("span", c.icon, "choice-symbol"),
@@ -2170,6 +2185,12 @@ function renderCareerOffers() {
       node("strong", offer.company),
       node("span", offer.work),
     );
+    const treatment = game.decisions.length >= game.payTypeFrom && offer.decision.id === "switch" ? payTypeLabel(offer.decision) : "";
+    if (treatment) {
+      const note = node("small", treatment);
+      note.title = "ゲーム上の待遇タイプ。実在企業の評価ではありません";
+      button.append(note);
+    }
     button.addEventListener("click", () => {
       if (revision !== currentRevision || generating) return;
       try {
