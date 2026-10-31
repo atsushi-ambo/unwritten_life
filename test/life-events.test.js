@@ -10,7 +10,7 @@ const profile = familyProfile({ age: 30, partner: "partner", children: 0 });
 
 test("boundary preserves old rates and new events respect eligibility", () => {
   const g = createGame(profile);
-  const old = incidentRates({ ...g, lifeEventsFrom: 110 }, "rest");
+  const old = incidentRates({ ...g, lifeEventsFrom: 110, payTypeFrom: 110 }, "rest");
   const current = incidentRates(g, "rest");
   assert.deepEqual(Object.fromEntries(Object.entries(current).filter(([id]) => !ids.includes(id))), old);
   assert.ok(!incidentRates({ ...g, family: { ...g.family, partner: false } }, "rest").partnerSeparation);
@@ -71,7 +71,7 @@ test("meeting adds a zero-income partner and an old save preserves its years", (
   assert.ok(next);
   assert.equal(next.family.partner, true);
   assert.equal(next.history[0].budget.partnerIncome ?? 0, 0);
-  const legacy = advance({ ...createGame(solo, "steady", 42), lifeEventsFrom: 110 }, "rest");
+  const legacy = advance({ ...createGame(solo, "steady", 42), lifeEventsFrom: 110, payTypeFrom: 110 }, "rest");
   const saved = JSON.parse(encodeSave(legacy));
   delete saved.lifeEventsFrom;
   const restored = decodeSave(JSON.stringify(saved));

@@ -4,7 +4,7 @@ import { createGame, advance, encodeSave, decodeSave, compareWorlds, rewindTo } 
 import { ERAS, worldAt } from "../public/world.js";
 import { storyRequest } from "../public/story.js";
 import { simulationProfile } from "../scripts/simulate-life-realism.mjs";
-const game = (era = "standard", seed = 42) => createGame(simulationProfile(), "steady", seed, ...Array(22).fill(0), era);
+const game = (era = "standard", seed = 42) => createGame(simulationProfile(), "steady", seed, ...Array(22).fill(0), era, 0);
 
 test("era thresholds and independent rolls preserve the standard world", () => {
   assert.deepEqual(Object.values(ERAS).map(e => [e.downturn, e.expansion]), [[.23,.72],[.12,.55],[.30,.85],[.45,.90]]);

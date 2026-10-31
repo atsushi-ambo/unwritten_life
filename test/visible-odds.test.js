@@ -21,7 +21,7 @@ const boundaries = ["dynamicFrom", "worldFrom", "retirementFrom", "careLeaveSala
   "paceFrom", "reemploymentPayFrom", "driftFrom", "familyFrom", "growthFrom", "cycleFrom", "spendFrom", "oddsFrom", "lifeEventsFrom"];
 const replayGame = (g, length = g.decisions.length) => replay(g.profile, g.scenario, g.seed, g.decisions.slice(0, length),
   Object.fromEntries(Object.entries(g.scenes).filter(([step]) => Number(step) <= length)), false,
-  ...boundaries.map((key) => g[key]), g.directionBlocks?.filter(([, end]) => end <= length));
+  ...boundaries.map((key) => g[key]), g.directionBlocks?.filter(([, end]) => end <= length), g.era, g.payTypeFrom);
 const hash = (g) => createHash("sha256").update(JSON.stringify(g.history)).digest("hex");
 
 test("each displayed work probability is the actual draw threshold and recorded chance, including raised-role moves", () => {
@@ -51,13 +51,14 @@ test("old history and saved current scenes retain pre-edit hashes, while future 
     const g = decodeSave(JSON.stringify(save));
     assert.equal(g.oddsFrom, save.decisions.length + (nextHash ? 1 : 0));
     assert.equal(g.lifeEventsFrom, save.decisions.length + (nextHash ? 1 : 0));
+    assert.equal(g.payTypeFrom, save.decisions.length + (nextHash ? 1 : 0));
     assert.equal(hash(g), historyHash);
     assert.deepEqual(g.scenes, save.scenes);
     assert.equal(g.history[0].intention, "newSkill");
     assert.deepEqual(decodeSave(encodeSave(g)), g);
     assert.deepEqual(replayGame(g), g);
     assert.equal(replayGame(g, 0).oddsFrom, g.oddsFrom);
-    assert.equal(replayGame(g, 0).lifeEventsFrom, g.lifeEventsFrom);
+    assert.equal(replayGame(g, 0).lifeEventsFrom, g.lifeEventsFrom, undefined, g.era, g.payTypeFrom);
     for (const w of compareWorlds(g)) assert.equal(w.oddsFrom, g.oddsFrom);
     if (nextHash) {
       const next = advance(g, g.scenes[1].options[0].decision);

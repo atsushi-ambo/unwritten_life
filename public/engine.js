@@ -1026,6 +1026,7 @@ export function createGame(
   oddsFrom = 0,
   lifeEventsFrom = 0,
   era = "standard",
+  payTypeFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -1097,7 +1098,8 @@ export function createGame(
     !Number.isInteger(oddsFrom) ||
     oddsFrom < 0 ||
     oddsFrom > MAX_AGE ||
-    !Number.isInteger(lifeEventsFrom) || lifeEventsFrom < 0 || lifeEventsFrom > MAX_AGE
+    !Number.isInteger(lifeEventsFrom) || lifeEventsFrom < 0 || lifeEventsFrom > MAX_AGE ||
+    !Number.isInteger(payTypeFrom) || payTypeFrom < 0 || payTypeFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -1131,6 +1133,7 @@ export function createGame(
     spendFrom,
     oddsFrom,
     lifeEventsFrom,
+    payTypeFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -4223,6 +4226,7 @@ export function replay(
   lifeEventsFrom = 0,
   directionBlocks,
   era = "standard",
+  payTypeFrom = 0,
 ) {
   if (
     !Array.isArray(decisions) ||
@@ -4260,6 +4264,7 @@ export function replay(
     oddsFrom,
     lifeEventsFrom,
     era,
+    payTypeFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -4322,6 +4327,7 @@ export function compareWorlds(g) {
       g.lifeEventsFrom,
       g.directionBlocks,
       g.era,
+      g.payTypeFrom,
     ),
   );
 }
@@ -4379,7 +4385,8 @@ export function encodeSave(g) {
     !Number.isInteger(g.oddsFrom) ||
     g.oddsFrom < 0 ||
     g.oddsFrom > MAX_AGE ||
-    !Number.isInteger(g.lifeEventsFrom) || g.lifeEventsFrom < 0 || g.lifeEventsFrom > MAX_AGE
+    !Number.isInteger(g.lifeEventsFrom) || g.lifeEventsFrom < 0 || g.lifeEventsFrom > MAX_AGE ||
+    !Number.isInteger(g.payTypeFrom) || g.payTypeFrom < 0 || g.payTypeFrom > MAX_AGE
   )
     fail();
   const value = JSON.stringify({
@@ -4406,6 +4413,7 @@ export function encodeSave(g) {
     spendFrom: g.spendFrom,
     oddsFrom: g.oddsFrom,
     lifeEventsFrom: g.lifeEventsFrom,
+    payTypeFrom: g.payTypeFrom,
     profile: g.profile,
     scenario: g.scenario,
     era: g.era ?? "standard",
@@ -4494,6 +4502,8 @@ export function decodeSave(value) {
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
     undefined,
     Object.hasOwn(d, "era") ? d.era : "standard",
+    Object.hasOwn(d, "payTypeFrom") ? d.payTypeFrom
+      : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
   );
   if (Object.hasOwn(d, "directionBlocks"))
     game.directionBlocks = validateDirectionBlocks(d.directionBlocks, game.decisions.length);
@@ -4545,7 +4555,7 @@ function branchState(g, step, includeScene = false) {
     g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom,
     g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom,
     g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, g.oddsFrom, g.lifeEventsFrom,
-    g.directionBlocks?.filter(([, end]) => end <= step), g.era);
+    g.directionBlocks?.filter(([, end]) => end <= step), g.era, g.payTypeFrom);
 }
 
 export function rewindTo(g, step) {

@@ -821,7 +821,7 @@ function timelineRevealing() {
 // tiles follow the reveal cursor; saves and AI requests keep using game.
 function revealedTimelineState(current, shown) {
   if (shown >= current.history.length) return current;
-  const initial = createGame(current.profile, current.scenario, current.seed, ...Array(22).fill(0), current.era);
+  const initial = createGame(current.profile, current.scenario, current.seed, ...Array(22).fill(0), current.era, 0);
   const entry = current.history[shown - 1];
   // Cards carry the age during their year. Before the block's first card is
   // out, show where the player stood when choosing: the year after the last
@@ -840,7 +840,7 @@ function revealedTimelineState(current, shown) {
 }
 function renderRevealedStatus() {
   const state = revealedTimelineState(game, timelineShown),
-    initial = createGame(game.profile, game.scenario, game.seed, ...Array(22).fill(0), game.era),
+    initial = createGame(game.profile, game.scenario, game.seed, ...Array(22).fill(0), game.era, 0),
     previous = state.history.at(-2) ?? initial;
   renderCareerMap($("career-map"), state);
   $("chapter-label").textContent = state.ended
@@ -897,7 +897,7 @@ function updateEarlierYears() {
     ? `これまでの${rows.length}年を見る（${rows[0].dataset.year}〜${rows.at(-1).dataset.year}年）` : "";
 }
 function appendTimelineYear(h, index, target = $("journey-years")) {
-  const before = game.history[index - 1] ?? createGame(game.profile, game.scenario, game.seed, ...Array(22).fill(0), game.era);
+  const before = game.history[index - 1] ?? createGame(game.profile, game.scenario, game.seed, ...Array(22).fill(0), game.era, 0);
   const row = node("article", undefined, "journey-year");
   row.dataset.year = h.year;
   row.append(
@@ -1129,7 +1129,7 @@ function renderGame() {
   $("choices").hidden = revealing;
   $("career-actions").hidden = revealing;
   const complete = game.ended,
-    initial = createGame(game.profile, game.scenario, game.seed, ...Array(22).fill(0), game.era),
+    initial = createGame(game.profile, game.scenario, game.seed, ...Array(22).fill(0), game.era, 0),
     previous = game.history.length > 1 ? game.history.at(-2) : initial;
   const change = (key, monetary = false) => {
     if (!game.history.length) return "";
@@ -1293,6 +1293,7 @@ function renderGame() {
         game.oddsFrom,
         game.lifeEventsFrom,
         game.era,
+        game.payTypeFrom,
       );
       showGame(true);
     });
@@ -1654,6 +1655,7 @@ $("profile-form").addEventListener("submit", (e) => {
       crypto.getRandomValues(new Uint32Array(1))[0],
       ...Array(22).fill(0),
       new FormData(e.currentTarget).get("era"),
+      0,
     );
     remember = $("remember").checked;
     showGame(true, true);
@@ -1748,6 +1750,7 @@ $("undo-button").addEventListener("click", () => {
     game.lifeEventsFrom,
     blocks,
     game.era,
+    game.payTypeFrom,
   );
   const reached = new Set(careerMilestones(game).map((m) => m.id));
   game.reflections = Object.fromEntries(Object.entries(reflections).filter(([id]) => reached.has(id)));
