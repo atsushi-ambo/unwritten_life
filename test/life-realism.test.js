@@ -20,7 +20,7 @@ const replayGame = (g, decisions = g.decisions, scenes = g.scenes) => replay(
   g.profile, g.scenario, g.seed, decisions, scenes, false, g.dynamicFrom, g.worldFrom,
   g.retirementFrom, g.careLeaveSalaryFrom, g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom,
   g.incidentFrom, g.careerPathFrom, g.careerEndFrom, g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom, g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, g.oddsFrom, g.lifeEventsFrom,
-  decisions.length === g.decisions.length ? g.directionBlocks : undefined);
+  decisions.length === g.decisions.length ? g.directionBlocks : undefined, g.era, g.payTypeFrom);
 const within = (value, low, high, label) => assert.ok(value >= low && value <= high, `${label}: ${value}`);
 
 test("automatic re-employment has bounded age-dependent first and later year rates", () => {

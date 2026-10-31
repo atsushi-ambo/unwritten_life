@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createContext, runInContext } from "node:vm";
 import {
-  choiceForecast, createGame, advance, availableChoices, encodeSave, decodeSave,
+  payTypeLabel, choiceForecast, createGame, advance, availableChoices, encodeSave, decodeSave,
   validateProfile, optionalProfileInputs, profileInputForLevel,
 } from "../public/engine.js";
 import { storyRequest } from "../public/story.js";
@@ -84,7 +84,7 @@ test("career renderer shows only AI offers, waits while generating, and preserve
   };
   const decisions = [];
   const context = createContext({
-    $, node, choiceForecast, revision: 1, careerMode: "switch", careerDraft: null,
+    $, node, choiceForecast, payTypeLabel, revision: 1, careerMode: "switch", careerDraft: null,
     careerGenerating: false, generating: false, careerError: "",
     game: createGame(profile), timelineRevealing: () => false,
     takeCareerDecision: (d) => decisions.push(d),

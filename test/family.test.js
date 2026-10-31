@@ -21,7 +21,7 @@ const replayGame = (g, length = g.decisions.length) => replay(
   g.prepayFrom, g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom,
   g.careerEndFrom, g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom,
   g.reemploymentPayFrom, g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, g.oddsFrom, g.lifeEventsFrom,
-  g.directionBlocks?.filter(([, end]) => end <= length),
+  g.directionBlocks?.filter(([, end]) => end <= length), g.era, g.payTypeFrom,
 );
 
 test("consecutive family-first years pay 85% of full-time pay; normal hours restore the entire evolving basis", () => {

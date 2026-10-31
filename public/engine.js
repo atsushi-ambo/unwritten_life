@@ -1026,6 +1026,7 @@ export function createGame(
   oddsFrom = 0,
   lifeEventsFrom = 0,
   era = "standard",
+  payTypeFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -1097,7 +1098,8 @@ export function createGame(
     !Number.isInteger(oddsFrom) ||
     oddsFrom < 0 ||
     oddsFrom > MAX_AGE ||
-    !Number.isInteger(lifeEventsFrom) || lifeEventsFrom < 0 || lifeEventsFrom > MAX_AGE
+    !Number.isInteger(lifeEventsFrom) || lifeEventsFrom < 0 || lifeEventsFrom > MAX_AGE ||
+    !Number.isInteger(payTypeFrom) || payTypeFrom < 0 || payTypeFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -1131,6 +1133,7 @@ export function createGame(
     spendFrom,
     oddsFrom,
     lifeEventsFrom,
+    payTypeFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -1712,6 +1715,25 @@ export function careerIncidentFactors(g, choice) {
   const success = recent.some((h) => h.outcome?.kind === "success" || h.incident?.id === "bigRole");
   return { strain, transition, success };
 }
+// Stars use thresholds on favorable multipliers: <= .8, < .98, <= 1.02,
+// < 1.2, and >= 1.2 map to 1..5. Stability/load invert risk.
+export function payType(employer = {}) {
+  const table = {
+    services: [0.97, 1, 1.25], product: [1.05, 1.15, 1.1],
+    inhouse: [1, 0.9, 0.9], public: [0.93, 0.5, 0.7],
+    self: [1, 1, 1], unknown: [1, 1, 1],
+  };
+  const [pay, risk, load] = table[employer.workModel] ?? table.unknown;
+  const stability = risk * (employer.companyType === "large" ? 0.85 : 1);
+  const stars = (x) => x <= 0.8 ? 1 : x < 0.98 ? 2 : x <= 1.02 ? 3 : x < 1.2 ? 4 : 5;
+  return { pay, stability, load, stars: { pay: stars(pay), stability: stars(1 / stability), load: stars(1 / load) } };
+}
+export function payTypeLabel(employer) {
+  const type = payType(employer);
+  if (type.pay === 1 && type.stability === 1 && type.load === 1) return "";
+  const mark = (n) => ["×", "△", "○", "◎", "◎"][n - 1];
+  return `給与${mark(type.stars.pay)} 安定${mark(type.stars.stability)} ゆとり${mark(type.stars.load)}`;
+}
 export function incidentRates(g, choice, employer = g.employer, outcome = null) {
   const working =
     !g.retired && g.age < g.profile.retirementAge && choice !== "retire" &&
@@ -1744,6 +1766,11 @@ export function incidentRates(g, choice, employer = g.employer, outcome = null) 
       rates.harassment = 0.012 * strain;
       rates.burnout = 0.003 * strain;
     }
+  }
+  if (g.decisions.length >= g.payTypeFrom && working) {
+    const type = payType(employer);
+    rates.burnout *= type.load;
+    if (rates.layoff !== undefined) rates.layoff *= type.stability;
   }
   if (careerOffers(g) && !isRetiredAt(g) && g.age + 1 < g.profile.retirementAge && choice !== "retire" &&
     (inCompany({ ...g, employer }) || employer.kind === "seeking")) {
@@ -2202,6 +2229,7 @@ const REALISTIC_CEILINGS = Object.freeze({
 // Soft ceiling for one employer: raises shrink above half of it and are
 // nearly gone at twice it. Real cuts stay undamped; yearly noise is symmetric.
 export function salaryCeiling(g, employer = g.employer) {
+  const multiplier = g.decisions.length >= g.payTypeFrom ? payType(employer).pay : 1;
   if (payRealism(g))
     return Math.round(Math.max(
       REALISTIC_CEILINGS[employer.role] *
@@ -2210,7 +2238,7 @@ export function salaryCeiling(g, employer = g.employer) {
         (employer.kind === "venture" ? 1.8 : 1) *
         (employer.kind === "venture" ? 1 : [1, 1.12, 1.3, 1.5][RANKS[g.position?.rank]?.level ?? 0]),
       g.profile.income * 1.15,
-    ));
+    ) * multiplier);
   const base =
     SALARY_CEILINGS[employer.role] *
     { metro: 1.2, city: 1, rural: 0.85 }[g.region] *
@@ -2221,7 +2249,7 @@ export function salaryCeiling(g, employer = g.employer) {
     (employer.kind === "venture"
       ? 1
       : [1, 1.1, 1.25, 1.45][RANKS[g.position?.rank]?.level ?? 0]);
-  return Math.round(Math.max(base, g.profile.income * 1.3));
+  return Math.round(Math.max(base, g.profile.income * 1.3) * multiplier);
 }
 // Raises are damped; the separate zero-mean noise gets the same scale in
 // both directions. Each real factor below 1 (negative growth, care leave)
@@ -4223,6 +4251,7 @@ export function replay(
   lifeEventsFrom = 0,
   directionBlocks,
   era = "standard",
+  payTypeFrom = 0,
 ) {
   if (
     !Array.isArray(decisions) ||
@@ -4260,6 +4289,7 @@ export function replay(
     oddsFrom,
     lifeEventsFrom,
     era,
+    payTypeFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -4322,6 +4352,7 @@ export function compareWorlds(g) {
       g.lifeEventsFrom,
       g.directionBlocks,
       g.era,
+      g.payTypeFrom,
     ),
   );
 }
@@ -4379,7 +4410,8 @@ export function encodeSave(g) {
     !Number.isInteger(g.oddsFrom) ||
     g.oddsFrom < 0 ||
     g.oddsFrom > MAX_AGE ||
-    !Number.isInteger(g.lifeEventsFrom) || g.lifeEventsFrom < 0 || g.lifeEventsFrom > MAX_AGE
+    !Number.isInteger(g.lifeEventsFrom) || g.lifeEventsFrom < 0 || g.lifeEventsFrom > MAX_AGE ||
+    !Number.isInteger(g.payTypeFrom) || g.payTypeFrom < 0 || g.payTypeFrom > MAX_AGE
   )
     fail();
   const value = JSON.stringify({
@@ -4406,6 +4438,7 @@ export function encodeSave(g) {
     spendFrom: g.spendFrom,
     oddsFrom: g.oddsFrom,
     lifeEventsFrom: g.lifeEventsFrom,
+    payTypeFrom: g.payTypeFrom,
     profile: g.profile,
     scenario: g.scenario,
     era: g.era ?? "standard",
@@ -4494,6 +4527,8 @@ export function decodeSave(value) {
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
     undefined,
     Object.hasOwn(d, "era") ? d.era : "standard",
+    Object.hasOwn(d, "payTypeFrom") ? d.payTypeFrom
+      : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
   );
   if (Object.hasOwn(d, "directionBlocks"))
     game.directionBlocks = validateDirectionBlocks(d.directionBlocks, game.decisions.length);
@@ -4545,7 +4580,7 @@ function branchState(g, step, includeScene = false) {
     g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom,
     g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom,
     g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, g.oddsFrom, g.lifeEventsFrom,
-    g.directionBlocks?.filter(([, end]) => end <= step), g.era);
+    g.directionBlocks?.filter(([, end]) => end <= step), g.era, g.payTypeFrom);
 }
 
 export function rewindTo(g, step) {

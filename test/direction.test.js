@@ -6,7 +6,7 @@ import {
 } from "../public/engine.js";
 
 // Preserve the historical incident distribution in existing scenarios.
-const createGame = (...args) => originalCreateGame(...[...args, ...Array(Math.max(0, 25 - args.length)).fill(undefined)].map((v, i) => i === 24 && v === undefined ? 110 : v));
+const createGame = (...args) => originalCreateGame(...[...args, ...Array(Math.max(0, 27 - args.length)).fill(undefined)].map((v, i) => (i === 24 || i === 26) && v === undefined ? 110 : v));
 import { readyAI, replyFor, ollamaText, fourReply } from "./fixtures/ai-replies.js";
 import { storyRequest } from "../public/story.js";
 
@@ -17,7 +17,7 @@ const quiet = (p = profile, seed = 42) => createGame(p, "steady", seed, 0, 0, 0,
 const replayGame = (g) => replay(g.profile, g.scenario, g.seed, g.decisions, g.scenes, false,
   g.dynamicFrom, g.worldFrom, g.retirementFrom, g.careLeaveSalaryFrom, g.prepayFrom,
   g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom,
-  g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom, g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, g.oddsFrom, g.lifeEventsFrom, g.directionBlocks);
+  g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom, g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, g.oddsFrom, g.lifeEventsFrom, g.directionBlocks, g.era, g.payTypeFrom);
 
 test("a five-year direction preserves every decision, passes a reflection milestone and replays exactly", () => {
   const base = quiet(), snapshot = structuredClone(base);

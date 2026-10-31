@@ -155,9 +155,9 @@ test("multi-year progress stops at the first retired year and respects the saved
 });
 
 test("local narrative distinguishes product/SI work and preserves game facts instead of making new hires", () => {
-  const a = advance(createGame(p, "steady", 42), "studyDaily");
+  const a = advance({ ...createGame(p, "steady", 42), payTypeFrom: 110 }, "studyDaily");
   const b = advance(
-    createGame({ ...p, workModel: "product" }, "steady", 42),
+    { ...createGame({ ...p, workModel: "product" }, "steady", 42), payTypeFrom: 110 },
     "studyDaily",
   );
   assert.match(a.history[0].episode.body, /顧客/);
