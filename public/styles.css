@@ -2307,3 +2307,12 @@ dialog p, dialog li { font-size: 14px; }
   .choices .choice { min-height: 44px; padding: 8px 10px 8px 28px; }
   .choices .choice b { display: block; line-height: 1.4; overflow-wrap: anywhere; }
 }
+
+#menu-dialog { width: min(42rem, calc(100vw - 2rem)); max-height: 85vh; overflow: auto; }
+#menu-dialog section { margin-block: 1.5rem; }
+#menu-dialog h3 { font-size: 1rem; }
+.stat-warning { color: #805000; }
+.stat-critical { color: #a11b1b; }
+.stat-warning-note { font-size: 0.8rem; margin: 0.25rem 0; }
+.stat-warning progress { accent-color: #a86900; }
+.stat-critical progress { accent-color: #b32121; }
