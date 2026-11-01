@@ -340,6 +340,10 @@ function stat(label, value, unit, delta, metric) {
     bar.value = metric;
     bar.setAttribute("aria-label", label);
     el.append(bar);
+    if (metric < 30) {
+      el.classList.add(metric < 10 ? "stat-critical" : "stat-warning");
+      el.append(node("p", `⚠ ${label === "心と体のゆとり" ? "ゆとりが少ない。休養を選ぶと回復します" : `${label}が少なくなっています`}`, "stat-warning-note"));
+    }
   }
   if (delta) el.append(node("div", delta, "stat-delta"));
   return el;
@@ -1642,6 +1646,18 @@ for (const [trigger, dialog] of [
   ["assumptions-button", "assumptions-dialog"],
 ])
   $(trigger).addEventListener("click", () => $(dialog).showModal());
+for (const id of ["compare-button", "career-compare-button", "game-import-save", "game-export-save", "game-delete-save"])
+  $(id).addEventListener("click", () => $("menu-dialog").close(), { capture: true });
+$("menu-button").addEventListener("click", () => $("menu-dialog").showModal());
+// Safari does not focus a clicked button, so return focus to it explicitly.
+$("menu-dialog").addEventListener("close", () => $("menu-button").focus());
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || event.repeat || event.altKey || event.ctrlKey || event.metaKey ||
+      $("game").hidden || document.querySelector("dialog[open]") ||
+      event.target.closest("input, textarea, select, [contenteditable]")) return;
+  event.preventDefault();
+  $("menu-dialog").showModal();
+});
 for (const dialog of document.querySelectorAll("dialog")) {
   dialog
     .querySelector("[data-close]")

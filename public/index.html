@@ -47,6 +47,9 @@
             <p class="lead">
               もし、あの内定を受けていたら。もし、いまの会社に残ったら。<br />年収も、働き方も、家族との時間も。<br />2026年のあなたの職歴から、まだ書かれていないキャリアがはじまる。
             </p>
+            <p class="model-note">
+              人生の終わりまで進む架空のゲームです。寿命・収入・資産の個人予測ではありません。場面と選択肢は、接続したAIがあなたの入力から5年ごとにつくります。
+            </p>
             <div class="hero-actions">
               <button class="text-button" id="demo-button">
                 架空の人物で試す →
@@ -750,9 +753,7 @@
                 この設定ですぐ始める ↗
               </button>
             </div>
-            <p class="model-note">
-              人生の終わりまで進む架空のゲームです。寿命・収入・資産の個人予測ではありません。場面と選択肢は、接続したAIがあなたの入力から5年ごとにつくります。
-            </p>
+
             <p class="error" id="form-error" role="alert"></p>
           </form>
         </section>
@@ -761,7 +762,8 @@
         <div class="game-top">
           <button id="back-setup" class="text-button">
             ← 現在地を設定しなおす</button
-          ><span id="world-badge" class="pill"></span>
+          ><span id="world-badge" class="pill"></span><button id="menu-button" class="button secondary small" type="button">メニュー</button>
+
         </div>
         <div class="section-heading">
           <div>
@@ -769,9 +771,7 @@
             <h1 id="chapter-title" tabindex="-1"></h1>
             <p id="profile-caption"></p>
           </div>
-          <button id="compare-button" class="button secondary">
-            3つの世界を比べる ↗
-          </button>
+
         </div>
         <progress
           id="progress"
@@ -787,19 +787,67 @@
         </div>
         <div class="game-grid">
           <aside class="life-sidebar" aria-label="キャリアのステータス">
-            <section id="career-map" class="career-map" aria-label="キャリアマップ"></section>
+
             <div id="stats"></div>
-            <button id="game-delete-save" class="text-button" hidden>
-              端末の保存を削除
-            </button>
+
           </aside>
           <div class="story-column">
-            <section
+
+
+
+
+            <section id="timeline" class="timeline" aria-labelledby="timeline-title" tabindex="-1" hidden>
+              <h2 id="timeline-title">流れていく、キャリアと暮らし。</h2>
+              <p id="reflection-note" class="field-note">節目の一行は任意です。セーブに残り、AIには送りません。書かなくても年月は進みます。</p>
+              <div id="timeline-controls" class="timeline-controls">
+                <button id="timeline-pause" type="button" class="button secondary small" aria-pressed="false">一時停止</button>
+                <label>速さ <select id="timeline-speed"><option value="1">等速</option><option value="2">2倍</option></select></label>
+                <div class="journey-footer"><button id="journey-next" type="button" class="button secondary small">次の決断まで進む</button></div>
+              </div>
+              <p id="timeline-status" class="field-note" role="status"></p>
+              <details id="journey-earlier" class="journey-earlier" hidden>
+                <summary id="journey-earlier-summary"></summary>
+                <div id="journey-earlier-years" class="journey-years"></div>
+              </details>
+              <div id="journey-years" class="journey-years" aria-live="polite" aria-relevant="additions"></div>
+            </section>
+
+            <div id="event-card" class="event-card"></div>
+            <div class="choice-heading">
+              <h2 id="choice-title">コマンド / 次の5年の方針</h2>
+              <span id="command-help">1〜4で選択 · ↑↓で移動 · Enterで決定</span>
+            </div>
+            <div id="choices" class="choices" role="group" aria-labelledby="choice-title" aria-describedby="command-help"></div>
+            <div id="career-actions" class="career-actions"></div>
+            <div class="game-controls">
+              <button id="undo-button" class="text-button">
+                ↶ ひとつ前の方針に戻る</button
+              ><span id="save-status"></span>
+            </div>
+
+
+          </div>
+        </div>
+      </section>
+      <div id="notice" role="status" aria-live="polite"></div>
+    </main>
+    <footer class="footer wrap">
+      <span>unwritten life <small>© 2026</small></span
+      ><span>未来は、まだ書かれていない。</span
+      ><button id="assumptions-button" class="text-button">
+        前提とプライバシー ↗
+      </button>
+    </footer>
+    <div id="book-notice" class="book-notice" aria-live="polite"></div>
+    <dialog id="menu-dialog" aria-labelledby="menu-title">
+<div class="dialog-top"><h2 id="menu-title">メニュー</h2><button type="button" data-close aria-label="閉じる">×</button></div>
+<section><h3>世界の局面</h3>            <section
               id="world-context"
               class="world-context"
               aria-label="世界と家族の状況"
-            ></section>
-            <details class="model-notes">
+            ></section></section>
+<section>            <section id="career-map" class="career-map" aria-label="キャリアマップ"></section></section>
+<section>            <details class="model-notes">
               <summary>この世界の仕組みと、端末内の知識</summary>
               <p>
                 2026年から先の世界・勤務先の業況・成功率はゲーム上の仮定です。過去のデータは普及の遅れや業種差を考える参考で、AIの未来にそのまま当てはめていません。景気と国際情勢は原則3年の局面。学習・家族の結果は別に抽選し、同じ選択でも別の人生になります。「戻る」は同じ乱数を保つため、同じ選択は同じ結果です。
@@ -817,72 +865,37 @@
                 </p>
                 <div id="knowledge-catalog"></div>
               </details>
-            </details>
-            <div class="game-toolbar">
-              <button id="career-compare-button" class="button secondary small">
-                転職・残るの4択を見る ↗
-              </button>
-            </div>
-            <div class="ai-row">
+            </details></section>
+<section><h3>AIの状況</h3>            <div class="ai-row">
               <p id="ai-status" class="field-note" role="status"></p>
               <p id="ai-timing" class="field-note" aria-live="off" hidden></p>
               <details class="context-preview">
                 <summary>AIに渡す情報</summary>
                 <pre id="context-preview"></pre>
               </details>
-            </div>
-            <section id="timeline" class="timeline" aria-labelledby="timeline-title" tabindex="-1" hidden>
-              <h2 id="timeline-title">流れていく、キャリアと暮らし。</h2>
-              <p id="reflection-note" class="field-note">節目の一行は任意です。セーブに残り、AIには送りません。書かなくても年月は進みます。</p>
-              <div id="timeline-controls" class="timeline-controls">
-                <button id="timeline-pause" type="button" class="button secondary small" aria-pressed="false">一時停止</button>
-                <label>速さ <select id="timeline-speed"><option value="1">等速</option><option value="2">2倍</option></select></label>
-                <div class="journey-footer"><button id="journey-next" type="button" class="button secondary small">次の決断まで進む</button></div>
-              </div>
-              <p id="timeline-status" class="field-note" role="status"></p>
-              <details id="journey-earlier" class="journey-earlier" hidden>
-                <summary id="journey-earlier-summary"></summary>
-                <div id="journey-earlier-years" class="journey-years"></div>
-              </details>
-              <div id="journey-years" class="journey-years" aria-live="polite" aria-relevant="additions"></div>
-            </section>
-            <label class="field-note"><input id="text-reveal-setting" type="checkbox"> 場面の文字送り</label>
-            <div id="event-card" class="event-card"></div>
-            <div class="choice-heading">
-              <h2 id="choice-title">コマンド / 次の5年の方針</h2>
-              <span id="command-help">1〜4で選択 · ↑↓で移動 · Enterで決定</span>
-            </div>
-            <div id="choices" class="choices" role="group" aria-labelledby="choice-title" aria-describedby="command-help"></div>
-            <div id="career-actions" class="career-actions"></div>
-            <div class="game-controls">
-              <button id="undo-button" class="text-button">
-                ↶ ひとつ前の方針に戻る</button
-              ><span id="save-status"></span>
-            </div>
-            <div class="save-transfer">
+            </div></section>
+<section><h3>比べる</h3>          <button id="compare-button" class="button secondary">
+            3つの世界を比べる ↗
+          </button>            <div class="game-toolbar">
+              <button id="career-compare-button" class="button secondary small">
+                転職・残るの4択を見る ↗
+              </button>
+            </div></section>
+<section><h3>保存</h3>            <div class="save-transfer">
               <button id="game-export-save" class="text-button" type="button">
                 セーブを書き出す
               </button>
               <button id="game-import-save" class="text-button" type="button">
                 セーブを読み込む
               </button>
-            </div>
+            </div>            <button id="game-delete-save" class="text-button" hidden>
+              端末の保存を削除
+            </button></section>
+<section><h3>設定</h3>            <label class="field-note"><input id="text-reveal-setting" type="checkbox"> 場面の文字送り</label></section>
             <p class="model-note">
               金額は2026年の購買力にそろえたゲーム内の概算。生活の指標はゲーム上の表現です。
             </p>
-          </div>
-        </div>
-      </section>
-      <div id="notice" role="status" aria-live="polite"></div>
-    </main>
-    <footer class="footer wrap">
-      <span>unwritten life <small>© 2026</small></span
-      ><span>未来は、まだ書かれていない。</span
-      ><button id="assumptions-button" class="text-button">
-        前提とプライバシー ↗
-      </button>
-    </footer>
-    <div id="book-notice" class="book-notice" aria-live="polite"></div>
+</dialog>
     <dialog id="book-dialog" aria-labelledby="book-title">
       <div class="dialog-top"><h2 id="book-title">発見の図鑑</h2><button type="button" data-close aria-label="閉じる">×</button></div>
       <div id="book-content"></div>

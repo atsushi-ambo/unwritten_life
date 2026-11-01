@@ -148,3 +148,11 @@ function checkCareerCopy(html) {
     assert.ok(elements.get(id).attrs.some((a) => a.name === "hidden"), id);
   assert.doesNotMatch(html, /unsafe-inline|unsafe-eval/);
 }
+
+test("game menu keeps secondary controls available in the mobile build", async () => {
+  const html = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
+  const menu = html.slice(html.indexOf('<dialog id="menu-dialog"'), html.indexOf('</dialog>', html.indexOf('<dialog id="menu-dialog"')));
+  for (const id of ["world-context", "career-map", "ai-status", "compare-button", "career-compare-button", "game-export-save", "game-import-save", "game-delete-save", "text-reveal-setting"]) {
+    assert.ok(menu.includes(`id="${id}"`), id);
+  }
+});
