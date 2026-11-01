@@ -1646,7 +1646,7 @@ for (const [trigger, dialog] of [
   ["assumptions-button", "assumptions-dialog"],
 ])
   $(trigger).addEventListener("click", () => $(dialog).showModal());
-for (const id of ["compare-button", "career-compare-button", "game-import-save"])
+for (const id of ["compare-button", "career-compare-button", "game-import-save", "game-export-save", "game-delete-save"])
   $(id).addEventListener("click", () => $("menu-dialog").close(), { capture: true });
 $("menu-button").addEventListener("click", () => $("menu-dialog").showModal());
 // Safari does not focus a clicked button, so return focus to it explicitly.
