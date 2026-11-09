@@ -152,8 +152,16 @@ export function initProfileGuide({ document: doc = document, window: win = windo
   function renderBulk() {
     restore(); body.replaceChildren(); status.textContent='';
     title.textContent='まとめて話す・書く'; byId('guide-next').hidden=true; byId('guide-back').disabled=false;
-    const text=el('textarea');text.id='guide-bulk-text';text.maxLength=6000;text.rows=6;text.setAttribute('aria-label','まとめて伝えるプロフィール');
-    body.append(el('p','現在の仕事や暮らし、これからの希望を、話しやすい順でどうぞ。分からない項目は話さなくて大丈夫です。','field-note'),text);voice(text,body);
+    const text=el('textarea');text.id='guide-bulk-text';text.maxLength=6000;text.rows=4;text.setAttribute('aria-label','まとめて伝えるプロフィール');text.setAttribute('aria-describedby','guide-speaking-topics');text.placeholder='話した内容がここに入ります。直接書いたり、あとから直したりもできます。';
+    const topics=el('section','','guide-speaking-topics');topics.id='guide-speaking-topics';topics.setAttribute('aria-label','話すことの目安');
+    topics.append(el('p','この中のひとつからで大丈夫。順番も自由です。会社名・番地・金額は省けます。','field-note'));
+    for(const [question,hint] of [
+      ['いま、どんな仕事や活動をしていますか？','年代・おおまかな地域・仕事内容など、言える範囲で。'],
+      ['どんな暮らしをしていますか？','家族や住まいのこと。話したくないことは省いて大丈夫です。'],
+      ['これから、どんなことを試したいですか？','働き方や暮らしの希望、大切にしたいことなど。'],
+    ]){const item=el('div','','guide-speaking-topic');item.append(el('b',question),el('small',hint));topics.append(item);}
+    const more=el('details');more.append(el('summary','もっと詳しく話したいときの目安（任意）'),el('p','経験や得意なこと、業界、住まいの形、家族についての希望など。年収や金融資産も、入れたい場合だけ金額と単位を伝えられます。会社名・番地・正確な金額は必須ではありません。','field-note'));topics.append(more);
+    body.append(topics);voice(text,body);body.append(text);
     let selectedAI=JSON.stringify(getAIInfo());const aiInfo=getAIInfo();body.append(el('p','整理に使うAI：'+(aiInfo?.provider??'未接続')+' / '+(aiInfo?.model??'AIの接続画面で設定してください')+(aiInfo?.baseURL?' / '+aiInfo.baseURL:''),'field-note'));
     const consent=el('input');consent.type='checkbox';consent.id='guide-extraction-consent';
     const label=el('label');label.append(consent,doc.createTextNode('この文章を接続中のAIへ送り、項目へ整理することを許可する（APIの場合は利用枠を消費します）'));body.append(label,el('p','送るのはこの文章だけです。閉じても開始済みのAI処理の利用枠は戻りません。','field-note'));
