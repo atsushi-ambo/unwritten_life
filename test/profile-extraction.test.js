@@ -28,3 +28,8 @@ test('zero children without a numeric unit is explicit, debt is not an asset and
  assert.throws(()=>validateExtractedProfile({fields:{children:{value:2,evidence:'12人'}}},'12人'));
  assert.throws(()=>validateExtractedProfile({fields:{savings:{value:300,evidence:'借金300万円'}}},'借金300万円'));
 });
+test('spoken housing and family wishes stay distinct from current family counts',()=>{
+ const text='持ち家です。子どもはいません。希望は2人です。';
+ const out=validateExtractedProfile({fields:{housing:{value:'own',evidence:'持ち家です'},children:{value:0,evidence:'子どもはいません'},childrenWish:{value:'two',evidence:'希望は2人です'}}},text);
+ assert.equal(out.fields.children.value,0);assert.equal(out.fields.childrenWish.value,'two');assert.equal(out.fields.housing.value,'own');
+});
