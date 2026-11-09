@@ -3116,7 +3116,7 @@ document.addEventListener("keydown", (event) => {
   }
 });
 readStoredGame();
-initProfileGuide({getAIInfo:()=>({provider:aiState?.provider,model:aiState?.model,baseURL:aiState?.baseURL}),extractProfile:(text,cloudConsent,signal)=>api(hosted?"/api/scene":"/api/profile",hosted?{mode:"profile",text,cloudConsent,choiceVersion:1}:{text,cloudConsent},{signal})});
+initProfileGuide({getAIInfo:()=>({provider:aiState?.provider,model:aiState?.model,baseURL:aiState?.baseURL}),extractProfile:async(text,cloudConsent,signal)=>{const result=await api(hosted?"/api/scene":"/api/profile",hosted?{mode:"profile",text,cloudConsent,choiceVersion:1}:{text,cloudConsent},{signal});if(result.accounting){aiState=result.accounting;renderAI();}return result;}});
 loadBook();
 updateMunicipalityRegion();
 status()

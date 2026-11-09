@@ -174,8 +174,9 @@ export function initProfileGuide({ document: doc = document, window: win = windo
         const selected=[];
         for(const [key,item] of Object.entries(result.fields)){
           const spec=PROFILE_FIELDS[key],row=el('label'),check=el('input');check.type='checkbox';check.checked=!before[key];
-          const input=el('input');input.value=String(item.value);input.setAttribute('aria-label',spec.label+'の抽出結果');
-          if(spec.values){input.readOnly=true;}
+          const input=el(spec.values?'select':'input');
+          if(spec.values)for(const [value,label] of Object.entries(spec.values)){const option=el('option',label);option.value=value;input.append(option);}
+          input.value=String(item.value);input.setAttribute('aria-label',spec.label+'の抽出結果');
           row.append(check,el('small','現在：'+(spec.values?.[before[key]]??(before[key]||'空欄'))),el('span',spec.label+'：'+(spec.values?.[item.value]??item.value)),input,el('small','根拠：'+item.evidence));preview.append(row);
           selected.push({key,item,spec,input,check});
         }

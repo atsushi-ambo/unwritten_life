@@ -2370,5 +2370,5 @@ dialog p, dialog li { font-size: 14px; }
 .guide-overview { border-top: 1px solid var(--line); padding-top: 12px; font-size: 12px; line-height: 1.7; }
 #guide-bulk-text { width:100%; min-height:150px; font-size:16px; }
 #guide-bulk-preview > label { display:grid; grid-template-columns:auto 1fr; gap:8px; padding-block:12px; border-bottom:1px solid var(--line); }
-#guide-bulk-preview input:not([type="checkbox"]), #guide-bulk-preview small { grid-column:2; min-width:0; width:100%; }
+#guide-bulk-preview input:not([type="checkbox"]), #guide-bulk-preview select, #guide-bulk-preview small { grid-column:2; min-width:0; width:100%; }
 #guide-bulk-preview small { overflow-wrap:anywhere; }
