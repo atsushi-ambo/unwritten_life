@@ -2372,3 +2372,9 @@ dialog p, dialog li { font-size: 14px; }
 #guide-bulk-preview > label { display:grid; grid-template-columns:auto 1fr; gap:8px; padding-block:12px; border-bottom:1px solid var(--line); }
 #guide-bulk-preview input:not([type="checkbox"]), #guide-bulk-preview select, #guide-bulk-preview small { grid-column:2; min-width:0; width:100%; }
 #guide-bulk-preview small { overflow-wrap:anywhere; }
+.guide-speaking-topics { margin-bottom: 12px; }
+.guide-speaking-topic { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.guide-speaking-topic b, .guide-speaking-topic small { display:block; line-height:1.6; }
+.guide-speaking-topic b { font-size:14px; }
+.guide-speaking-topic small { margin-top:2px; font-size:12px; }
+.guide-speaking-topics details { margin-top:10px; font-size:12px; }
