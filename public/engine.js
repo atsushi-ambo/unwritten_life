@@ -2501,6 +2501,7 @@ export function validateGeneratedScene(
     )
       fail();
     // AI may propose an employer, never mark its invented facts as verified.
+    if(fresh && decision.id === 'familyPlan') return {...o,label:'新しい家族を迎える準備を進める',hint:'出産・家族を迎える準備。家族が増える可能性があります。',reason:'希望と支援体制を確かめる',decision:{...decision,intent:'新しい家族を迎える準備を進める'}};
     return { ...o, decision };
   });
   const scene = validateLifeOptions(validateScene({ ...raw, options }, g), g, mode);

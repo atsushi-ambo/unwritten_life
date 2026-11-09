@@ -197,12 +197,13 @@ async function status() {
   renderAI();
   return data;
 }
-async function api(path, body) {
+async function api(path, body, {signal} = {}) {
   if (!apiToken) await status();
   if (!hosted && serverStale) throw new Error(staleNotice);
   if (hosted && path !== "/api/scene")
     throw new Error("このスマホ版では接続設定と企業ページの取得は使えません。");
   const res = await fetch(path, {
+    signal,
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -1515,7 +1516,7 @@ function renderGame() {
         node("b", option.label),
         node(
           "small",
-          `${option.hint}${offer ? ` / 開業費${offer.setup}万円・年間運営費${VENTURES[offer.venture].overhead}万円` : ""} / 行動：${c.label}`,
+          `${option.hint}${offer ? ` / 開業費${offer.setup}万円・年間運営費${VENTURES[offer.venture].overhead}万円` : ""} / 実行内容：${c.label}。${c.hint}`,
         ),
       );
       appendChoiceForecast(copy, option.decision ?? option.id);
@@ -3115,7 +3116,7 @@ document.addEventListener("keydown", (event) => {
   }
 });
 readStoredGame();
-initProfileGuide();
+initProfileGuide({getAIInfo:()=>({provider:aiState?.provider,model:aiState?.model,baseURL:aiState?.baseURL}),extractProfile:async(text,cloudConsent,signal)=>{const result=await api(hosted?"/api/scene":"/api/profile",hosted?{mode:"profile",text,cloudConsent,choiceVersion:1}:{text,cloudConsent},{signal});if(result.accounting){aiState=result.accounting;renderAI();}return result;}});
 loadBook();
 updateMunicipalityRegion();
 status()

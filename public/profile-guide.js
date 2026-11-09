@@ -1,9 +1,11 @@
+import {PROFILE_FIELDS,validateExtractedProfile} from './profile-extraction.js';
 // Guided editing shares the existing form as its only source of truth.
 // Speech is opt-in and never submits the profile or starts the game.
-export function initProfileGuide({ document: doc = document, window: win = window } = {}) {
+export function initProfileGuide({ document: doc = document, window: win = window, extractProfile, getAIInfo = () => null } = {}) {
   const byId = (id) => doc.getElementById(id), form = byId("profile-form"), dialog = byId("profile-guide");
   const title = byId("guide-title"), body = byId("guide-body"), status = byId("guide-status");
   if (!["profile-form", "profile-guide", "guide-title", "guide-body", "guide-status", "guide-progress", "guide-back", "guide-next", "guide-open", "guide-scroll", "quick-summary", "budget-summary", "company-name", "company-confirmed", "company-search", "company-research-panel", "profile-section"].every((id) => byId(id))) { const opener = byId("guide-open"); if (opener) opener.hidden = true; return { close() {} }; }
+  let bulkRevision = 0, bulkController = null, lastApplied = null;
   let step = "start", active = false, moved = [], recorder = null, voiceTarget = null, generation = 0, bindings = new Map();
   const el = (tag, text, cls) => { const n = doc.createElement(tag); if (text) n.textContent = text; if (cls) n.className = cls; return n; };
   const level = () => doc.querySelector('[data-profile-level][aria-pressed="true"]')?.dataset.profileLevel ?? "quick";
@@ -62,6 +64,7 @@ export function initProfileGuide({ document: doc = document, window: win = windo
     if (old) for (const note of dialog.querySelectorAll("[data-voice-status]")) note.textContent = "聞き取りを止めました。";
   }
   function restore() {
+    bulkRevision++; bulkController?.abort(); bulkController=null;
     stopVoice();
     const hadMoved = moved.length > 0;
     for (const [node, marker, state] of moved) {
@@ -110,13 +113,22 @@ export function initProfileGuide({ document: doc = document, window: win = windo
       const local = "processLocally" in rec;
       if (!local && !online.checked) { note.textContent = "端末内の認識に非対応です。オンライン認識を許可するか、OSの音声入力を使ってください。"; settings.open = true; return; }
       if (local) rec.processLocally = !online.checked;
-      rec.lang = "ja-JP"; rec.continuous = false; rec.interimResults = false; rec.maxAlternatives = 1;
+      const bulk = input.id === "guide-bulk-text";
+      rec.lang = "ja-JP"; rec.continuous = bulk; rec.interimResults = false; rec.maxAlternatives = 1;
       const ticket = ++generation; recorder = rec; voiceTarget = input;
-      const before = input.value;
+      const before = input.value; let nextResult = 0; const spoken = [];
       const current = () => ticket === generation && recorder === rec && active && dialog.open && input.isConnected;
       rec.onresult = (event) => {
         if (!current()) return;
-        const transcript = event.results?.[0]?.[0]?.transcript;
+        let transcript;
+        if(bulk){
+          for(let i=Math.max(nextResult,event.resultIndex??0);i<(event.results?.length??0);i++){
+            if(event.results[i].isFinal===false)continue;
+            const part=event.results[i]?.[0]?.transcript;if(typeof part==='string')spoken.push(part);
+            nextResult=i+1;
+          }
+          transcript=spoken.join('。');
+        }else transcript = event.results?.[0]?.[0]?.transcript;
         if (typeof transcript !== "string") return;
         const value = input.tagName === "TEXTAREA" && before.trim() ? `${before}\n${transcript}` : transcript;
         input.value = value.slice(0, input.maxLength > 0 ? input.maxLength : 1000);
@@ -137,6 +149,54 @@ export function initProfileGuide({ document: doc = document, window: win = windo
     online.addEventListener("change", stopVoice);
     input.addEventListener("input", () => { if (!applying && recorder) { stopVoice(); note.textContent = "手入力に切り替えました。"; } });
   }
+  function renderBulk() {
+    restore(); body.replaceChildren(); status.textContent='';
+    title.textContent='まとめて話す・書く'; byId('guide-next').hidden=true; byId('guide-back').disabled=false;
+    const text=el('textarea');text.id='guide-bulk-text';text.maxLength=6000;text.rows=6;text.setAttribute('aria-label','まとめて伝えるプロフィール');
+    body.append(el('p','現在の仕事や暮らし、これからの希望を、話しやすい順でどうぞ。分からない項目は話さなくて大丈夫です。','field-note'),text);voice(text,body);
+    let selectedAI=JSON.stringify(getAIInfo());const aiInfo=getAIInfo();body.append(el('p','整理に使うAI：'+(aiInfo?.provider??'未接続')+' / '+(aiInfo?.model??'AIの接続画面で設定してください')+(aiInfo?.baseURL?' / '+aiInfo.baseURL:''),'field-note'));
+    const consent=el('input');consent.type='checkbox';consent.id='guide-extraction-consent';
+    const label=el('label');label.append(consent,doc.createTextNode('この文章を接続中のAIへ送り、項目へ整理することを許可する（APIの場合は利用枠を消費します）'));body.append(label,el('p','送るのはこの文章だけです。閉じても開始済みのAI処理の利用枠は戻りません。','field-note'));
+    const parse=el('button','内容を整理する','button');parse.type='button';body.append(parse);
+    const preview=el('div');preview.id='guide-bulk-preview';body.append(preview);
+    const back=el('button','項目ごとの入力へ戻る','text-button');back.type='button';back.addEventListener('click',()=>render());body.append(back);
+    const invalidate=()=>{bulkRevision++;bulkController?.abort();preview.replaceChildren();status.textContent="内容が変わりました。確認してから整理し直してください。";};text.addEventListener('input',invalidate);consent.addEventListener('change',invalidate);
+    parse.addEventListener('click',async()=>{
+      stopVoice();preview.replaceChildren();
+      if(selectedAI!==JSON.stringify(getAIInfo())){consent.checked=false;status.textContent='AIの接続先が変わりました。項目ごとの入力に戻り、まとめ入力を開き直して確認してください。';return;}
+      if(!consent.checked){status.textContent='送信する内容と送信先を確認し、許可を入れてください。';return;}
+      const original=text.value,ticket=++bulkRevision;bulkController=new win.AbortController();
+      const before=Object.fromEntries(Object.entries(PROFILE_FIELDS).map(([k,v])=>[k,field(v.selector)?.value]));
+      parse.disabled=true;status.textContent='内容を整理しています…';
+      try{
+        const result=validateExtractedProfile((await extractProfile(original,true,bulkController.signal)).profile,original);
+        if(ticket!==bulkRevision||!dialog.open||!text.isConnected)return;
+        const selected=[];
+        for(const [key,item] of Object.entries(result.fields)){
+          const spec=PROFILE_FIELDS[key],row=el('label'),check=el('input');check.type='checkbox';check.checked=!before[key];
+          const input=el(spec.values?'select':'input');
+          if(spec.values)for(const [value,label] of Object.entries(spec.values)){const option=el('option',label);option.value=value;input.append(option);}
+          input.value=String(item.value);input.setAttribute('aria-label',spec.label+'の抽出結果');
+          row.append(check,el('small','現在：'+(spec.values?.[before[key]]??(before[key]||'空欄'))),el('span',spec.label+'：'+(spec.values?.[item.value]??item.value)),input,el('small','根拠：'+item.evidence));preview.append(row);
+          selected.push({key,item,spec,input,check});
+        }
+        if(!selected.length){status.textContent='項目を確かめられませんでした。もう少し具体的に書くか、項目ごとの入力を使えます。';return;}
+        const apply=el('button','確認した項目を反映する','button');apply.type='button';preview.append(apply);
+        apply.addEventListener('click',()=>{
+          if(ticket!==bulkRevision)return;
+          const accepted={fields:{}};
+          for(const r of selected)if(r.check.checked){let value=r.input.value;if(r.spec.min!==undefined){if(!value.trim()||!/^\d+(?:\.\d+)?$/.test(value)){status.textContent='数値は空欄や指数表記にせず、数字で入力してください。';return;}value=Number(value);if(['age','children'].includes(r.key)&&!Number.isInteger(value)){status.textContent='年齢と人数は整数で入力してください。';return;}}accepted.fields[r.key]={value,evidence:r.item.evidence};}
+          for(const [key,item] of Object.entries(accepted.fields)){const spec=PROFILE_FIELDS[key];if(spec.min!==undefined&&(!Number.isFinite(item.value)||item.value<spec.min||item.value>spec.max)||spec.values&&!Object.hasOwn(spec.values,item.value)||typeof item.value==='string'&&item.value.length>(spec.maxLength??100)){status.textContent='修正した値を確認してください。';return;}}
+          let skipped=0;
+          const updates=Object.entries(accepted.fields).filter(([key])=>{const source=field(PROFILE_FIELDS[key].selector);if(!source||source.value!==before[key]){skipped++;return false;}return true;});
+          lastApplied=updates.map(([key,item])=>({key,before:before[key],after:String(item.value)}));
+          doc.querySelector('[data-profile-level="advanced"]').click();
+          for(const [key,item]of updates)change(field(PROFILE_FIELDS[key].selector),String(item.value));
+          bulkRevision++;step='start';render();status.textContent=skipped?'整理中に変更した項目は保持し、それ以外を反映しました。':'確認した項目を反映しました。会社情報は会社候補を確認してから取得できます。';
+        });status.textContent='抽出結果を確認・修正し、反映したい項目だけ選んでください。まだ入力欄は変更していません。';
+      }catch(error){if(ticket===bulkRevision)status.textContent=error.message;}finally{if(text.isConnected)parse.disabled=false;}
+    });title.focus({preventScroll:true});byId('guide-scroll').scrollTop=0;
+  }
   function render() {
     restore(); body.replaceChildren(); status.textContent = "";
     const list = steps(); if (!list.length) { dialog.close(); return; }
@@ -146,6 +206,8 @@ export function initProfileGuide({ document: doc = document, window: win = windo
     byId("guide-back").disabled = index === 0;
     byId("guide-next").hidden = false;
     byId("guide-next").textContent = last ? "この設定で物語を始める" : "次へ →";
+    if(lastApplied){const undo=el('button','直前のまとめ入力を元に戻す','text-button');undo.type='button';undo.id='guide-bulk-undo';undo.addEventListener('click',()=>{for(const r of lastApplied){const source=field(PROFILE_FIELDS[r.key].selector);if(source.value===r.after)change(source,r.before);}lastApplied=null;render();status.textContent='反映を元に戻しました。会社情報は改めて確認してください。';});body.append(undo);}
+    const bulk=el("button","まとめて話す・書く","button secondary small");bulk.type="button";bulk.id="guide-bulk-open";bulk.addEventListener("click",renderBulk);body.append(bulk);
     const modeLabel = el("label", "入力の詳しさ", "guide-mode");
     const mode = el("select"); mode.id = "guide-mode"; modeLabel.htmlFor = mode.id;
     for (const [value, label] of [["quick", "簡単"], ["standard", "詳しく"], ["advanced", "家族・家計まで"]]) {
@@ -199,7 +261,7 @@ export function initProfileGuide({ document: doc = document, window: win = windo
   win.visualViewport?.addEventListener("resize", fitViewport);
   win.visualViewport?.addEventListener("scroll", fitViewport);
   byId("guide-open").addEventListener("click", () => { active = true; step = "start"; dialog.showModal(); render(); });
-  byId("guide-back").addEventListener("click", () => go(-1));
+  byId("guide-back").addEventListener("click", () => {if(body.querySelector("#guide-bulk-text"))render();else go(-1);});
   byId("guide-next").addEventListener("click", () => {
     if (step !== steps().at(-1)) { go(1); return; }
     if (!form.checkValidity()) {
@@ -209,7 +271,7 @@ export function initProfileGuide({ document: doc = document, window: win = windo
     }
     restore(); active = false; dialog.close(); form.requestSubmit();
   });
-  dialog.addEventListener("close", () => { try { restore(); } finally { active = false; if (!doc.querySelector("dialog[open]")) byId("guide-open").focus(); } });
+  dialog.addEventListener("close", () => { try { restore(); if(body.querySelector("#guide-bulk-text"))body.replaceChildren(); } finally { active = false; if (!doc.querySelector("dialog[open]")) byId("guide-open").focus(); } });
   dialog.addEventListener("cancel", restore);
   dialog.addEventListener("focusin", (event) => { if (recorder && event.target !== voiceTarget && event.target.matches("input,textarea,select")) stopVoice(); });
   doc.addEventListener("visibilitychange", () => { if (doc.hidden) stopVoice(); });

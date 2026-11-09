@@ -50,6 +50,7 @@ export async function buildMobile(output) {
     "app.js",
     "text-reveal.js",
     "profile-guide.js",
+    "profile-extraction.js",
     "book.js",
     "engine.js",
     "world.js",
@@ -77,7 +78,7 @@ export async function buildMobile(output) {
       ? sources
           .get(file)
           .replace(
-            /(\bfrom\s+["'])\.\/(engine|world|careers|story|book|text-reveal|profile-guide)\.js(["'])/g,
+            /(\bfrom\s+["'])\.\/(engine|world|careers|story|book|text-reveal|profile-guide|profile-extraction)\.js(["'])/g,
             `$1./$2.js?v=${revision}$3`,
           )
       : sources.get(file);
