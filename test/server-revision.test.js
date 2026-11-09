@@ -13,7 +13,7 @@ async function fixture(t) {
   t.after(() => rm(dir, { recursive: true, force: true }));
   await mkdir(join(dir, "lib"));
   await mkdir(join(dir, "public"));
-  const files = ["server.mjs", "lib/ai.mjs", "public/engine.js", "public/story.js", "public/world.js", "public/careers.js"];
+  const files = ["server.mjs", "lib/ai.mjs", "public/engine.js", "public/story.js", "public/world.js", "public/careers.js", "public/profile-extraction.js"];
   for (const file of files) await writeFile(join(dir, file), "// startup\n");
   let now = 0;
   const revision = await makeServerRevision({ root: pathToFileURL(dir + "/"), now: () => now });

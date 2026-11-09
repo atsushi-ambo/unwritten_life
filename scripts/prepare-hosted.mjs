@@ -16,6 +16,8 @@ export async function prepareHosted(target) {
   const { files } = await buildMobile(resolve(output, "public"));
   const assets = Object.fromEntries(await Promise.all(files.map(async (file) =>
     [file, await readFile(resolve(output, "public", file), "utf8")])));
+  await copyFile(resolve(root,"public/profile-extraction.js"),resolve(output,"public/profile-extraction.js"));
+  await copyFile(resolve(root,"public/careers.js"),resolve(output,"public/careers.js"));
   await writeFile(resolve(output, "assets.mjs"), `export default ${JSON.stringify(assets)};\n`);
   await mkdir(resolve(output, "lib"), { recursive: true });
   for (const file of ["hosted-ai.mjs", "hosted-worker.mjs"])

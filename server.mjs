@@ -15,6 +15,7 @@ const assets = new Map([
   ["/book.js", ["book.js", "text/javascript"]],
   ["/app.js", ["app.js", "text/javascript"]],
   ["/text-reveal.js", ["text-reveal.js", "text/javascript"]],
+  ["/profile-extraction.js", ["profile-extraction.js", "text/javascript"]],
   ["/profile-guide.js", ["profile-guide.js", "text/javascript"]],
   ["/engine.js", ["engine.js", "text/javascript"]],
   ["/world.js", ["world.js", "text/javascript"]],
@@ -120,6 +121,10 @@ export function makeServer({
           });
         if (req.url === "/api/ai/config")
           return json(res, 200, { ai: await ai.configure(body) });
+        if (req.url === "/api/profile") {
+          if(Object.keys(body).some(k=>!["text","cloudConsent"].includes(k)))throw Error("入力項目を確認してください。");
+          return json(res,200,await ai.extractProfile(body.text,body.cloudConsent));
+        }
         if (req.url === "/api/scene") {
           if (body.choiceVersion !== 1)
             throw new Error("選択肢の形式を確認してください。");

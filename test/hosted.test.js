@@ -631,3 +631,15 @@ test("hosted AI denies other owners or missing owner configuration before databa
 });
 
 test('owner email binding uses verified dispatch identity and rejects another account',async(t)=>{const{db}=database(t);const api=makeHostedAPI({db,origin,ownerEmail:user.email});assert.equal((await api.status(new Request(origin+'/api/status'),user)).status,200);assert.equal((await api.status(new Request(origin+'/api/status'),{userId:'other',email:'other@example.invalid'})).status,403);});
+
+test('hosted bulk extraction uses owner consent, strict input and the existing lifetime budget',async(t)=>{
+ const{db,sql}=database(t);let calls=0;
+ const api=makeHostedAPI({ownerId:user.userId,db,origin,apiKey:'synthetic-key',fetchAI:async()=>{calls++;return Response.json({choices:[{message:{content:JSON.stringify({fields:{age:{value:30,evidence:'30歳'}}})}}]});}});
+ const auth=await session(api);
+ const body={save:undefined,mode:'profile',text:'私は30歳です。'};
+ assert.equal((await api.scene(request(auth,{...body,cloudConsent:false}),user)).status,400);
+ assert.equal((await api.scene(request(auth,{...body,text:'x'.repeat(6001)}),user)).status,400);
+ assert.equal(calls,0);
+ const response=await api.scene(request(auth,body),user);assert.equal(response.status,200);assert.equal((await response.json()).profile.fields.age.value,30);assert.equal(calls,1);
+ assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM ai_attempts').get().n,1);
+});
