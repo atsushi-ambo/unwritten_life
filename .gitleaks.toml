@@ -1,0 +1,12 @@
+[extend]
+useDefault = true
+
+# Ignored local runtime state is not source and must not be uploaded or logged.
+# No rule IDs or actual secret values are allowlisted.
+[[allowlists]]
+paths = [
+  '''(^|/)artifacts/''',
+  '''(^|/)\.claude/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)\.git/''',
+]

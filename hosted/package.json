@@ -1,0 +1,32 @@
+{
+  "name": "unwritten-life-hosted",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <27"
+  },
+  "scripts": {
+    "build": "node scripts/build-worker.mjs && node scripts/validate-artifact.mjs",
+    "start": "wrangler dev --config wrangler.json --local --ip 127.0.0.1 --inspector-port 0",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261023.1",
+    "@types/node": "22.19.19",
+    "drizzle-kit": "0.31.11",
+    "drizzle-orm": "0.45.2",
+    "esbuild": "0.25.12",
+    "typescript": "5.9.3",
+    "wrangler": "4.153.0"
+  },
+  "overrides": {
+    "miniflare": {
+      "sharp": "0.35.5"
+    },
+    "@esbuild-kit/core-utils": {
+      "esbuild": "0.25.12"
+    }
+  }
+}

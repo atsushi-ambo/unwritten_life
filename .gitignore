@@ -1,0 +1,12 @@
+node_modules/
+.DS_Store
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+!.env.example
+coverage/
+artifacts/
+*.log
+.claude/worktrees/
+.claude/.cc-writes
