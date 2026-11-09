@@ -629,3 +629,5 @@ test("hosted AI denies other owners or missing owner configuration before databa
   }
   assert.equal(touched,false);
 });
+
+test('owner email binding uses verified dispatch identity and rejects another account',async(t)=>{const{db}=database(t);const api=makeHostedAPI({db,origin,ownerEmail:user.email});assert.equal((await api.status(new Request(origin+'/api/status'),user)).status,200);assert.equal((await api.status(new Request(origin+'/api/status'),{userId:'other',email:'other@example.invalid'})).status,403);});
