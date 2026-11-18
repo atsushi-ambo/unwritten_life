@@ -44,7 +44,6 @@ export function makeServer({
   revision = serverRevision,
   research = companyPage,
   searchCompanies = makeCompanySearch(),
-  // POSTs per minute for this one local player.
   requestsPerMinute = 60,
 } = {}) {
   const token = randomBytes(32).toString("hex");

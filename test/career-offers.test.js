@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import {
   createGame, advance, advanceDirection, advanceYears, incidentAt, incidentRates,
   pendingCareerOffer, onMentalLeave, availableChoices, validateGeneratedScene,
-  encodeSave, decodeSave, replay, compareWorlds, MAX_AGE, RANKS, applyScene,
+  encodeSave, decodeSave, replay, compareWorlds, MAX_AGE, applyScene,
 } from "../public/engine.js";
 import { storyRequest, SCENE_STYLE, CAREER_DISCOVERY, groundScene } from "../public/story.js";
 import { simulationProfile } from "../scripts/simulate-life-realism.mjs";

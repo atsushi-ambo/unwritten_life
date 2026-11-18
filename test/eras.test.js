@@ -15,7 +15,7 @@ test("era thresholds and independent rolls preserve the standard world", () => {
   }
 });
 test("era survives saves, comparisons, rewind and is validated", () => {
-  let g = advance(advance(game("boom"), "rest"), "rest");
+  const g = advance(advance(game("boom"), "rest"), "rest");
   assert.equal(decodeSave(encodeSave(g)).era, "boom");
   assert.equal(rewindTo(g, 1).era, "boom");
   assert.ok(compareWorlds(g).every(x => x.era === "boom"));

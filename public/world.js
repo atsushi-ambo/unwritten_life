@@ -237,7 +237,6 @@ export function knowledgeFor(
   };
 }
 
-// Prompt packets omit internal search tags and duplicate source metadata.
 export function referencePacket(record) {
   return {
     id: record.id,
@@ -331,7 +330,7 @@ export async function loadKnowledge({ indexedDB, timeoutMs = 2500 } = {}) {
               );
             else {
               records.clear();
-              KNOWLEDGE.forEach((r) => records.put(r));
+              KNOWLEDGE.forEach((r) => { records.put(r); });
               catalog = KNOWLEDGE;
             }
             meta.put({

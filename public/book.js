@@ -28,7 +28,7 @@ export function gameDiscoveries(game, { startHistory = 0, end = game?.history?.l
   if (includeCurrent) {
     add('companies', g.profile?.company, 'profile');
     add('companies', g.employer?.name, `employer:${g.history?.length ?? 0}`);
-    for (const [year, names] of Object.entries(g.careerSeen ?? {})) if (Array.isArray(names)) names.forEach((name, i) => add('companies', name, `career:${year}:${i}`));
+    for (const [year, names] of Object.entries(g.careerSeen ?? {})) if (Array.isArray(names)) names.forEach((name, i) => { add('companies', name, `career:${year}:${i}`); });
     (g.decisions ?? []).forEach((d, i) => { add('choices', decisionId(d), `decision:${i}`); add('companies', d?.name, `decision:${i}`); });
     for (const [year, scene] of Object.entries(g.scenes ?? {})) (scene?.options ?? []).forEach((option, i) => {
       add('choices', option.id, `scene:${year}:${i}`); add('companies', option.decision?.name, `scene:${year}:${i}`);

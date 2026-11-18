@@ -1413,7 +1413,6 @@ progress::-moz-progress-bar {
     transition: none !important;
   }
 }
-/* Local AI, evidence and lifetime controls. */
 textarea {
   font: 12px/1.8 var(--sans);
   width: 100%;
@@ -1754,7 +1753,6 @@ textarea:focus-visible {
   }
 }
 
-/* World context and causal results share the existing quiet paper palette. */
 .quick-grid {
   margin-bottom: 14px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1814,7 +1812,6 @@ textarea:focus-visible {
   }
 }
 
-/* Original retro RPG presentation. Game state and command behavior are shared. */
 :root {
   --paper: #f1ecd7;
   --ink: #203b43;
@@ -2313,11 +2310,9 @@ dialog p, dialog li { font-size: 14px; }
   color: var(--accent);
 }
 
-/* An option that ends the story is marked by the game, not the AI. */
 .choice-ending-note { color: var(--accent); font-weight: 600; }
 .choice-pause-note { color: var(--muted); font-weight: 600; }
 
-/* Engine-authored odds and always available care/search entry points. */
 .choice-odds { font-weight: 700; }
 .choice-risk, .choice-odds-note { line-height: 1.5; }
 .care-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-block: .75rem; }

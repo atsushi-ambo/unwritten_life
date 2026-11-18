@@ -2,7 +2,7 @@
 
 このリポジトリは閲覧用に公開しています。外部からのIssue・PRは受け付けません。Issueは無効、PR作成はGitHubの恒久的な共同管理者限定設定を使い、開発は所有者とその権限で動くエージェントに限ります。外部の方へ共同管理権限を付与していません。
 
-Node.js 24 LTS、`npm ci --ignore-scripts`、`npm run check`、`npm run audit` を使います。ゲームモデルは `public/engine.js`、場面の依頼は `public/story.js`、AI接続は `lib/ai.mjs`、公開URLの取得は `lib/network.mjs` です。
+Node.js 24 LTS、`npm ci --ignore-scripts`、`npm run check`、`npm run audit` を使います。ブラウザとサーバーの境界は `biome.json` のlint規則、検証手順は [AGENTS.md](AGENTS.md#verify-changes) を参照。
 
 PRはmainを取り込んだブランチから作ります。`automerge` ラベルを付けると、CI（Check）が最新のコミットで全部成功した時点で自動でマージされます（所有者のPRだけ。仕組みはREADMEのCIの節）。ラベルなしのPRは手動でマージします。
 

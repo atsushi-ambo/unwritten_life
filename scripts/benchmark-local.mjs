@@ -372,6 +372,7 @@ try {
       body: JSON.stringify({ model, keep_alive: 0 }),
       signal: AbortSignal.timeout(30_000),
     });
+    // biome-ignore lint/correctness/noUnsafeFinally: caught below and recorded; this throw never replaces the benchmark failure.
     if (!response.ok) throw new Error(`Unload: HTTP ${response.status}`);
   } catch (error) {
     report.cleanupError = error.message;

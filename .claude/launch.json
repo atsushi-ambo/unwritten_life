@@ -1,6 +1,14 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "dev", "runtimeExecutable": "node", "runtimeArgs": ["server.mjs"], "port": 4341 }
+    {
+      "name": "unwritten-life",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 4341
+    }
   ]
 }

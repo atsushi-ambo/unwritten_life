@@ -2,7 +2,6 @@ import { revealEnabled, revealCount } from "./text-reveal.js";
 import { initProfileGuide } from "./profile-guide.js";
 import { emptyBook, recordGame, validateBook, bookView, bookBaseline } from "./book.js";
 import {
-  START_YEAR,
   MAX_AGE,
   SCENARIOS,
   JOBS,
@@ -323,7 +322,6 @@ function showGame(focus = false, fresh = false) {
   $("game").hidden = false;
   renderGame();
   if (focus) {
-    // Resume at the latest result and next decision, above the records.
     if (game.history.length) ($("direction-review").hidden ? $("event-card") : $("direction-review")).scrollIntoView({ block: "start", behavior: "instant" });
     else window.scrollTo({ top: 0, behavior: "instant" });
     $("chapter-title").focus({ preventScroll: true });
@@ -400,8 +398,6 @@ function renderCareerMap(container, state = game) {
   }
   container.append(grid, detail, legend);
 }
-// The pop summary at the top of the ending: headline numbers, then the
-// turning points of each decade (work, money, family and luck).
 function renderLifeStory() {
   const story = lifeStory(game, RANKS);
   const section = node("section", undefined, "life-story");
@@ -473,7 +469,7 @@ function renderShareCard() {
       ctx.fillStyle = "#e4d8ad"; ctx.font = "bold 25px system-ui, sans-serif"; ctx.fillText("UNWRITTEN LIFE", 60, 55);
       const draw = (text, x, y, width, size, lines = 1, color = "#fffef9") => {
         ctx.font = `bold ${size}px system-ui, sans-serif`; ctx.fillStyle = color;
-        wrapCardText(text, width, lines, (s) => ctx.measureText(s).width).forEach((line, i) => ctx.fillText(line, x, y + i * (size + 8)));
+        wrapCardText(text, width, lines, (s) => ctx.measureText(s).width).forEach((line, i) => { ctx.fillText(line, x, y + i * (size + 8)); });
       };
       draw(data.headline, 60, 110, 1080, 36, 2);
       draw("年収（はじめ → ピーク）", 60, 225, 500, 21, 1, "#e4d8ad");
@@ -484,7 +480,7 @@ function renderShareCard() {
       draw(data.rank, 60, 365, 500, 27, 2);
       draw(`転職 ${data.moves}`, 620, 345, 520, 27);
       draw("人生の転機", 60, 445, 1080, 21, 1, "#e4d8ad");
-      data.points.forEach((point, i) => draw(point, 60, 485 + i * 32, 1080, 21));
+      data.points.forEach((point, i) => { draw(point, 60, 485 + i * 32, 1080, 21); });
       draw("ゲーム内の架空の経歴です。", 60, 600, 1080, 18, 1, "#dcded2");
       canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("PNG")), "image/png");
     } catch (error) { reject(error); }
@@ -523,8 +519,6 @@ function renderCareerResume() {
   const card = node("section", undefined, "career-resume");
   card.id = "ending-resume";
   card.setAttribute("aria-labelledby", "resume-title");
-  // One résumé: the life story above, then where and as what. The turning
-  // points are already in the story's decades, so they are not listed again.
   const title = node("h3", "勤務先と役割");
   title.id = "resume-title";
   card.append(renderLifeStory(), renderShareCard(), title, node("p", `${game.profile.age}歳から${game.age}歳まで・${game.decisions.length}年間。ゲーム内の架空の経歴で、実際の職務経歴を証明するものではありません。`, "resume-period"));
@@ -808,8 +802,6 @@ function appendBudget(parent, h, collapsed = false) {
     );
   parent.append(box);
 }
-// A chance incident is shown apart from the chosen action, with the game's
-// assumed odds, so a hard year reads as luck rather than as the player's fault.
 function incidentNote(h) {
   if (!h.incident) return null;
   const percent = (p) => `${(p * 100).toFixed(p < 0.01 ? 1 : 0)}%`;
@@ -891,9 +883,6 @@ function timelineSummary(entry, previous) {
   }
   return summary.join("");
 }
-// Only the current direction's years stay open; earlier ones fold into one
-// box, so the choices stay close (2026-10-22: after 15 years they were
-// 5,900px down, below a second log that repeated the same years).
 function foldEarlierYears() {
   const earlier = $("journey-earlier-years");
   earlier.prepend(...[...$("journey-years").children]);
@@ -990,7 +979,6 @@ function appendReflection(row, milestone) {
         game = recordCareerReflection(game, milestone.id, text);
         form.replaceChildren(node("p", text || "この節目は、書かずに通り過ぎました。", "field-note"));
         persist();
-        // The ending résumé (and its copy text) was built before this line.
         $("ending-resume")?.replaceWith(renderCareerResume());
       } catch (e) { error.textContent = e.message; }
     };
@@ -1276,8 +1264,6 @@ function renderGame() {
     $("profile-caption").append(note);
   }
   $("world-badge").textContent = `AIの未来：${SCENARIOS[game.scenario].label} / 景気の背景：${ERAS[game.era ?? "standard"].label}`;
-  // Income and net worth sit in the top band; the sidebar keeps the four
-  // indicators and folds the money breakdown away.
   const breakdown = node("details", undefined, "money-breakdown");
   breakdown.open = moneyBreakdownOpen;
   breakdown.addEventListener("toggle", () => { moneyBreakdownOpen = breakdown.open; });
@@ -1412,7 +1398,6 @@ function renderGame() {
     actions.append(again, compare);
     card.append(actions);
   } else if (!eventFor(game).generated) {
-    // Story choices wait for AI; permanent care/search commands remain available.
     card.append(node("p", `AIが考える場面 / ${game.year}`, "eyebrow"));
     if (generating) {
       card.append(
@@ -1522,7 +1507,6 @@ function renderGame() {
       appendChoiceForecast(copy, option.decision ?? option.id);
       if (option.reason)
         copy.append(node("small", `あなたとの接点：${option.reason}`));
-      // Ending the career ends the story; say so in the game's own words.
       if (option.id === "retire")
         copy.append(node("small", "選ぶとキャリアの物語が終わります", "choice-ending-note"));
       // While job-seeking, these years pause the search (no re-employment).
@@ -1623,7 +1607,6 @@ function renderAI() {
 function renderAITiming() {
   const el = $("ai-timing");
   const times = generationTimes.get(connectionKey(aiState)) ?? [];
-  // Only the wait is worth a line; the rest stays out of the way.
   el.hidden = !generating;
   el.textContent = generating
     ? `経過${Math.floor((performance.now() - generationStarted) / 1000)}秒${times.length ? `（前回は約${Math.ceil(times.at(-1) / 1000)}秒）` : ""}`
@@ -1990,7 +1973,7 @@ function renderKnowledge() {
     catalog.append(node("h4", title));
     knowledgeCatalog
       .filter((r) => r.kind === kind)
-      .forEach((r) => catalog.append(knowledgeItem(r)));
+      .forEach((r) => { catalog.append(knowledgeItem(r)); });
   }
   const selected = $("knowledge-selected");
   selected.replaceChildren();
@@ -1999,7 +1982,7 @@ function renderKnowledge() {
     const entries = [...refs.historical, ...refs.rules];
     $("knowledge-selected-title").textContent =
       `${game.year}年のあなたに関連する資料 · ${entries.length}件`;
-    entries.forEach((r) => selected.append(knowledgeItem(r)));
+    entries.forEach((r) => { selected.append(knowledgeItem(r)); });
   }
 }
 renderKnowledge();
@@ -2032,8 +2015,6 @@ function suggestedCost() {
   updateBudget();
 }
 function updateMunicipalityRegion() {
-  // The area select stays hidden unless asked for: a blank or unreadable
-  // municipality falls back to 地方の中心都市, and the line says why.
   const text = $("municipality").value.trim(),
     inferred = regionFromMunicipality(text);
   if (!manualRegion) $("region").value = inferred ?? "city";

@@ -19,7 +19,8 @@ function salariesAt(p, pick, seeds = 60) {
     let g = createGame(p, "steady", seed * 7919);
     for (let y = 0; y < 32 && !g.ended; y++) {
       g = advance(g, onMentalLeave(g) ? "rest" : pick(g, y));
-      (at[g.age] ??= []).push(g.salary);
+      at[g.age] ??= [];
+      at[g.age].push(g.salary);
     }
   }
   return at;
