@@ -84,7 +84,6 @@ test("partner income is a separate household budget line at 320px", async ({ pag
   const budget = year.locator(".budget-window");
   const row = budget.locator(".budget-list > div").filter({ hasText: "パートナー収入（手取り）" });
   await expect(row.locator("dd")).toHaveText("+152");
-  // The top band shows the player's own pay (not the partner's), rounded to 10万円.
   await expect(page.locator("#hud-income")).toHaveText(`約${Math.round(game.income / 10) * 10}万円`);
   await expectFits(page);
 });
@@ -101,7 +100,6 @@ test("mental leave shows sickness allowance separately from salary in the budget
   const budget = year.locator(".budget-window");
   await expect(budget).toContainText("傷病手当金（給与の約2/3、最長1年6か月）");
   await expect(budget).not.toContainText("労働収入（手取り）");
-  // The budget lists signed amounts in 万円 (its heading says so).
   await expect(budget.locator("dd").first()).toHaveText(`+${Math.round(game.income)}`);
   await expectFits(page);
 });
@@ -278,7 +276,6 @@ test("earlier directions fold away so only the current years and the choices sta
   await page.locator("#journey-earlier-summary").click();
   await expect(page.locator("#journey-earlier .journey-year")).toHaveCount(5);
   await expect(page.locator("#journey-earlier .journey-year").first()).toBeVisible();
-  // The duplicate career log below the choices is gone.
   await expect(page.locator("#history")).toHaveCount(0);
   await page.locator("#undo-button").click();
   await expect(page.locator("#journey-earlier")).toBeHidden();
@@ -400,8 +397,6 @@ for (const width of [320, 390]) test(`touch commands, inline checkpoints and yea
   await expect(page.locator("#career-map .career-map-detail")).toHaveText(await tiles.last().getAttribute("aria-label"));
   await expect(tiles.last()).toHaveAttribute("aria-pressed", "true");
   await page.locator("#menu-dialog [data-close]").tap();
-  // Years before the current direction fold into one tappable box.
-  // The commands are docked at the bottom on narrow screens; scroll the box clear of them.
   await page.locator("#journey-earlier-summary").evaluate((el) => el.scrollIntoView({ block: "start" }));
   await page.locator("#journey-earlier-summary").tap();
   await expect(page.locator("#journey-earlier .journey-year").first()).toBeVisible();
@@ -432,7 +427,6 @@ test("inline milestones keep flowing, save an optional line, and undo a whole sa
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("unwritten-life:v2")).reflections)).toEqual({});
   await page.locator("#choices button").first().click();
   await finishDirection(page);
-  // Leaving the input blank does not hold the next four directions back.
   await expect(checkpoint.locator("input")).toBeVisible();
   await expect(page.locator("#choices button")).toHaveCount(4);
   await checkpoint.getByRole("button", { name: "今は書かない" }).click();
@@ -458,7 +452,6 @@ test("five year cards reveal on the clock, support pause and speed, and overlap 
   await expect(page.locator("#hud-age")).toHaveText("22歳");
   await expect(page.locator("#progress")).toHaveJSProperty("value", 0);
   await expect(page.locator("#career-map .career-tile")).toHaveCount(0);
-  // The second AI call finishes while the first year's card is still pending.
   await expect(page.locator("#choices button")).toHaveCount(4);
   await expect(page.locator("#choices")).toBeHidden();
   expect(requests).toEqual(["life", "life"]);
@@ -494,7 +487,6 @@ test("five year cards reveal on the clock, support pause and speed, and overlap 
   await page.clock.runFor(6000);
   await expect(page.locator("#journey-years .journey-year")).toHaveCount(3);
   await page.keyboard.press("Space");
-  // Opening the comparison leaves the year clock running behind it.
   await openMenu(page);
   await page.locator("#career-compare-button").click();
   await expect(page.locator("#career-offers .career-offer-button")).toHaveCount(4);

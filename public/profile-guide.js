@@ -162,7 +162,7 @@ export function initProfileGuide({ document: doc = document, window: win = windo
     ]){const item=el('div','','guide-speaking-topic');item.append(el('b',question),el('small',hint));topics.append(item);}
     const more=el('details');more.append(el('summary','もっと詳しく話したいときの目安（任意）'),el('p','経験や得意なこと、業界、住まいの形、家族についての希望など。年収や金融資産も、入れたい場合だけ金額と単位を伝えられます。会社名・番地・正確な金額は必須ではありません。','field-note'));topics.append(more);
     body.append(topics);voice(text,body);body.append(text);
-    let selectedAI=JSON.stringify(getAIInfo());const aiInfo=getAIInfo();body.append(el('p','整理に使うAI：'+(aiInfo?.provider??'未接続')+' / '+(aiInfo?.model??'AIの接続画面で設定してください')+(aiInfo?.baseURL?' / '+aiInfo.baseURL:''),'field-note'));
+    const selectedAI=JSON.stringify(getAIInfo());const aiInfo=getAIInfo();body.append(el('p','整理に使うAI：'+(aiInfo?.provider??'未接続')+' / '+(aiInfo?.model??'AIの接続画面で設定してください')+(aiInfo?.baseURL?' / '+aiInfo.baseURL:''),'field-note'));
     const consent=el('input');consent.type='checkbox';consent.id='guide-extraction-consent';
     const label=el('label');label.append(consent,doc.createTextNode('この文章を接続中のAIへ送り、項目へ整理することを許可する（APIの場合は利用枠を消費します）'));body.append(label,el('p','送るのはこの文章だけです。閉じても開始済みのAI処理の利用枠は戻りません。','field-note'));
     const parse=el('button','内容を整理する','button');parse.type='button';body.append(parse);

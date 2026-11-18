@@ -22,7 +22,6 @@ export function measureLifeRealism({ seeds = 2000, from = 0 } = {}) {
     let g = start(seed), doubled = false;
     for (let year = 0; year < 10 && !g.ended; year++) {
       if (year && g.employer.kind !== "venture") break;
-      // Grow when possible, pivot after a setback, otherwise do the work.
       const allowed = availableChoices(g);
       g = advance(g, year === 0 ? { id: "startup", venture: "ai", name: "合成事業" }
         : allowed.includes("pivot") ? "pivot" : allowed.includes("expand") ? "expand" : "focus");

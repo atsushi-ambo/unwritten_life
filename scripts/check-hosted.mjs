@@ -1,15 +1,13 @@
 import { createHash } from "node:crypto";
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
 import { prepareHosted } from "./prepare-hosted.mjs";
 
 // Build only synthetic, credential-free state. Never read .env.local or a live D1.
-const root = fileURLToPath(new URL("../", import.meta.url));
 const output = await mkdtemp(resolve(tmpdir(), "unwritten-verify-"));
 const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
   !/KEY|TOKEN|SECRET|PASSWORD|DATABASE|^UNWRITTEN_|^CLOUDFLARE_|^CF_|^NODE_OPTIONS$|^SITES_/i.test(key)));

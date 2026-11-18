@@ -1,0 +1,77 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.6.8/schema.json",
+  "files": {
+    "includes": [
+      "lib/**/*.{js,mjs}",
+      "public/**/*.{js,mjs}",
+      "scripts/**/*.{js,mjs}",
+      "server.mjs",
+      "test/**/*.{js,mjs}",
+      "e2e/**/*.{js,mjs}",
+      "hosted/src/**/*.{js,mjs}",
+      "hosted/worker/**/*.{js,mjs}",
+      "hosted/scripts/**/*.{js,mjs}",
+      "playwright.config.js",
+      "!**/node_modules",
+      "!**/artifacts",
+      "!**/dist",
+      "!**/build",
+      "!**/coverage",
+      "!**/vendor",
+      "!**/vendored",
+      "!**/*.min.js"
+    ]
+  },
+  "formatter": {
+    "enabled": false
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "style": {
+        "useTemplate": "off"
+      },
+      "suspicious": {
+        "noControlCharactersInRegex": "off"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "public/**/*.{js,mjs}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "node:*",
+                      "**/lib/**",
+                      "**/server.mjs"
+                    ],
+                    "message": "Browser modules must stay portable: use browser APIs and keep server/AI/network code in lib/ behind the HTTP API."
+                  }
+                ]
+              }
+            },
+            "noRestrictedGlobals": {
+              "level": "error",
+              "options": {
+                "deniedGlobals": {
+                  "process": "Browser code cannot read server environment or credentials; use the HTTP API.",
+                  "Buffer": "Use browser-standard text/binary APIs in public/."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

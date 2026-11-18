@@ -7,7 +7,7 @@ const scene = { title: '選択', body: '次を考える', options: ['focus', 'le
 
 test('分岐を決定的に再生し元のゲームを変えず、成功率は当時の予測と一致する', () => {
   const before = applyScene(createGame(profile, 'steady', 567), scene);
-  let game = advance(before, 'focus');
+  const game = advance(before, 'focus');
   assert.ok(['success', 'setback'].includes(game.history[0].outcome.kind));
   const saved = structuredClone(game);
   const result = branchReview(game);
@@ -18,7 +18,7 @@ test('分岐を決定的に再生し元のゲームを変えず、成功率は�
 });
 
 test('実行不能な選択肢を除外し、旧セーブでも落ちない', () => {
-  let game = advance(applyScene(createGame({ ...profile, savings: 20, stocks: 0 }, 'steady', 567), scene), 'focus');
+  const game = advance(applyScene(createGame({ ...profile, savings: 20, stocks: 0 }, 'steady', 567), scene), 'focus');
   game.scenes['0'].options.push({ id: 'startup', label: '高額な起業', decision: { id: 'startup', venture: 'agriculture', name: '事業' } });
   assert.equal(branchReview(game)[0].alternatives.find(a => a.label === '高額な起業').forecast, null);
   assert.notEqual(branchReview(game)[0].comparison?.label, '高額な起業');

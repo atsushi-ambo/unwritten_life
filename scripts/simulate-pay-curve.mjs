@@ -28,8 +28,12 @@ export function measureCurve({ job = "office", band = "new", region = "metro", s
     for (const h of g.history) {
       if (h.employer.kind !== "initial" || h.salary === 0) disrupted = true;
       if (!CURVE_AGES.includes(h.age)) continue;
-      (all[h.age] ??= []).push(h.salary);
-      if (!disrupted) (stayers[h.age] ??= []).push(h.salary);
+      all[h.age] ??= [];
+      all[h.age].push(h.salary);
+      if (!disrupted) {
+        stayers[h.age] ??= [];
+        stayers[h.age].push(h.salary);
+      }
     }
     const last = g.history.findLast((h) => h.age <= 65);
     if (last.age >= 64) {

@@ -57,7 +57,6 @@ export function careerMilestones(game) {
     const automatic = Math.max(game.profile.retirementAge - start, game.retirementFrom ?? 0);
     const step = Math.min(explicit < 0 ? Infinity : explicit + 1, automatic);
     if (step > 0 && step <= length) {
-      // Retirement and a decade in the same year share one pause.
       const sameYear = milestones.findIndex((m) => m.step === step);
       if (sameYear >= 0) milestones.splice(sameYear, 1);
       milestones.push({ id: "retirement", age: start + step, step });
@@ -80,13 +79,10 @@ export function careerRecord(game) {
     const nonworking = h.employer?.kind === "initial" && ["student", "notWorking"].includes(game.profile.occupation);
     const employer = state === "retired" ? "退職後の暮らし"
       : nonworking ? (game.profile.occupation === "student" ? "学びを中心に過ごす" : "仕事を離れて過ごす")
-        // An unnamed first employer is 「いまの職場」 in play; in a résumé it is past.
         : h.employer?.kind === "initial" && h.employer.name === "いまの職場" ? "最初の勤務先"
         : h.employer?.name ?? "勤務先の記録なし";
     const role = state === "retired" || nonworking || h.employer?.kind === "seeking" ? null : h.employer?.role ?? null;
     const kind = state === "retired" ? "retired" : nonworking ? "nonworking" : h.employer?.kind ?? "unknown";
-    // A stage or unit change inside the same employer starts a new line, so
-    // staying for years still shows how the career moved.
     const inside = role && h.position && ["initial", "real", "fictional", "legacy"].includes(kind);
     const rank = inside && h.position.rank !== "unspecified" ? h.position.rank : null;
     const unit = inside ? h.position.unit || null : null;
@@ -108,7 +104,6 @@ export function careerRecord(game) {
 // a missing form field (2026-10-22: the résumé showed 役職は未入力).
 export const peakRankLabel = (rank, ranks) =>
   rank === "unspecified" ? "昇格の記録なし" : ranks[rank]?.label ?? "記録なし";
-// A tenure within one calendar year reads 2035年, not 2035〜2035年.
 // A story that ends without a career end is a death; before 70 it is sudden
 // (2026-10-22: 「44歳、物語が完結した」 did not say what had happened).
 export const deathHeadline = (age) =>
@@ -335,7 +330,6 @@ export const VENTURES = Object.freeze({
     detail: "人との信頼を軸に、小さな生活支援サービスを始める。",
   },
 });
-// This describes the player's work, separately from employer size or job title.
 export const WORK_MODELS = Object.freeze({
   unknown: "まだ指定しない",
   product: "自社サービス・自社製品を育てる",
@@ -748,9 +742,6 @@ export function makeDirectorySearch({ transport, parseHTML = typeof document ===
   };
 }
 
-// A pop "my resume" for the end of a working life: a few headline numbers and
-// the turning points of each decade of age, including money, family and luck,
-// not only titles. Plain data; the page and the copied text format it.
 export function lifeStory(game, ranks = {}) {
   const level = (rank) => ranks[rank]?.level ?? 0;
   const events = [];
@@ -812,7 +803,6 @@ export function lifeStory(game, ranks = {}) {
       endNetWorth: game.savings,
       peakRank,
       moves: game.history.filter((r) => r.choice === "switch").length,
-      // The starting company counts even if the first year was spent moving.
       employers: new Set([
         ...(game.profile.company ? [game.profile.company] : []),
         ...careerRecord(game).tenures

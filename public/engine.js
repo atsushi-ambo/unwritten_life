@@ -57,7 +57,6 @@ export const JOBS = Object.freeze({
   },
   other: { label: "学生・休職中・その他", exposure: 0.3, complement: 0.5 },
 });
-// Prose stays separate from category labels used by forms and AI context.
 const JOB_PROSE = Object.freeze({
   tech: "ITの仕事",
   marketing: "マーケティングの仕事",
@@ -194,7 +193,6 @@ export function switchRanks(g) {
   if (payRealism(g) && g.year - (g.position?.since ?? g.year) < 3) return [current];
   return [...new Set([current, ...["manager", "specialist"].map((t) => nextRank(current, t)).filter(Boolean)])];
 }
-// Building a career while staying: these and the existing in-company actions.
 export const STAY_ACTIONS = Object.freeze([
   "focus", "promote", "transfer", "internalVenture", "pilot", "negotiate", "mentor",
 ]);
@@ -610,7 +608,6 @@ export function optionalProfileInputs(raw, defaults = PROFILE_DEFAULTS) {
   return result;
 }
 export const QUICK_AGE_BANDS = Object.freeze({
-  // A new graduate: first-year pay and little saved (2026-10-20 default).
   new: { age: 22, income: 300, savings: 30, monthlyCost: 10 },
   "20s": { age: 25, income: 350, savings: 100, monthlyCost: 11 },
   "30s": { age: 35, income: 480, savings: 400, monthlyCost: 13 },
@@ -766,7 +763,6 @@ export function profileInputForLevel(
   return p;
 }
 const REGION_PROSE = { metro: "都市部", city: "地方の中心都市", rural: "地方の町" };
-// Narrative wording; residenceName keeps the selectable region label for UI.
 function residenceProse(g) {
   const name = residenceName(g);
   return name === REGIONS[g.region].label ? REGION_PROSE[g.region] : name;
@@ -1495,7 +1491,6 @@ const VENTURE_PROSE = {
     ["大きな変化のない、地道な一年。", "目立つ受注はなかったが、既存の顧客との仕事を丁寧に続けた。"],
     ["顧客と向き合い、足場を固めた。", "新しい顧客探しと、いまある仕事の両方に時間を使った。"],
   ],
-  // Loss titles by outcome kind: [first loss year, continuing losses].
   loss: {
     success: [
       ["手応えはあるが、収支は赤字。", "顧客はついた。収支はまだ合わない。"],
@@ -1535,7 +1530,6 @@ function narrateVentureYear(g, outcome, money) {
     deficitYears,
     ...(deficit ? { deficitKind: businessLoss ? "business" : "household" } : {}),
   };
-  // Setback prose already reports the loss; it only records the money result.
   if (outcome.kind === "setback") return { ...outcome, ...meta };
   const recent = new Set(
     g.history.slice(-2).flatMap((h) => [h.outcome?.title, h.outcome?.body]),
@@ -1629,7 +1623,6 @@ export const INCIDENTS = Object.freeze({
     title: "職場でハラスメントを受ける",
     body: "職場で、人格を否定するような言動や過大な要求が続いた。",
     effects: { health: -10, connection: -3 },
-    // A share of cases lead to a mental-health leave of absence.
     severe: {
       share: 0.25,
       title: "ハラスメントで心身を崩し、休職する",
@@ -1715,8 +1708,6 @@ export function careerIncidentFactors(g, choice) {
   const success = recent.some((h) => h.outcome?.kind === "success" || h.incident?.id === "bigRole");
   return { strain, transition, success };
 }
-// Stars use thresholds on favorable multipliers: <= .8, < .98, <= 1.02,
-// < 1.2, and >= 1.2 map to 1..5. Stability/load invert risk.
 export function payType(employer = {}) {
   const table = {
     services: [0.97, 1, 1.25], product: [1.05, 1.15, 1.1],
@@ -1745,7 +1736,6 @@ export function incidentRates(g, choice, employer = g.employer, outcome = null) 
   const downturn = world.economy.id === "downturn";
   const rates = {};
   if (working) {
-    // A new workplace is a fresh draw of boss and team, good or bad.
     rates.difficultBoss = INCIDENTS.difficultBoss.rate * (moved ? 2 : 1);
     rates.harassment = INCIDENTS.harassment.rate * (moved ? 1.5 : 1);
     rates.burnout =
@@ -1793,7 +1783,6 @@ export function incidentRates(g, choice, employer = g.employer, outcome = null) 
     rates.partnerJobLoss = INCIDENTS.partnerJobLoss.rate * (downturn ? 2 : 1);
   rates.illness =
     INCIDENTS.illness.rate + (g.age >= 50 ? 0.012 : 0) + (g.age >= 65 ? 0.02 : 0);
-  // Care for a parent begins once; it is not a new event every few years.
   if (g.age >= 45 && g.age <= 70 && !g.history.some((h) => h.incident?.id === "parentCare"))
     rates.parentCare = INCIDENTS.parentCare.rate;
   rates.oldFriend = INCIDENTS.oldFriend.rate;
@@ -2259,7 +2248,6 @@ function cappedSalary(g, employer, base, factors, transition, restore, noise = 0
   const ratio = (base * restore) / salaryCeiling(g, employer);
   const realism = payRealism(g),
     start = 0.5;
-  // Pay peaks in the mid-50s: raises slow from 50 and nearly stop after 55.
   const damp = (ratio <= start ? 1 : Math.exp(-3 * (ratio - start))) *
     (!realism ? 1 : g.age >= 55 ? 0.15 : g.age >= 50 ? 0.5 : 1);
   const merit = factors.reduce((m, f) => m * Math.max(f, 1), 1),
@@ -2926,7 +2914,6 @@ export function profileStoryContext(g, { action = null, intention = "" } = {}) {
         (t) =>
           t.id === `note-${subject[0]}` && Object.hasOwn(t.actions, action),
       );
-    // Multi-year progress keeps the subject of the player's actual policy.
     primary = exact ?? topic ?? primary;
   }
   // Cycle the whole list: alternating even/odd subsets can permanently skip a
@@ -3293,7 +3280,6 @@ export function annualEpisode(before, record) {
             "自分で決められる自由と、収入が読めない不安。その両方を抱えて働いている。",
             "請求書を送る日と、支払いを確かめる日。事業の一年は、その繰り返しでもあった。",
           ][
-            // Rotate by business year so consecutive years never repeat.
             Math.abs(record.year - (record.employer.started ?? record.year)) % 3
           ]
     }`;
@@ -3325,7 +3311,6 @@ export function annualEpisode(before, record) {
     nextTitle = "新しい勤務先で、どう働いていこう。";
   }
   if (deficit) {
-    // Learning or resting in a loss-making venture year still shows the loss.
     if (!ventureTold)
       body += ` ${record.outcome.deficitKind === "business" ? "事業の収支" : "事業の収入と暮らしの支出"}は、${deficitYears >= 2 ? "赤字の年が続いている。" : "今年は赤字だった。"}`;
     next =
@@ -3492,7 +3477,6 @@ export function advanceYears(game, decision, years = 1, { pauseAtMilestones = fa
 // harassment still do (2026-10-21).
 const mildIncident = (incident) =>
   incident.id === "difficultBoss" || (incident.id === "harassment" && !incident.severe) ||
-  // Another year of leave is not a new turning point; returning to work is.
   incident.id === "leaveContinues";
 export function advanceDirection(game, decision, { years = 5 } = {}) {
   if (!Number.isInteger(years) || years < 1 || years > 5) fail();
@@ -3781,7 +3765,6 @@ export function advance(g, rawDecision) {
       (symmetricDrift(g) ? 0 : volatility) +
       aiBenefit -
       transitionCost +
-      // Aiming for promotion is also a year of committed work.
       (["focus", "promote"].includes(choice)
         ? focusGrowth
         : ["transfer", "internalVenture"].includes(choice)
@@ -3794,7 +3777,6 @@ export function advance(g, rawDecision) {
     0.12,
   );
   const realism = payRealism(g);
-  // A small yearly seniority raise for employees before 50.
   if (
     realism &&
     g.age < 50 &&
@@ -3908,7 +3890,6 @@ export function advance(g, rawDecision) {
   if (mentalLeave)
     for (let j = g.history.length - 1; j >= 0 && g.history[j].incident?.effects.mentalLeave; j--)
       priorLeaveYears++;
-  // Annual approximation: one full year, then half a year, then no benefit.
   const sicknessAllowance = mentalLeave
     ? leaveSalary * (2 / 3) * clamp(1.5 - priorLeaveYears, 0, 1) : 0;
   // Apply reduced hours only to this year's paid salary, after calculating

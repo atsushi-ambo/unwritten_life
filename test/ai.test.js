@@ -24,7 +24,6 @@ const p = {
 };
 test("every narration mode follows the career arc while preserving safety and output contracts", () => {
   const game = createGame(p);
-  {
     for (const mode of ["life", "career"]) {
       const { messages } = storyRequest(game, { mode });
       const system = messages[0].content;
@@ -57,7 +56,6 @@ test("every narration mode follows the career arc while preserving safety and ou
         /"title":"40文字以内"/u,
       ]) assert.match(system, rule, `${mode}: ${rule}`);
       assert.match(system, /pastCandidates.*繰り返さず/u);
-      {
         assert.match(system, /body":"140〜240文字/u);
         // The style guide reaches every mode, after the content rules.
         assert.ok(system.includes(SCENE_STYLE), `${mode}: style guide`);
@@ -71,9 +69,7 @@ test("every narration mode follows the career arc while preserving safety and ou
           assert.match(system, /3つの異なる企業へのswitch案と、現職に残るfocus（求職中ならrest）を1案/u);
           assert.match(system, /具体的な役割は架空の提案で、求人情報として書かない/u);
         }
-      }
     }
-  }
 });
 test("actual local HTTP model transport parses a valid response and cache prevents another call", async (t) => {
   let calls = 0;

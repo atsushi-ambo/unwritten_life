@@ -34,7 +34,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       before: measureSpending({ job, band, region, seeds, from: MAX_AGE }),
       after: measureSpending({ job, band, region, seeds }),
     };
-  // The family case of simulate-family.mjs, with spending rules on and off.
   for (const partnerIncome of [0, 200])
     report[`family/partner${partnerIncome}`] = {
       before: measureFamily({ seeds, partnerIncome, spendFrom: MAX_AGE }),

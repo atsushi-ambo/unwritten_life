@@ -92,7 +92,7 @@ test("current and stored saves export JSON and round-trip through the actual fil
   assert.equal(download.blob.type, "application/json");
   const raw = await download.blob.text();
   assert.deepEqual(decodeSave(raw), game);
-  source.timers.forEach((fn) => fn());
+  source.timers.forEach((fn) => { fn(); });
   assert.deepEqual(source.revoked, ["blob:synthetic"]);
   assert.equal(source.storage.size, 0);
 

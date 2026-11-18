@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {validateExtractedProfile,extractionRequest} from '../public/profile-extraction.js';
 import {makeAI} from '../lib/ai.mjs';
-import {isVerification,readyAI,ollamaText} from './fixtures/ai-replies.js';
+import {isVerification,ollamaText} from './fixtures/ai-replies.js';
 test('bulk extraction accepts explicit facts, zero, and unit conversion without defaults',()=>{
  const text='30歳です。年収は500万円。貯金0円。子どもは現在2人です。';
  assert.deepEqual(validateExtractedProfile({fields:{age:{value:30,evidence:'30歳'},income:{value:500,evidence:'年収は500万円'},savings:{value:0,evidence:'貯金0円'},children:{value:2,evidence:'現在2人'}}},text).fields.age.value,30);
@@ -17,7 +17,7 @@ test('local profile extraction shares attempt cap and never starts a game',async
  let calls=0;
  const ai=makeAI({validateDestination:async()=>{},transport:async(url,options)=>{
  if(url.endsWith('/api/tags'))return {status:200,text:JSON.stringify({models:[{name:'synthetic-model'}]})};
- const body=JSON.parse(options.body);if(isVerification(options))return {status:200,text:ollamaText({ok:true})};calls++;return {status:200,text:ollamaText({fields:{age:{value:30,evidence:'30歳'}}})};
+ JSON.parse(options.body);if(isVerification(options))return {status:200,text:ollamaText({ok:true})};calls++;return {status:200,text:ollamaText({fields:{age:{value:30,evidence:'30歳'}}})};
  }});
  await ai.configure({provider:'ollama',model:'synthetic-model',requestCap:1});
  const result=await ai.extractProfile('私は30歳です。');assert.equal(result.profile.fields.age.value,30);assert.equal(ai.status().calls,1);
