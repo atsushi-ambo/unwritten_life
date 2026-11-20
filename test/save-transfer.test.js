@@ -165,6 +165,7 @@ tampered.decisions = [{ id: "switch", target: "__proto__", role: "tech" }];
 for (const [name, input] of [
   ["oversized file", { size: 1024 * 1024 + 1, text() { assert.fail("oversized file must not be read"); } }],
   ["malformed JSON", file('{"version":')],
+  ["unreadable file", { size: 10, async text() { throw Error("synthetic read failure"); } }],
   ["tampered save", file(JSON.stringify(tampered))],
   ["save above decodeSave's stricter text limit", file(encodeSave(initial()) + " ".repeat(250000))],
 ]) {
@@ -219,6 +220,23 @@ test("a newer file selection wins over a delayed read", async () => {
   await delayed;
   assert.deepEqual(h.context.game, next);
   assert.equal(h.rendered, 1);
+});
+
+test("a delayed file read failure leaves a newer imported save and its success notice intact", async () => {
+  let rejectRead;
+  const h = harness({ remember: true }), next = advance(initial(), "rest");
+  const delayed = h.importFile({ size: 10, text: () => new Promise((_, reject) => { rejectRead = reject; }) });
+  await h.importFile(file(encodeSave(next)));
+  const notices = [...h.notices];
+  assert.deepEqual(notices, ["セーブを読み込みました。"]);
+  rejectRead(Error("synthetic delayed read failure"));
+  await delayed;
+  assert.deepEqual(h.context.game, next);
+  assert.deepEqual(decodeSave(h.storage.get(saveKey)), next);
+  assert.equal(h.context.pendingImportedGame, null);
+  assert.equal(h.$("save-import-dialog").open, false);
+  assert.equal(h.rendered, 1);
+  assert.deepEqual(h.notices, notices);
 });
 
 test("career and ordinary direction choices both advance five years", () => {
