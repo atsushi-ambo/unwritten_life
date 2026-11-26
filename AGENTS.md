@@ -4,7 +4,7 @@ Architecture and browser/server boundaries are checked by `npm run lint` (`biome
 
 ## Verify changes
 
-Use Node.js 24 LTS and install with `npm ci`. Run `npm run check` for every change; it runs lint, syntax checks and the Node test suite. `npm run lint` and `node --test` can also be run separately.
+Use Node.js 24 LTS and install with `npm ci --ignore-scripts`. Run `npm run check` for every change; it runs lint, syntax checks and the Node test suite. `npm run lint` and `node --test` can also be run separately.
 
 Run `npm run test:e2e` after browser UI, game flow, shared browser modules, server routing or mobile build changes, and before a release. Install the test browsers first with `npx playwright install chromium webkit`. Playwright starts its own synthetic servers on 4397/4398 and covers desktop, narrow mobile and iPhone WebKit; it needs loopback ports and browser process permissions. No real AI or personal saves are used. For hosted Worker/build changes also run `npm run check:hosted`; use `npm run check:release` for release preparation.
 
