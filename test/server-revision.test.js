@@ -47,6 +47,22 @@ test("startup revision covers all server modules and imported browser modules wi
   assert.equal((await revision()).stale, true, "missing sources fail closed");
 });
 
+test("saving and deleting runtime data does not require a server restart or change its revision", async (t) => {
+  const { dir, revision, tick } = await fixture(t);
+  const startup = await revision();
+  const dataFile = join(dir, "synthetic-save.json");
+  for (const data of [{ decisions: [] }, { decisions: ["studyDaily"] }]) {
+    await writeFile(dataFile, JSON.stringify(data));
+    tick();
+    assert.deepEqual(await revision(), startup);
+    const restarted = await makeServerRevision({ root: pathToFileURL(dir + "/") });
+    assert.deepEqual(await restarted(), startup);
+  }
+  await rm(dataFile);
+  tick();
+  assert.deepEqual(await revision(), startup);
+});
+
 // Exercise the actual request handler without a socket, alongside the real HTTP
 // integration tests in server.test.js (which still require loopback permission).
 function request(server, url, { method = "GET", headers = {}, body = "{}" } = {}) {
