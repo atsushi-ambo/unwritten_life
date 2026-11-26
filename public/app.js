@@ -1391,6 +1391,7 @@ function renderGame() {
         game.lifeEventsFrom,
         game.era,
         game.payTypeFrom,
+        game.switchPayFrom,
       );
       showGame(true);
     });
@@ -1866,6 +1867,7 @@ $("undo-button").addEventListener("click", () => {
     blocks,
     game.era,
     game.payTypeFrom,
+    game.switchPayFrom,
   );
   const reached = new Set(careerMilestones(game).map((m) => m.id));
   game.reflections = Object.fromEntries(Object.entries(reflections).filter(([id]) => reached.has(id)));
@@ -2261,7 +2263,8 @@ function renderCareerOffers() {
   $("career-generation-status").textContent = careerGenerating
     ? "AIがプロフィール・仕事の形・直前の結果から、企業と役割を考えています…"
     : generated
-      ? "AIが作った4択です。企業名・職務の提案は未確認のゲーム内設定で、実際の求人ではありません。"
+      ? "AIが作った4択です。企業名・職務の提案は未確認のゲーム内設定で、実際の求人ではありません。" +
+        (game.decisions.length >= (game.switchPayFrom ?? 0) ? "実際の転職では、年収が1割以上増えた人が29%、1割以上減った人が22%です（厚生労働省 令和6年雇用動向調査）。" : "")
       : careerError || "AIが、あなたの経験・関心・暮らしから4つの道を考えます。";
   if (careerGenerating || !generated) return;
   const offers = generated.options.map((o) => ({
