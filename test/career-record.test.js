@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { careerMap, careerMilestones, pendingCareerReflection, careerRecord, careerRecordText } from "../public/careers.js";
-import { createGame, advance, advanceYears, recordCareerReflection, encodeSave, decodeSave } from "../public/engine.js";
+import { createGame, advance, advanceYears, recordCareerReflection, encodeSave, decodeSave, rewindTo } from "../public/engine.js";
 import { storyRequest } from "../public/story.js";
 // Play past retirement as under the rules before the career ending.
 const pastRetirement = (profile, scenario = "steady", seed = 2026, ...from) =>
@@ -102,6 +102,30 @@ test("career reflections never enter life or career AI prompts or context", () =
     assert.deepEqual(storyRequest(saved, { mode }), storyRequest(g, { mode }));
     assert.doesNotMatch(JSON.stringify(storyRequest(saved, { mode })), /PRIVATE_REFLECTION/);
   }
+});
+
+test("rewinding retains reached reflections and drops future retirement reflections from saves", () => {
+  let game = advance(createGame({ ...profile, age: 39, retirementAge: 42 }, "steady", 42), "rest");
+  game = recordCareerReflection(game, "age-40", "これからも余白を大切にしたい");
+  game = advance(advance(game, "rest"), "rest");
+  game = recordCareerReflection(game, "retirement", "仕事の区切りを迎えた");
+  const original = structuredClone(game);
+
+  const atForty = rewindTo(game, 1);
+  assert.equal(atForty.age, 40);
+  assert.deepEqual(atForty.reflections, { "age-40": game.reflections["age-40"] });
+  assert.deepEqual(decodeSave(encodeSave(atForty)), atForty);
+  assert.equal(pendingCareerReflection(atForty), null);
+
+  const beforeForty = rewindTo(game, 0);
+  assert.deepEqual(beforeForty.reflections, {});
+  assert.deepEqual(decodeSave(encodeSave(beforeForty)), beforeForty);
+  assert.equal(pendingCareerReflection(advance(beforeForty, "rest")).id, "age-40");
+
+  const retiredAgain = advance(advance(atForty, "rest"), "rest");
+  assert.deepEqual(retiredAgain.history, game.history);
+  assert.equal(pendingCareerReflection(retiredAgain).id, "retirement");
+  assert.deepEqual(game, original);
 });
 
 test("resume groups consecutive employers and roles, counts every year once, and exports the same record as text", () => {
