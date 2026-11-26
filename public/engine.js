@@ -142,7 +142,7 @@ export const careerOffers = (g) => g.decisions.length >= (g.offersFrom ?? 0);
 export const switchPay = (g) => g.decisions.length >= (g.switchPayFrom ?? 0);
 // MHLW 雇用動向調査 2024 (令和6年, 概況 p.13): of people who changed jobs, 29.4%
 // earned 10%+ more, 11.1% up to 10% more, 28.4% the same, 7.7% up to 10% less
-// and 21.7% 10%+ less. A draw maps to those bands; measured by
+// and 21.7% 10%+ less; the unreported 1.7% joins the top band. A draw maps to those bands; measured by
 // scripts/simulate-switch-pay.mjs.
 const SWITCH_PAY_BANDS = Object.freeze([
   [0.217, -0.3, -0.1],
@@ -3809,8 +3809,7 @@ export function advance(g, rawDecision) {
     employer.companyType !== "self"
   )
     growth += 0.012;
-  // With realistic pay a move averages about +1% (raises, cuts and no change
-  // are each roughly a third of moves in the labour survey).
+  // Before switchPayFrom, with realistic pay a move averages about +1%.
   if (choice === "switch" && !switchPay(g))
     growth += realism
       ? -0.11 + randomAt(g.seed, i, 7) * 0.24
