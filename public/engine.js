@@ -139,6 +139,26 @@ export const directionSpan = (g) =>
 export const payRealism = (g) => g.decisions.length >= (g.payRealismFrom ?? 0);
 export const lifeRealism = (g) => g.decisions.length >= (g.lifeRealismFrom ?? 0);
 export const careerOffers = (g) => g.decisions.length >= (g.offersFrom ?? 0);
+export const switchPay = (g) => g.decisions.length >= (g.switchPayFrom ?? 0);
+// MHLW 雇用動向調査 2024 (令和6年, 概況 p.13): of people who changed jobs, 29.4%
+// earned 10%+ more, 11.1% up to 10% more, 28.4% the same, 7.7% up to 10% less
+// and 21.7% 10%+ less; the unreported 1.7% joins the top band. A draw maps to those bands; measured by
+// scripts/simulate-switch-pay.mjs.
+const SWITCH_PAY_BANDS = Object.freeze([
+  [0.217, -0.3, -0.1],
+  [0.294, -0.1, -0.02],
+  [0.578, -0.01, 0.01],
+  [0.689, 0.01, 0.1],
+  [1, 0.1, 0.35],
+]);
+export function switchPayChange(u) {
+  let low = 0;
+  for (const [cut, from, to] of SWITCH_PAY_BANDS) {
+    if (u < cut) return from + ((u - low) / (cut - low)) * (to - from);
+    low = cut;
+  }
+  return SWITCH_PAY_BANDS.at(-1)[2];
+}
 export const familyMoney = (g) => g.decisions.length >= (g.familyFrom ?? 0);
 // Mean of worldAt().growth over seeds, years and employers (steady scenario).
 export const WORLD_GROWTH_MEAN = -0.0072;
@@ -1023,6 +1043,7 @@ export function createGame(
   lifeEventsFrom = 0,
   era = "standard",
   payTypeFrom = 0,
+  switchPayFrom = 0,
 ) {
   const p = validateProfile(profile);
   if (
@@ -1095,7 +1116,8 @@ export function createGame(
     oddsFrom < 0 ||
     oddsFrom > MAX_AGE ||
     !Number.isInteger(lifeEventsFrom) || lifeEventsFrom < 0 || lifeEventsFrom > MAX_AGE ||
-    !Number.isInteger(payTypeFrom) || payTypeFrom < 0 || payTypeFrom > MAX_AGE
+    !Number.isInteger(payTypeFrom) || payTypeFrom < 0 || payTypeFrom > MAX_AGE ||
+    !Number.isInteger(switchPayFrom) || switchPayFrom < 0 || switchPayFrom > MAX_AGE
   )
     fail();
   const cash = Math.max(p.savings, 0) - p.stocks,
@@ -1130,6 +1152,7 @@ export function createGame(
     oddsFrom,
     lifeEventsFrom,
     payTypeFrom,
+    switchPayFrom,
     studyHours: 0,
     family: {
       partner: p.partner === "partner",
@@ -3786,9 +3809,8 @@ export function advance(g, rawDecision) {
     employer.companyType !== "self"
   )
     growth += 0.012;
-  // With realistic pay a move averages about +1% (raises, cuts and no change
-  // are each roughly a third of moves in the labour survey).
-  if (choice === "switch")
+  // Before switchPayFrom, with realistic pay a move averages about +1%.
+  if (choice === "switch" && !switchPay(g))
     growth += realism
       ? -0.11 + randomAt(g.seed, i, 7) * 0.24
       : -0.12 + randomAt(g.seed, i, 7) * 0.3;
@@ -3826,7 +3848,8 @@ export function advance(g, rawDecision) {
       ? 0.75
       : 1;
   const transitionIncome =
-    (choice === "startup" ? 0.3 + randomAt(g.seed, i, 22) * 0.55 : 1) * rehire;
+    (choice === "startup" ? 0.3 + randomAt(g.seed, i, 22) * 0.55 : 1) * rehire *
+    (choice === "switch" && switchPay(g) ? 1 + switchPayChange(randomAt(g.seed, i, 7)) : 1);
   const careRestore = familyMoney(g) && i - 1 >= g.familyFrom ? 1 : world &&
     (i < g.careLeaveSalaryFrom || g.salary > 0 || previousLeaveSalary !== undefined) &&
     decisionId(g.decisions.at(-1)) === "careLeave" ? 1 / 0.85 : 1;
@@ -4266,6 +4289,7 @@ export function replay(
   directionBlocks,
   era = "standard",
   payTypeFrom = 0,
+  switchPayFrom = 0,
 ) {
   if (
     !Array.isArray(decisions) ||
@@ -4304,6 +4328,7 @@ export function replay(
     lifeEventsFrom,
     era,
     payTypeFrom,
+    switchPayFrom,
   );
   for (let i = 0; i < decisions.length; i++) {
     if (g.ended) {
@@ -4367,6 +4392,7 @@ export function compareWorlds(g) {
       g.directionBlocks,
       g.era,
       g.payTypeFrom,
+      g.switchPayFrom,
     ),
   );
 }
@@ -4425,7 +4451,8 @@ export function encodeSave(g) {
     g.oddsFrom < 0 ||
     g.oddsFrom > MAX_AGE ||
     !Number.isInteger(g.lifeEventsFrom) || g.lifeEventsFrom < 0 || g.lifeEventsFrom > MAX_AGE ||
-    !Number.isInteger(g.payTypeFrom) || g.payTypeFrom < 0 || g.payTypeFrom > MAX_AGE
+    !Number.isInteger(g.payTypeFrom) || g.payTypeFrom < 0 || g.payTypeFrom > MAX_AGE ||
+    !Number.isInteger(g.switchPayFrom) || g.switchPayFrom < 0 || g.switchPayFrom > MAX_AGE
   )
     fail();
   const value = JSON.stringify({
@@ -4453,6 +4480,7 @@ export function encodeSave(g) {
     oddsFrom: g.oddsFrom,
     lifeEventsFrom: g.lifeEventsFrom,
     payTypeFrom: g.payTypeFrom,
+    switchPayFrom: g.switchPayFrom,
     profile: g.profile,
     scenario: g.scenario,
     era: g.era ?? "standard",
@@ -4543,6 +4571,8 @@ export function decodeSave(value) {
     Object.hasOwn(d, "era") ? d.era : "standard",
     Object.hasOwn(d, "payTypeFrom") ? d.payTypeFrom
       : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
+    Object.hasOwn(d, "switchPayFrom") ? d.switchPayFrom
+      : d.decisions?.length + (d.scenes?.[String(d.decisions?.length)] ? 1 : 0),
   );
   if (Object.hasOwn(d, "directionBlocks"))
     game.directionBlocks = validateDirectionBlocks(d.directionBlocks, game.decisions.length);
@@ -4594,7 +4624,7 @@ function branchState(g, step, includeScene = false) {
     g.debtRepayFrom, g.salaryCapFrom, g.incidentFrom, g.careerPathFrom, g.careerEndFrom,
     g.payRealismFrom, g.lifeRealismFrom, g.offersFrom, g.paceFrom, g.reemploymentPayFrom,
     g.driftFrom, g.familyFrom, g.growthFrom, g.cycleFrom, g.spendFrom, g.oddsFrom, g.lifeEventsFrom,
-    g.directionBlocks?.filter(([, end]) => end <= step), g.era, g.payTypeFrom);
+    g.directionBlocks?.filter(([, end]) => end <= step), g.era, g.payTypeFrom, g.switchPayFrom);
 }
 
 export function rewindTo(g, step) {
